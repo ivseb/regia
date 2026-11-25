@@ -1,0 +1,42 @@
+{
+  "format": "regia.grc.catalog/v1",
+  "framework": {
+    "key": "gdpr",
+    "name": "GDPR · Protezione dei dati personali",
+    "kind": "regulation",
+    "jurisdiction": "EU",
+    "publisher": "Unione europea",
+    "description": "Regolamento (UE) 2016/679. Articoli principali su principi, responsabilità, sicurezza e protezione dei dati fin dalla progettazione."
+  },
+  "version": {
+    "version": "2016/679",
+    "effective_from": "2018-05-25",
+    "source_url": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+    "license_note": "Atto dell'Unione pubblico: articoli e titoli dal testo ufficiale, sintesi scritte da Regia.",
+    "notes": "Pacchetto di partenza: articoli principali per sicurezza e privacy by design."
+  },
+  "items": [
+    {"ref": "Capo II", "kind": "chapter", "title": "Principi"},
+    {"ref": "Art. 5", "parent": "Capo II", "kind": "article", "title": "Principi applicabili al trattamento di dati personali",
+     "summary": "Liceità, correttezza e trasparenza; limitazione della finalità; minimizzazione; esattezza; limitazione della conservazione; integrità e riservatezza; responsabilizzazione."},
+    {"ref": "Capo IV", "kind": "chapter", "title": "Titolare del trattamento e responsabile del trattamento"},
+    {"ref": "Art. 24", "parent": "Capo IV", "kind": "article", "title": "Responsabilità del titolare del trattamento",
+     "summary": "Il titolare adotta misure adeguate e sa dimostrare che il trattamento è conforme; le misure si riesaminano."},
+    {"ref": "Art. 25", "parent": "Capo IV", "kind": "article", "title": "Protezione dei dati fin dalla progettazione e protezione per impostazione predefinita",
+     "summary": "Le misure di protezione si progettano insieme al trattamento; per impostazione predefinita si trattano solo i dati necessari."},
+    {"ref": "Art. 28", "parent": "Capo IV", "kind": "article", "title": "Responsabile del trattamento",
+     "summary": "Si ricorre solo a responsabili con garanzie sufficienti, con un contratto che ne fissa obblighi e istruzioni."},
+    {"ref": "Art. 30", "parent": "Capo IV", "kind": "article", "title": "Registri delle attività di trattamento",
+     "summary": "Titolare e responsabile tengono il registro delle attività di trattamento, da mostrare all'autorità su richiesta."},
+    {"ref": "Art. 32", "parent": "Capo IV", "kind": "article", "title": "Sicurezza del trattamento",
+     "summary": "Misure tecniche e organizzative adeguate al rischio: pseudonimizzazione e cifratura, riservatezza e resilienza dei sistemi, ripristino, verifiche periodiche."},
+    {"ref": "Art. 33", "parent": "Capo IV", "kind": "article", "title": "Notifica di una violazione dei dati personali all'autorità di controllo",
+     "summary": "La violazione si notifica all'autorità entro 72 ore da quando se ne viene a conoscenza, salvo rischio improbabile; si documenta sempre."},
+    {"ref": "Art. 34", "parent": "Capo IV", "kind": "article", "title": "Comunicazione di una violazione dei dati personali all'interessato",
+     "summary": "Se il rischio per le persone è elevato, la violazione si comunica senza ingiustificato ritardo agli interessati."},
+    {"ref": "Art. 35", "parent": "Capo IV", "kind": "article", "title": "Valutazione d'impatto sulla protezione dei dati",
+     "summary": "Per i trattamenti a rischio elevato si valuta l'impatto prima di iniziare, sentito il responsabile della protezione dei dati."},
+    {"ref": "Art. 37", "parent": "Capo IV", "kind": "article", "title": "Designazione del responsabile della protezione dei dati",
+     "summary": "Nei casi previsti si designa un responsabile della protezione dei dati e se ne pubblicano i contatti."}
+  ]
+}

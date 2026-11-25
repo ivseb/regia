@@ -1,0 +1,38 @@
+# Servizio di Regia con il Postgres incluso (esempio; docs/operativo.md).
+# Percorsi d'esempio: binario in /opt/regia/bin, dati in /var/lib/regia,
+# backup in /var/backups/regia, binari di Postgres 18 di Debian.
+[Unit]
+Description=Regia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=regia
+Group=regia
+ExecStart=/opt/regia/bin/regia serve --data /var/lib/regia
+Environment=REGIA_PG_BIN=/usr/lib/postgresql/18/bin
+Environment=REGIA_HTTP_ADDR=:8080
+Environment=REGIA_LOG_FORMAT=json
+# Backup automatico prima delle migrazioni nuove, ultimi 5.
+Environment=REGIA_BACKUP_DIR=/var/backups/regia
+Environment=REGIA_BACKUP_KEEP=5
+# Facoltativo: backup cifrati (file 0400 di proprietà di regia, fuori da /var/lib/regia).
+#Environment=REGIA_BACKUP_PASSPHRASE_FILE=/etc/regia/backup-passphrase
+EnvironmentFile=-/etc/regia/regia.env
+# Allo stop: richieste aperte (fino a 20 s), poi arresto di Postgres (fino a 20 s).
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=5
+# Isolamento
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/regia /var/backups/regia
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

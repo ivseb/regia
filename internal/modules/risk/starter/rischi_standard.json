@@ -1,0 +1,90 @@
+{
+  "format": "regia.risk/v1",
+  "name": "Rischi, terze parti e incidenti",
+  "description": "Pacchetto di partenza: matrice 5×5 con quattro fasce e soglia di attenzione, politica di accettazione a soglie sul residuo, schemi di classificazione ispirati a DORA (incidenti gravi) e NIS2 (incidenti significativi). Criteri, soglie e termini sono valori di esempio scritti da noi: vanno verificati sul testo vigente e sulle norme tecniche prima dell'uso.",
+  "matrices": [
+    {
+      "key": "standard",
+      "name": "Matrice 5×5",
+      "description": "Probabilità e impatto da 1 a 5; il punteggio è il prodotto.",
+      "default": true,
+      "appetite_score": 9,
+      "likelihood": [
+        {"value": 1, "name": "Rara", "description": "Può accadere solo in circostanze eccezionali (meno di una volta ogni dieci anni)."},
+        {"value": 2, "name": "Improbabile", "description": "Non ci si aspetta che accada, ma è possibile (una volta ogni cinque-dieci anni)."},
+        {"value": 3, "name": "Possibile", "description": "Potrebbe accadere qualche volta (una volta ogni uno-cinque anni)."},
+        {"value": 4, "name": "Probabile", "description": "Accadrà probabilmente (circa una volta l'anno)."},
+        {"value": 5, "name": "Quasi certa", "description": "Ci si aspetta che accada più volte l'anno."}
+      ],
+      "impact": [
+        {"value": 1, "name": "Trascurabile", "description": "Nessun effetto percepibile su clienti e servizi."},
+        {"value": 2, "name": "Minore", "description": "Disservizio breve e locale, recuperabile senza costi rilevanti."},
+        {"value": 3, "name": "Moderato", "description": "Disservizio di alcune ore o su una parte dei clienti; costi contenuti."},
+        {"value": 4, "name": "Grave", "description": "Funzione importante ferma, molti clienti coinvolti, possibili segnalazioni alle autorità."},
+        {"value": 5, "name": "Critico", "description": "Funzione critica ferma a lungo, perdita di dati o danno economico e reputazionale serio."}
+      ],
+      "bands": [
+        {"key": "basso", "name": "Basso", "min": 1, "max": 4, "tone": "ok"},
+        {"key": "medio", "name": "Medio", "min": 5, "max": 9, "tone": "neutral"},
+        {"key": "alto", "name": "Alto", "min": 10, "max": 16, "tone": "danger"},
+        {"key": "critico", "name": "Critico", "min": 17, "max": 25, "tone": "danger"}
+      ]
+    }
+  ],
+  "settings": {
+    "register_columns": [],
+    "contract_notice_days": 90,
+    "review_notice_days": 14,
+    "notification_warning_hours": 4
+  },
+  "acceptance_policy": [
+    {"when": {"risk_lte": 9}, "steps": [{"approvers": [{"role": "risk_owner"}]}]},
+    {"when": {"risk_gt": 9}, "steps": [{"approvers": [{"role": "risk_owner"}]}, {"approvers": [{"role": "risk_committee"}]}]}
+  ],
+  "schemes": [
+    {
+      "key": "dora",
+      "name": "DORA · incidenti ICT gravi",
+      "outcome_name": "grave",
+      "reference": "Reg. (UE) 2022/2554, artt. 18-19, e norme tecniche sulla classificazione e sulla segnalazione degli incidenti. Valori da verificare sul testo vigente.",
+      "description": "Riassunto nostro: un incidente è grave se colpisce servizi che supportano funzioni critiche e, in più, c'è una perdita di dati oppure sono superate almeno due delle altre soglie (clienti, durata, diffusione, impatto economico, reputazione).",
+      "active": true,
+      "ordinal": 1,
+      "criteria": [
+        {"key": "servizi_critici", "name": "Servizi critici colpiti", "condition": "funzione_critica: sì", "primary": true, "help": "Almeno un'applicazione impattata supporta una funzione critica o importante."},
+        {"key": "perdita_dati", "name": "Perdita di dati", "condition": "perdita_dati: presente", "help": "Disponibilità, integrità, riservatezza o autenticità dei dati compromesse."},
+        {"key": "clienti", "name": "Clienti coinvolti", "condition": "clienti_coinvolti_pct: >=10 oppure clienti_coinvolti: >=100000", "help": "Soglia di esempio: 10% dei clienti o 100.000 clienti."},
+        {"key": "durata", "name": "Durata e fermo", "condition": "durata_ore: >24 oppure fermo_minuti: >120", "help": "Soglia di esempio: oltre 24 ore di durata o oltre 2 ore di fermo del servizio."},
+        {"key": "diffusione", "name": "Diffusione geografica", "condition": "stati_membri: >=2", "help": "Effetti in almeno due Stati membri."},
+        {"key": "economico", "name": "Impatto economico", "condition": "impatto_economico: >=100000", "help": "Soglia di esempio: 100.000 euro tra costi e perdite."},
+        {"key": "reputazione", "name": "Impatto reputazionale", "condition": "impatto_reputazionale: sì", "help": "Copertura dei media, reclami, attenzione delle autorità."}
+      ],
+      "when": "criterio.servizi_critici: sì criterio.perdita_dati: sì oppure criterio.servizi_critici: sì criteri_secondari: >=2",
+      "stages": [
+        {"key": "iniziale", "name": "Notifica iniziale", "due": [{"from": "classified", "hours": 4}, {"from": "detected", "hours": 24}], "hint": "Cosa è successo, quando è stato rilevato, servizi e clienti coinvolti, prime misure."},
+        {"key": "intermedia", "name": "Relazione intermedia", "due": [{"from": "stage:iniziale", "hours": 72}], "hint": "Aggiornamento su impatto, cause note, azioni di ripristino in corso."},
+        {"key": "finale", "name": "Relazione finale", "due": [{"from": "stage:intermedia", "days": 30}], "hint": "Cause, impatto definitivo, costi, azioni correttive e lezioni apprese."}
+      ]
+    },
+    {
+      "key": "nis2",
+      "name": "NIS2 · incidenti significativi",
+      "outcome_name": "significativo",
+      "reference": "Dir. (UE) 2022/2555, art. 23, e recepimento nazionale (in Italia d.lgs. 138/2024). Valori da verificare sul testo vigente.",
+      "description": "Riassunto nostro: un incidente è significativo se causa una grave perturbazione dei servizi o perdite economiche rilevanti, oppure danni considerevoli ad altre persone.",
+      "active": true,
+      "ordinal": 2,
+      "criteria": [
+        {"key": "perturbazione", "name": "Grave perturbazione dei servizi", "condition": "fermo_minuti: >=240 oppure clienti_coinvolti_pct: >=10", "primary": true, "help": "Soglia di esempio: almeno 4 ore di fermo o il 10% dei clienti."},
+        {"key": "perdita_economica", "name": "Perdita economica rilevante", "condition": "impatto_economico: >=500000", "primary": true, "help": "Soglia di esempio: 500.000 euro."},
+        {"key": "danni_a_terzi", "name": "Danni ad altre persone", "condition": "perdita_dati: riservatezza clienti_coinvolti: >=1000", "primary": true, "help": "Dati di almeno 1.000 persone esposti."}
+      ],
+      "when": "criteri_soddisfatti: >=1",
+      "stages": [
+        {"key": "preallarme", "name": "Preallarme", "due": [{"from": "detected", "hours": 24}], "hint": "Segnalazione rapida: possibile atto illecito o malevolo, possibili effetti transfrontalieri."},
+        {"key": "notifica", "name": "Notifica dell'incidente", "due": [{"from": "detected", "hours": 72}], "hint": "Valutazione iniziale: gravità, impatto e indicatori di compromissione."},
+        {"key": "finale", "name": "Relazione finale", "due": [{"from": "stage:notifica", "days": 30}], "hint": "Descrizione dettagliata, causa probabile, misure adottate, effetti transfrontalieri."}
+      ]
+    }
+  ]
+}

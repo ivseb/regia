@@ -1,0 +1,28 @@
+Regia
+Copyright (C) 2026 Ivan Sebben
+
+Distribuito con licenza GNU Affero General Public License, versione 3
+(AGPL-3.0-only): vedi il file LICENSE.
+
+Questo prodotto include software di terze parti, ognuno con la propria licenza.
+L'elenco completo con versioni e licenze è in docs/licenze-dipendenze.md
+(generato da `make licenses-report`).
+
+Componenti con avvisi da riprodurre (Apache-2.0, §4 lettera d):
+
+  go-oidc (github.com/coreos/go-oidc), Apache-2.0
+    CoreOS Project
+    Copyright 2014 CoreOS, Inc
+    This product includes software developed at CoreOS, Inc. (http://www.coreos.com/).
+
+  go-jose (github.com/go-jose/go-jose), Apache-2.0 e BSD-3-Clause
+
+Caratteri inclusi nell'interfaccia (SIL Open Font License 1.1): Atkinson Hyperlegible
+Next e Mono, IBM Plex Sans e Mono, JetBrains Mono, Public Sans, Source Sans 3,
+Source Code Pro. I caratteri restano con la loro licenza e non si vendono da soli.
+
+L'immagine Docker include PostgreSQL (PostgreSQL License), pgvector (PostgreSQL
+License) e pacchetti non modificati di Alpine Linux, ognuno con la sua licenza;
+alcuni (busybox, apk-tools, gdbm) sono GPL e i loro sorgenti sono disponibili
+nel repository aports di Alpine Linux per le versioni incluse. Elenco in
+docs/licenza.md.

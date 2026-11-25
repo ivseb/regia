@@ -1,0 +1,16 @@
+{
+  "name": "regia-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sito statico di Regia: presentazione e documentazione (GitHub Pages)",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node check-links.mjs",
+    "test": "node build.mjs && node check-links.mjs"
+  },
+  "dependencies": {
+    "marked": "^15.0.0"
+  }
+}

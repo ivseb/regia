@@ -1,0 +1,33 @@
+{
+  "format": "regia.process/v1",
+  "key": "control_standard",
+  "name": "Ciclo del controllo interno",
+  "description": "Pacchetto di partenza: il controllo nasce in bozza con il responsabile e i requisiti che copre, entra in esercizio quando la compliance lo approva, si rivede a ogni periodo con la valutazione dell'efficacia, si dismette con un motivo.",
+  "type": "control",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Bozza", "category": "todo", "color": "#6B7280", "description": "Descrizione, responsabile, frequenza e requisiti coperti da completare."},
+      {"name": "In esercizio", "category": "in_progress", "color": "#3A7A1C", "description": "Il controllo opera: le sue evidenze valide coprono i requisiti collegati."},
+      {"name": "In revisione", "category": "in_progress", "color": "#9A5200", "description": "Riesame periodico: si raccolgono le evidenze del periodo e si valuta l'efficacia."},
+      {"name": "Dismesso", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "Non più in uso: non copre più i requisiti."}
+    ],
+    "initial": "Bozza",
+    "transitions": [
+      {"from": ["Bozza"], "to": "In esercizio", "label": "Metti in esercizio", "roles": ["grc_reviewer"], "gates": ["responsabile", "requisiti"]},
+      {"from": ["In esercizio"], "to": "In revisione", "label": "Avvia la revisione", "roles": ["control_owner", "grc_reviewer"]},
+      {"from": ["In revisione"], "to": "In esercizio", "label": "Chiudi la revisione", "roles": ["grc_reviewer"], "gates": ["efficacia"]},
+      {"from": ["Bozza", "In esercizio", "In revisione"], "to": "Dismesso", "label": "Dismetti", "roles": ["grc_reviewer"], "comment_required": true},
+      {"from": ["Dismesso"], "to": "Bozza", "label": "Riattiva", "roles": ["grc_reviewer"]}
+    ],
+    "gates": [
+      {"key": "responsabile", "name": "Responsabile indicato", "condition": "responsabile: presente", "message": "Indica il responsabile del controllo."},
+      {"key": "requisiti", "name": "Requisiti collegati", "condition": "requisiti: >0", "message": "Collega almeno un requisito normativo."},
+      {"key": "efficacia", "name": "Efficacia valutata", "condition": "efficacia: efficace, parziale, inefficace", "message": "Valuta l'efficacia prima di chiudere la revisione."}
+    ],
+    "rules": [
+      {"key": "revisori", "name": "La compliance segue il controllo", "on": "create", "actions": [{"kind": "assign_role", "role": "grc_reviewer", "group": "Compliance"}]}
+    ]
+  }
+}

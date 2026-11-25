@@ -1,0 +1,1 @@
+Cartella generata da 'make web' (vite build). Questo file la mantiene nel repository.

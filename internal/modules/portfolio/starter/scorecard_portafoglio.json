@@ -1,0 +1,96 @@
+{
+  "format": "regia.scorecard/v1",
+  "key": "portafoglio",
+  "type": "business_request",
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "name": "Scorecard del portafoglio",
+    "description": "Pacchetto di partenza: cinque criteri pesati, punteggio da 0 a 100 (demand.md §6). Si modifica dalla configurazione: ogni pubblicazione è una nuova versione.",
+    "method": "weighted",
+    "scorer_roles": ["demand_manager", "pmo"],
+    "criteria": [
+      {
+        "key": "valore_strategico",
+        "name": "Valore strategico",
+        "description": "Contributo agli obiettivi del piano strategico e al posizionamento.",
+        "weight": 30,
+        "direction": "higher_better",
+        "scale": [
+          { "value": 1, "label": "Marginale" },
+          { "value": 2, "label": "Basso" },
+          { "value": 3, "label": "Medio" },
+          { "value": 4, "label": "Alto" },
+          { "value": 5, "label": "Determinante" }
+        ],
+        "suggest": [{ "when": "driver: strategico", "value": 4 }]
+      },
+      {
+        "key": "beneficio_economico",
+        "name": "Beneficio economico",
+        "description": "Risparmi, ricavi o costi evitati attesi, rispetto all'investimento.",
+        "weight": 25,
+        "direction": "higher_better",
+        "scale": [
+          { "value": 1, "label": "Trascurabile" },
+          { "value": 2, "label": "Limitato" },
+          { "value": 3, "label": "Moderato" },
+          { "value": 4, "label": "Rilevante" },
+          { "value": 5, "label": "Molto rilevante" }
+        ],
+        "suggest": [{ "when": "driver: efficienza", "value": 3 }]
+      },
+      {
+        "key": "urgenza_normativa",
+        "name": "Urgenza normativa",
+        "description": "Obbligo di legge o di vigilanza e vicinanza della scadenza.",
+        "weight": 20,
+        "direction": "higher_better",
+        "scale": [
+          { "value": 1, "label": "Nessun obbligo" },
+          { "value": 2, "label": "Raccomandazione" },
+          { "value": 3, "label": "Obbligo, scadenza lontana" },
+          { "value": 4, "label": "Obbligo entro 12 mesi" },
+          { "value": 5, "label": "Obbligo entro 6 mesi o sanzioni" }
+        ],
+        "suggest": [
+          { "when": "obbligatoria: sì scadenza_normativa: presente", "value": 4 },
+          { "when": "obbligatoria: sì oppure driver: normativo", "value": 3 },
+          { "when": "obbligatoria: no", "value": 1 }
+        ]
+      },
+      {
+        "key": "rischio_esecuzione",
+        "name": "Rischio di esecuzione",
+        "description": "Complessità, dipendenze, novità tecnologica e fornitori: più è alto, più pesa contro.",
+        "weight": 15,
+        "direction": "lower_better",
+        "scale": [
+          { "value": 1, "label": "Molto basso" },
+          { "value": 2, "label": "Basso" },
+          { "value": 3, "label": "Medio" },
+          { "value": 4, "label": "Alto" },
+          { "value": 5, "label": "Molto alto" }
+        ],
+        "suggest": [
+          { "when": "criticita_max: critica oppure importo: >250k", "value": 4 },
+          { "when": "impatti: >3", "value": 3 },
+          { "when": "importo: <50k", "value": 2 }
+        ]
+      },
+      {
+        "key": "allineamento_architetturale",
+        "name": "Allineamento architetturale",
+        "description": "Coerenza con l'architettura di riferimento e con il piano di evoluzione delle applicazioni.",
+        "weight": 10,
+        "direction": "higher_better",
+        "scale": [
+          { "value": 1, "label": "In contrasto" },
+          { "value": 2, "label": "Serve una deroga" },
+          { "value": 3, "label": "Neutro" },
+          { "value": 4, "label": "Allineato" },
+          { "value": 5, "label": "Abilitante" }
+        ]
+      }
+    ]
+  }
+}

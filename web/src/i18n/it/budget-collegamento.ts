@@ -1,0 +1,40 @@
+// Budget di progetto collegato a un nodo dell'albero dei budget: il campo «Attinge da» nel budget di un elemento
+// e l'elenco dei budget nel pannello del nodo. Chiavi «budget.link.»: vedi web/src/i18n/GLOSSARIO.md.
+import type { Source } from "../types";
+
+export default {
+  "budget.link.label": "Attinge da",
+  "budget.link.none": "Nessun nodo: il budget non attinge dall'albero",
+  "budget.link.pick": "Scegli un nodo",
+  "budget.link.optionDetail": "{amount} disponibili",
+  "budget.link.thisElement": "Nodo del progetto",
+  "budget.link.noOptions": "Questo elemento non ha nodi nell'albero dei budget che tu veda, in un periodo aperto dell'esercizio.",
+  "budget.link.needsElement": "Scrivi la chiave dell'elemento per vedere i nodi da cui può attingere.",
+  "budget.link.help": "Facoltativo. L'invio e l'approvazione controllano che il budget stia nello stanziamento del nodo; l'approvazione lo impegna.",
+  "budget.link.allocated": "Stanziato",
+  "budget.link.others": "Già impegnato da altri",
+  "budget.link.available": "Disponibile",
+  "budget.link.uses": "Questo budget ne usa",
+  "budget.link.after": "Dopo resterebbero",
+  "budget.link.exceeds": "Il budget supera il disponibile di {amount}: l'invio verrebbe rifiutato.",
+  "budget.link.forecastNote": "Una previsione a finire non impegna il nodo.",
+  "budget.link.unlink": "Scollega",
+  "budget.link.unlinkConfirm": "Sì, scollega",
+  "budget.link.unlinkHelp": "Scollegare il budget dal nodo? Non impegnerà più lo stanziamento.",
+  "budget.link.hidden": "Nodo non visibile",
+  "budget.link.hiddenHelp": "Il budget attinge da un nodo che non vedi: ne resta l'effetto, non i numeri.",
+  "budget.link.readOnly": "Solo la finanza collega un budget a un nodo.",
+  "budget.link.noLink": "Non collegato a nessun nodo",
+  "budget.link.period": "Periodo {period}",
+  "budget.link.linking": "Collego…",
+  // Pannello del nodo
+  "budget.tab.budgets": "Budget di progetto",
+  "budget.link.nodeEmpty": "Nessun budget di progetto attinge da questo nodo.",
+  "budget.link.nodeHelp": "Si collega dal budget dell'elemento (campo «Attinge da»).",
+  "budget.link.col.element": "Elemento",
+  "budget.link.col.version": "Versione",
+  "budget.link.col.status": "Stato",
+  "budget.link.col.total": "Totale",
+  "budget.link.col.committed": "Impegnato",
+  "budget.link.nodeTotal": "Impegnato dai budget: {amount} su {allocated}",
+} satisfies Source;

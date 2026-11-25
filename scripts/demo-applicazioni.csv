@@ -1,0 +1,9 @@
+codice;nome;descrizione;criticita;funzione_critica;classificazione_dati;hosting;rto_minuti;rpo_minuti;team;asset
+WEB-AR;Frontend area riservata;Single page application dell'area clienti;alta;sì;personali;cloud UE;240;60;Web;Area riservata
+API-CLI;Backend API clienti;API REST per anagrafica e contratti;critica;sì;personali;cloud UE;120;15;Integrazioni;Area riservata|App mobile
+PAY;Modulo pagamenti;Integrazione con il gateway di pagamento;critica;sì;finanziari;on-premise;60;5;Payments;Area riservata|App mobile
+IAM;IAM / SSO;Identità e accessi dei clienti;critica;sì;credenziali;on-premise;60;5;Identity;Area riservata|App mobile|Portale fornitori
+APP-MOB;App mobile clienti;App iOS e Android;alta;no;personali;store;480;60;Mobile;App mobile
+DWH;Data warehouse;Storico e reportistica;media;no;personali;on-premise;1440;240;Dati;Reportistica direzionale
+BI;Cruscotti direzionali;Report per la direzione;bassa;no;aggregati;cloud UE;2880;1440;Dati;Reportistica direzionale
+FORN;Portale fornitori;Anagrafica e documenti dei fornitori ICT;media;sì;contrattuali;cloud UE;480;60;Integrazioni;Portale fornitori

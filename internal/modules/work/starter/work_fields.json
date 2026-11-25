@@ -1,0 +1,42 @@
+{
+  "format": "regia.fields/v1",
+  "fields": [
+    {
+      "key": "priorita", "name": "Priorità", "data_type": "enum", "aliases": ["priority"],
+      "help": "Bloccante e Alta si vedono sulle card e si possono usare come swimlane.",
+      "options": [
+        {"name": "Bloccante", "color": "danger"},
+        {"name": "Alta", "color": "flag"},
+        {"name": "Normale", "color": ""},
+        {"name": "Bassa", "color": "muted"}
+      ],
+      "default": "Normale",
+      "settings": {},
+      "types": [
+        {"type": "epic", "required": false, "section": "Pianificazione", "ordinal": 0},
+        {"type": "story", "required": false, "section": "Pianificazione", "ordinal": 0},
+        {"type": "task", "required": false, "section": "Pianificazione", "ordinal": 0},
+        {"type": "bug", "required": false, "section": "Pianificazione", "ordinal": 0}
+      ]
+    },
+    {
+      "key": "punti", "name": "Punti", "data_type": "decimal", "aliases": ["story_points", "points"],
+      "help": "Stima relativa (di solito 1, 2, 3, 5, 8, 13). Serve al burndown dello sprint.",
+      "settings": {"min": 0, "max": 100},
+      "types": [
+        {"type": "story", "required": false, "section": "Pianificazione", "ordinal": 1},
+        {"type": "bug", "required": false, "section": "Pianificazione", "ordinal": 1}
+      ]
+    },
+    {
+      "key": "stima", "name": "Stima", "data_type": "duration", "aliases": ["estimate"],
+      "help": "Stima in ore o giorni (es. 4h, 1g 2h).",
+      "settings": {"min": 0, "hours_per_day": 8},
+      "types": [
+        {"type": "story", "required": false, "section": "Pianificazione", "ordinal": 2},
+        {"type": "task", "required": false, "section": "Pianificazione", "ordinal": 2},
+        {"type": "bug", "required": false, "section": "Pianificazione", "ordinal": 2}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+Issue Id,Summary,Project,Reporter,Created,Updated,Resolved,Priority,Type,State,Assignee,Subsystem,Estimation,Tags,Sprints,subtask of,depends on,relates to,Description
+DEMO-1,Ricerca avanzata nel catalogo,DEMO,marco.neri,2026-04-02 10:15,2026-06-10 17:30,,Critical,Feature,In Progress,anna.bianchi,Backend,1d 4h,"ricerca, ux",Sprint 7,,,,Filtri per categoria e **prezzo**.
+DEMO-2,Indice di ricerca,DEMO,anna.bianchi,2026-04-03 09:00,2026-05-20 12:00,2026-05-20 12:00,Normal,Task,Fixed,paolo.verdi,Backend,4h,ricerca,Sprint 7,DEMO-1,,,
+DEMO-3,I filtri non si azzerano,DEMO,marco.neri,2026-05-21 08:30,2026-05-21 08:30,,Show-stopper,Bug,Submitted,,Frontend,,,,,DEMO-2,,Il pulsante «Azzera» non fa niente.
+DEMO-4,Piattaforma dati,DEMO,marco.neri,2026-03-01 09:00,2026-03-01 09:00,,Major,Epic,Open,marco.neri,,,,,,,,
+DEMO-5,Esportazione dei report,DEMO,anna.bianchi,2026-03-05 11:00,2026-04-01 16:00,2026-04-01 16:00,Minor,Feature,Verified,anna.bianchi,Backend,2d,,,DEMO-4,,DEMO-3,

@@ -1,0 +1,40 @@
+{
+  "format": "regia.process/v1",
+  "key": "requirement_standard",
+  "name": "Ciclo del requisito",
+  "description": "Pacchetto di partenza: il team accetta il requisito, lo realizza e lo porta alla verifica; il requisito è verificato quando lo sono tutte le sue celle (impatti), oppure in deroga. Le azioni requirement_stage dicono al modulo cosa significa ogni fase.",
+  "type": "requirement",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Proposto", "category": "todo", "color": "#6B7280", "description": "Nato da una prescrizione, da una baseline del catalogo o inserito a mano: il team lo accetta o lo dichiara non applicabile."},
+      {"name": "Accettato", "category": "in_progress", "color": "#3550C8", "description": "Il team ha preso in carico il requisito."},
+      {"name": "In realizzazione", "category": "in_progress", "color": "#3A7A1C", "description": "Il team lo sta realizzando; le celle pronte passano alla verifica."},
+      {"name": "Da verificare", "category": "in_progress", "color": "#0B6E8E", "description": "Tutte le celle sono realizzate (o in deroga) e aspettano il verificatore."},
+      {"name": "Verificato", "category": "done", "color": "#0B7A5E", "description": "Ogni cella è verificata, con evidenze e firma."},
+      {"name": "In deroga", "category": "done", "color": "#9A5200", "off_path": true, "description": "Almeno una cella è coperta da una deroga approvata e valida; le altre sono verificate."},
+      {"name": "Non applicabile", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "Escluso con motivazione: non conta nella matrice né nel gate di rilascio."}
+    ],
+    "initial": "Proposto",
+    "transitions": [
+      {"from": ["Proposto"], "to": "Accettato", "label": "Accetta", "roles": ["requirement_owner"]},
+      {"from": ["Accettato"], "to": "In realizzazione", "label": "Avvia la realizzazione", "roles": ["requirement_owner"]},
+      {"from": ["Proposto", "Accettato", "In realizzazione"], "to": "Non applicabile", "label": "Non applicabile", "roles": ["requirement_owner", "requirement_verifier"], "comment_required": true},
+      {"from": ["Non applicabile"], "to": "Proposto", "label": "Riapri", "roles": ["requirement_owner", "requirement_verifier"], "comment_required": true},
+      {"from": ["Accettato", "In realizzazione", "Verificato", "In deroga"], "to": "Da verificare", "system": true},
+      {"from": ["Accettato", "In realizzazione", "Da verificare", "In deroga"], "to": "Verificato", "system": true},
+      {"from": ["Proposto", "Accettato", "In realizzazione", "Da verificare", "Verificato"], "to": "In deroga", "system": true},
+      {"from": ["Da verificare", "Verificato", "In deroga"], "to": "In realizzazione", "system": true}
+    ],
+    "rules": [
+      {"key": "stadio_proposto", "name": "Proposto", "on": "enter:Proposto", "actions": [{"kind": "requirement_stage", "ref": "proposed"}]},
+      {"key": "stadio_accettato", "name": "Accettato dal team", "on": "enter:Accettato", "actions": [{"kind": "requirement_stage", "ref": "accepted"}]},
+      {"key": "stadio_realizzazione", "name": "In realizzazione", "on": "enter:In realizzazione", "actions": [{"kind": "requirement_stage", "ref": "implementing"}]},
+      {"key": "stadio_verifica", "name": "Pronto per la verifica", "on": "enter:Da verificare", "actions": [{"kind": "requirement_stage", "ref": "to_verify"}]},
+      {"key": "stadio_verificato", "name": "Verificato", "on": "enter:Verificato", "actions": [{"kind": "requirement_stage", "ref": "verified"}]},
+      {"key": "stadio_deroga", "name": "Coperto da deroga", "on": "enter:In deroga", "actions": [{"kind": "requirement_stage", "ref": "waived"}]},
+      {"key": "stadio_non_applicabile", "name": "Non applicabile", "on": "enter:Non applicabile", "actions": [{"kind": "requirement_stage", "ref": "not_applicable"}]}
+    ]
+  }
+}

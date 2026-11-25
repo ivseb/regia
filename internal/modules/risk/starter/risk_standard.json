@@ -1,0 +1,45 @@
+{
+  "format": "regia.process/v1",
+  "key": "risk_standard",
+  "name": "Ciclo del rischio ICT",
+  "description": "Pacchetto di partenza: il rischio si identifica, si valuta sulla matrice (inerente), si tratta con un piano e una scadenza oppure si accetta con l'approvazione prevista dalla politica @risk_acceptance; il residuo resta sotto monitoraggio e si rivaluta.",
+  "type": "risk",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Identificato", "category": "todo", "color": "#6B7280", "description": "Descrizione, categoria e collegamenti da completare; poi la valutazione inerente."},
+      {"name": "Valutato", "category": "in_progress", "color": "#3550C8", "description": "Probabilità e impatto inerenti sulla matrice: si sceglie il trattamento."},
+      {"name": "In trattamento", "category": "in_progress", "color": "#0B6E8E", "description": "Il piano di trattamento è in corso fino alla sua scadenza."},
+      {"name": "Monitorato", "category": "in_progress", "color": "#3A7A1C", "description": "Trattamento completato: il residuo è valutato e si rivede alla data prevista."},
+      {"name": "In accettazione", "category": "in_progress", "color": "#0B6E8E", "off_path": true, "description": "Il residuo è proposto per l'accettazione: decidono gli approvatori previsti dalla politica, mai chi la chiede."},
+      {"name": "Accettato", "category": "in_progress", "color": "#3A7A1C", "off_path": true, "description": "Il residuo è accettato fino alla data indicata; poi va rivalutato."},
+      {"name": "Chiuso", "category": "done", "color": "#1F2937", "description": "Il rischio non esiste più (per esempio l'applicazione è dismessa)."}
+    ],
+    "initial": "Identificato",
+    "gates": [
+      {"key": "valutazione_inerente", "name": "Valutazione inerente", "condition": "punteggio_inerente: presente", "message": "valuta probabilità e impatto inerenti"},
+      {"key": "piano", "name": "Piano di trattamento", "condition": "trattamento: mitigare, trasferire, evitare piano_trattamento: presente scadenza_trattamento: presente", "message": "scegli un trattamento diverso dall'accettazione, con piano e scadenza"},
+      {"key": "residuo", "name": "Rischio residuo", "condition": "punteggio_residuo: presente", "message": "valuta probabilità e impatto residui"},
+      {"key": "accettazione", "name": "Accettazione", "condition": "trattamento: accettare punteggio_residuo: presente", "message": "per chiedere l'accettazione il trattamento è «accettare» e il residuo è valutato"}
+    ],
+    "transitions": [
+      {"from": ["Identificato"], "to": "Valutato", "label": "Valuta", "roles": ["risk_owner", "risk_committee"], "gates": ["valutazione_inerente"]},
+      {"from": ["Valutato", "Monitorato"], "to": "In trattamento", "label": "Avvia il trattamento", "roles": ["risk_owner", "risk_committee"], "gates": ["piano"]},
+      {"from": ["In trattamento"], "to": "Monitorato", "label": "Trattamento completato", "roles": ["risk_owner", "risk_committee"], "gates": ["residuo"]},
+      {"from": ["Valutato", "In trattamento", "Monitorato"], "to": "In accettazione", "label": "Chiedi l'accettazione", "roles": ["risk_owner", "risk_committee"], "gates": ["accettazione"]},
+      {"from": ["In accettazione"], "to": "Accettato", "system": true},
+      {"from": ["In accettazione"], "to": "Valutato", "system": true},
+      {"from": ["Accettato"], "to": "Valutato", "system": true},
+      {"from": ["Accettato", "Monitorato"], "to": "Valutato", "label": "Rivaluta", "roles": ["risk_owner", "risk_committee"]},
+      {"from": ["Identificato", "Valutato", "In trattamento", "Monitorato", "Accettato"], "to": "Chiuso", "label": "Chiudi", "roles": ["risk_owner", "risk_committee"], "comment_required": true},
+      {"from": ["Chiuso"], "to": "Identificato", "label": "Riapri", "roles": ["risk_committee"]}
+    ],
+    "rules": [
+      {"key": "comitato", "name": "Il comitato rischi segue ogni rischio", "on": "create", "actions": [{"kind": "assign_role", "role": "risk_committee", "group": "Risk management"}]},
+      {"key": "accettazione_richiesta", "name": "Si apre l'approvazione dell'accettazione", "on": "enter:In accettazione", "actions": [{"kind": "risk_acceptance", "ref": "submitted"}]},
+      {"key": "accettazione_approvata", "name": "Il residuo è accettato", "on": "enter:Accettato", "actions": [{"kind": "risk_acceptance", "ref": "accepted"}]},
+      {"key": "rivalutazione", "name": "Rivalutazione: l'accettazione in corso o scaduta si chiude", "on": "enter:Valutato", "actions": [{"kind": "risk_acceptance", "ref": "reopened"}]}
+    ]
+  }
+}

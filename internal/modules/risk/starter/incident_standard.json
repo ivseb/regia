@@ -1,0 +1,41 @@
+{
+  "format": "regia.process/v1",
+  "key": "incident_standard",
+  "name": "Gestione dell'incidente",
+  "description": "Pacchetto di partenza: rilevato, classificato secondo gli schemi normativi del tenant (che generano le notifiche con le loro scadenze), in gestione, risolto, postmortem con azioni correttive, chiuso quando le notifiche sono inviate.",
+  "type": "incident",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Rilevato", "category": "todo", "color": "#6B7280", "description": "Segnalato: si raccolgono i primi dati sull'impatto e si classifica."},
+      {"name": "Classificato", "category": "in_progress", "color": "#3550C8", "description": "Gli schemi di classificazione sono applicati: se l'incidente è grave o significativo partono le notifiche."},
+      {"name": "In gestione", "category": "in_progress", "color": "#0B6E8E", "description": "Contenimento e ripristino; la timeline registra gli eventi."},
+      {"name": "Risolto", "category": "in_progress", "color": "#3A7A1C", "description": "Servizio ripristinato: restano le notifiche finali e il postmortem."},
+      {"name": "Postmortem", "category": "in_progress", "color": "#6B4FC8", "description": "Analisi delle cause, lezioni apprese e azioni correttive."},
+      {"name": "Chiuso", "category": "done", "color": "#1F2937", "description": "Notifiche inviate, postmortem e azioni registrate."},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "Falso allarme o segnalazione doppia."}
+    ],
+    "initial": "Rilevato",
+    "gates": [
+      {"key": "notifiche", "name": "Notifiche normative", "condition": "notifiche_aperte: 0", "message": "ci sono notifiche normative non ancora inviate o dichiarate non dovute"},
+      {"key": "postmortem", "name": "Postmortem", "condition": "postmortem: presente", "message": "compila il postmortem"}
+    ],
+    "transitions": [
+      {"from": ["Rilevato"], "to": "Classificato", "label": "Classifica", "roles": ["incident_lead", "incident_team"]},
+      {"from": ["Classificato"], "to": "In gestione", "label": "Prendi in carico", "roles": ["incident_lead", "incident_team"]},
+      {"from": ["Classificato", "In gestione"], "to": "Risolto", "label": "Segna come risolto", "roles": ["incident_lead", "incident_team"]},
+      {"from": ["Risolto"], "to": "In gestione", "label": "Riapri", "roles": ["incident_lead", "incident_team"], "comment_required": true},
+      {"from": ["Risolto"], "to": "Postmortem", "label": "Avvia il postmortem", "roles": ["incident_lead", "incident_team"]},
+      {"from": ["Postmortem"], "to": "Chiuso", "label": "Chiudi", "roles": ["incident_lead", "incident_team"], "gates": ["postmortem", "notifiche"]},
+      {"from": ["Risolto"], "to": "Chiuso", "label": "Chiudi senza postmortem", "roles": ["incident_lead", "incident_team"], "when": "grave: no", "gates": ["notifiche"], "comment_required": true},
+      {"from": ["Rilevato", "Classificato"], "to": "Annullato", "label": "Annulla", "roles": ["incident_lead", "incident_team"], "comment_required": true}
+    ],
+    "rules": [
+      {"key": "gestione", "name": "La gestione incidenti segue ogni incidente", "on": "create", "actions": [{"kind": "assign_role", "role": "incident_team", "group": "Incident management"}, {"kind": "incident_stage", "ref": "detected"}]},
+      {"key": "classificazione", "name": "Si applicano gli schemi di classificazione", "on": "enter:Classificato", "actions": [{"kind": "incident_stage", "ref": "classified"}]},
+      {"key": "risoluzione", "name": "Ora di risoluzione", "on": "enter:Risolto", "actions": [{"kind": "incident_stage", "ref": "resolved"}]},
+      {"key": "chiusura", "name": "Chiusura nella timeline", "on": "enter:Chiuso", "actions": [{"kind": "incident_stage", "ref": "closed"}]}
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+# Backup periodico di Regia (esempio; lo avvia regia-backup.timer, docs/operativo.md).
+# Funziona con il servizio avviato: pg_dump legge un'istantanea coerente senza fermare nulla.
+[Unit]
+Description=Backup di Regia
+After=regia.service
+
+[Service]
+Type=oneshot
+User=regia
+Group=regia
+Environment=REGIA_PG_BIN=/usr/lib/postgresql/18/bin
+# Facoltativo: backup cifrati.
+#Environment=REGIA_BACKUP_PASSPHRASE_FILE=/etc/regia/backup-passphrase
+EnvironmentFile=-/etc/regia/regia.env
+# Ultimi 14 backup periodici; quelli automatici prima delle migrazioni (auto-*) hanno la loro retention.
+ExecStart=/opt/regia/bin/regia backup --data /var/lib/regia --dir /var/backups/regia --keep 14
+# Facoltativo: copia fuori dalla macchina, per esempio con rsync o rclone verso un altro disco.
+#ExecStartPost=/usr/bin/rsync -a --delete /var/backups/regia/ backup-host:/srv/backup/regia/
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/regia /var/backups/regia
+UMask=0077

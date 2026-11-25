@@ -1,0 +1,220 @@
+{
+  "format": "regia.reviews/v1",
+  "name": "Valutazioni di partenza",
+  "description": "Team valutatori, tipi di valutazione e questionari di esempio. Le regole e il gate si aggiungono ai processi della domanda e dell'impatto come nuova versione.",
+  "groups": ["Sicurezza", "Architetture", "Privacy (DPO)", "Compliance"],
+  "teams": [
+    {"key": "sicurezza", "name": "Sicurezza", "description": "Sicurezza applicativa e infrastrutturale.", "group": "Sicurezza", "sla_days": 5, "reminder_days": 1, "escalation_days": 2},
+    {"key": "architetture", "name": "Architetture", "description": "Architetture applicative, integrazioni, linee guida tecnologiche.", "group": "Architetture", "sla_days": 5, "reminder_days": 1, "escalation_days": 3},
+    {"key": "privacy", "name": "Privacy (DPO)", "description": "Protezione dei dati personali: DPIA e trattamenti.", "group": "Privacy (DPO)", "sla_days": 10, "reminder_days": 2, "escalation_days": 3},
+    {"key": "compliance", "name": "Compliance", "description": "Conformità normativa: DORA, NIS2, registro dei fornitori ICT.", "group": "Compliance", "sla_days": 10, "reminder_days": 2, "escalation_days": 5}
+  ],
+  "templates": [
+    {
+      "key": "security_applicativa",
+      "notes": "Pacchetto di partenza",
+      "definition": {
+        "name": "Security review applicativa",
+        "description": "Esposizione, accessi, dati e segreti dell'applicazione toccata dalla richiesta.",
+        "sections": [
+          {
+            "key": "contesto",
+            "title": "Contesto",
+            "description": "Dati già noti dal catalogo applicativo: conferma o correggi.",
+            "questions": [
+              {"key": "criticita", "label": "Criticità dell'applicazione", "type": "single", "required": true, "prefill": "criticita",
+               "options": [{"value": "bassa", "label": "Bassa"}, {"value": "media", "label": "Media"}, {"value": "alta", "label": "Alta"}, {"value": "critica", "label": "Critica"}]},
+              {"key": "classificazione_dati", "label": "Classificazione dei dati trattati", "type": "single", "required": true, "prefill": "classificazione_dati",
+               "options": [{"value": "pubblici", "label": "Pubblici"}, {"value": "aggregati", "label": "Aggregati o anonimi"}, {"value": "contrattuali", "label": "Contrattuali"}, {"value": "personali", "label": "Personali"}, {"value": "particolari", "label": "Categorie particolari"}, {"value": "finanziari", "label": "Finanziari"}, {"value": "credenziali", "label": "Credenziali"}]}
+            ]
+          },
+          {
+            "key": "esposizione",
+            "title": "Esposizione e accessi",
+            "questions": [
+              {"key": "esposto_internet", "label": "L'applicazione o le sue API sono raggiungibili da internet?", "type": "yes_no", "required": true,
+               "help": "Anche solo una parte, per esempio un endpoint per i partner o un'app mobile."},
+              {"key": "autenticazione", "label": "Come si autenticano gli utenti?", "type": "single", "required": true, "visible_when": "esposto_internet: sì",
+               "options": [{"value": "sso", "label": "SSO aziendale (OIDC/SAML)"}, {"value": "locale", "label": "Credenziali gestite dall'applicazione"}, {"value": "nessuna", "label": "Nessuna autenticazione"}]},
+              {"key": "mfa", "label": "Gli accessi da internet richiedono più fattori (MFA)?", "type": "yes_no", "required": true, "visible_when": "esposto_internet: sì -autenticazione: nessuna"},
+              {"key": "utenti_esterni", "label": "Accedono utenti esterni all'azienda (clienti, fornitori)?", "type": "yes_no"}
+            ]
+          },
+          {
+            "key": "dati",
+            "title": "Dati, segreti e terze parti",
+            "questions": [
+              {"key": "cifratura_riposo", "label": "I dati sono cifrati a riposo?", "type": "yes_no", "required": true},
+              {"key": "segreti", "label": "Dove sono custoditi segreti e chiavi?", "type": "single", "required": true,
+               "options": [{"value": "vault", "label": "Vault aziendale"}, {"value": "config", "label": "File di configurazione o variabili d'ambiente"}, {"value": "codice", "label": "Nel codice"}]},
+              {"key": "terze_parti", "label": "Ci sono integrazioni con servizi di terze parti?", "type": "yes_no", "required": true},
+              {"key": "elenco_terze_parti", "label": "Quali servizi e con quali dati?", "type": "text", "multiline": true, "required": true, "visible_when": "terze_parti: sì"},
+              {"key": "schema_architettura", "label": "Schema dell'architettura", "type": "attachment", "help": "Facoltativo: aiuta il team a rispondere prima."}
+            ]
+          }
+        ],
+        "derivations": [
+          {"key": "waf", "when": "esposto_internet: sì", "text": "Pubblicare dietro il WAF aziendale con profilo OWASP e rate limiting.", "category": "Sicurezza perimetrale"},
+          {"key": "mfa", "when": "esposto_internet: sì mfa: no", "text": "Attivare l'autenticazione a più fattori per tutti gli accessi da internet.", "category": "Identità e accessi"},
+          {"key": "sso", "when": "autenticazione: locale", "text": "Integrare l'autenticazione con l'SSO aziendale ed eliminare le credenziali locali.", "category": "Identità e accessi"},
+          {"key": "cifratura", "when": "cifratura_riposo: no classificazione_dati: personali, particolari, finanziari, credenziali", "text": "Cifrare i dati a riposo (AES-256) con chiavi gestite nel KMS aziendale.", "category": "Protezione dei dati"},
+          {"key": "segreti", "when": "segreti: config, codice", "text": "Spostare segreti e chiavi nel vault aziendale, con rotazione automatica.", "category": "Gestione dei segreti"},
+          {"key": "pentest", "when": "criticita: alta, critica esposto_internet: sì", "text": "Penetration test sul perimetro esposto prima del rilascio in produzione.", "category": "Verifiche"}
+        ]
+      }
+    },
+    {
+      "key": "design_review",
+      "notes": "Pacchetto di partenza",
+      "definition": {
+        "name": "Design review",
+        "description": "Soluzione, tecnologie e integrazioni dell'intervento sull'applicazione.",
+        "sections": [
+          {
+            "key": "soluzione",
+            "title": "Soluzione",
+            "questions": [
+              {"key": "tipo_intervento", "label": "Tipo di intervento", "type": "single", "required": true, "prefill": "tipo_intervento",
+               "options": [{"value": "nuova", "label": "Nuova applicazione"}, {"value": "modifica", "label": "Modifica"}, {"value": "configurazione", "label": "Configurazione"}, {"value": "dismissione", "label": "Dismissione"}]},
+              {"key": "descrizione", "label": "Descrivi la soluzione in poche righe", "type": "text", "multiline": true, "required": true,
+               "help": "Componenti toccati, flussi principali, dove gira."},
+              {"key": "hosting", "label": "Dove gira la soluzione?", "type": "single", "required": true,
+               "options": [{"value": "cloud_ue", "label": "Cloud aziendale (UE)"}, {"value": "on_premise", "label": "Data center aziendale"}, {"value": "saas", "label": "SaaS di un fornitore"}]},
+              {"key": "nuove_tecnologie", "label": "Introduce tecnologie non presenti nello stack aziendale?", "type": "yes_no", "required": true},
+              {"key": "tecnologie", "label": "Quali tecnologie e perché", "type": "text", "multiline": true, "required": true, "visible_when": "nuove_tecnologie: sì"}
+            ]
+          },
+          {
+            "key": "integrazioni",
+            "title": "Integrazioni",
+            "questions": [
+              {"key": "nuove_api", "label": "Espone o consuma API nuove?", "type": "yes_no", "required": true},
+              {"key": "standard_api", "label": "Le API seguono le linee guida aziendali (OpenAPI 3, versionamento)?", "type": "yes_no", "required": true, "visible_when": "nuove_api: sì"},
+              {"key": "volumi", "label": "Chiamate al giorno attese", "type": "number", "min": 0, "unit": "chiamate/giorno", "visible_when": "nuove_api: sì"},
+              {"key": "diagramma", "label": "Diagramma di contesto", "type": "attachment"}
+            ]
+          }
+        ],
+        "derivations": [
+          {"key": "tecnologie", "when": "nuove_tecnologie: sì", "text": "Presentare le nuove tecnologie al comitato architetture prima dell'adozione.", "category": "Governance tecnologica"},
+          {"key": "api", "when": "nuove_api: sì standard_api: no", "text": "Adeguare le API alle linee guida aziendali (OpenAPI 3, versionamento semantico).", "category": "Integrazione"},
+          {"key": "saas", "when": "hosting: saas", "text": "Verificare il fornitore SaaS con la checklist cloud aziendale.", "category": "Cloud"},
+          {"key": "carico", "when": "volumi: >1000000", "text": "Test di carico con i volumi attesi prima del rilascio.", "category": "Prestazioni"}
+        ]
+      }
+    },
+    {
+      "key": "dpia_preliminare",
+      "notes": "Pacchetto di partenza",
+      "definition": {
+        "name": "DPIA preliminare",
+        "description": "Prima valutazione del trattamento di dati personali: dice se serve la DPIA completa (art. 35 GDPR).",
+        "sections": [
+          {
+            "key": "trattamento",
+            "title": "Il trattamento",
+            "questions": [
+              {"key": "finalita", "label": "Per quale finalità si trattano i dati?", "type": "text", "multiline": true, "required": true},
+              {"key": "interessati", "label": "Di chi sono i dati?", "type": "multi", "required": true,
+               "options": [{"value": "clienti", "label": "Clienti"}, {"value": "dipendenti", "label": "Dipendenti"}, {"value": "fornitori", "label": "Fornitori"}, {"value": "minori", "label": "Minori"}]},
+              {"key": "dati_particolari", "label": "Si trattano categorie particolari (salute, opinioni, biometrici)?", "type": "yes_no", "required": true},
+              {"key": "profilazione", "label": "Ci sono profilazione o decisioni automatizzate?", "type": "yes_no", "required": true},
+              {"key": "larga_scala", "label": "Il trattamento è su larga scala?", "type": "yes_no", "required": true,
+               "help": "Indicativamente: più di 10.000 interessati o un'intera categoria di clienti."}
+            ]
+          },
+          {
+            "key": "misure",
+            "title": "Base giuridica e conservazione",
+            "questions": [
+              {"key": "base_giuridica", "label": "Base giuridica", "type": "single", "required": true,
+               "options": [{"value": "contratto", "label": "Esecuzione di un contratto"}, {"value": "consenso", "label": "Consenso"}, {"value": "obbligo_legale", "label": "Obbligo di legge"}, {"value": "legittimo_interesse", "label": "Legittimo interesse"}]},
+              {"key": "conservazione_mesi", "label": "Per quanto tempo si conservano i dati?", "type": "number", "required": true, "min": 1, "unit": "mesi"},
+              {"key": "extra_ue", "label": "I dati escono dall'Unione europea?", "type": "yes_no", "required": true},
+              {"key": "paesi", "label": "Verso quali paesi e quali fornitori?", "type": "text", "required": true, "visible_when": "extra_ue: sì"},
+              {"key": "informativa", "label": "Bozza dell'informativa", "type": "attachment"}
+            ]
+          }
+        ],
+        "derivations": [
+          {"key": "dpia_completa", "when": "dati_particolari: sì oppure profilazione: sì oppure larga_scala: sì", "text": "Svolgere la DPIA completa prima dell'avvio del trattamento (art. 35 GDPR).", "category": "Privacy"},
+          {"key": "minori", "when": "interessati: minori", "text": "Raccogliere il consenso dei genitori e adeguare l'informativa per i minori.", "category": "Privacy"},
+          {"key": "trasferimenti", "when": "extra_ue: sì", "text": "Clausole contrattuali standard e valutazione d'impatto del trasferimento (TIA).", "category": "Trasferimenti"},
+          {"key": "conservazione", "when": "conservazione_mesi: >120", "text": "Motivare la conservazione oltre i 10 anni oppure ridurla.", "category": "Minimizzazione"},
+          {"key": "registro", "when": "finalita: presente", "text": "Aggiornare il registro dei trattamenti.", "category": "Registro"}
+        ]
+      }
+    },
+    {
+      "key": "parere_dora",
+      "notes": "Pacchetto di partenza",
+      "definition": {
+        "name": "Parere compliance e DORA",
+        "description": "Funzioni critiche, fornitori ICT e continuità operativa (Regolamento UE 2022/2554).",
+        "sections": [
+          {
+            "key": "fornitori",
+            "title": "Funzioni e fornitori",
+            "questions": [
+              {"key": "funzione_critica", "label": "La richiesta tocca una funzione essenziale o importante?", "type": "yes_no", "required": true, "prefill": "funzione_critica",
+               "help": "Precompilata dal catalogo applicativo: è vera se almeno un'applicazione impattata supporta una funzione critica."},
+              {"key": "nuovo_fornitore", "label": "Coinvolge un fornitore ICT nuovo?", "type": "yes_no", "required": true},
+              {"key": "fornitore", "label": "Quale fornitore e per quale servizio?", "type": "text", "required": true, "visible_when": "nuovo_fornitore: sì"},
+              {"key": "subappalto", "label": "Il fornitore subappalta parti del servizio?", "type": "yes_no", "visible_when": "nuovo_fornitore: sì"}
+            ]
+          },
+          {
+            "key": "continuita",
+            "title": "Continuità operativa",
+            "visible_when": "funzione_critica: sì",
+            "questions": [
+              {"key": "rto_ore", "label": "Tempo massimo di ripristino richiesto (RTO)", "type": "number", "required": true, "min": 0, "unit": "ore"},
+              {"key": "piano_uscita", "label": "Esiste una strategia di uscita dal fornitore?", "type": "yes_no", "required": true, "visible_when": "nuovo_fornitore: sì"}
+            ]
+          }
+        ],
+        "derivations": [
+          {"key": "registro", "when": "nuovo_fornitore: sì", "text": "Iscrivere il fornitore nel registro delle informazioni (art. 28 DORA).", "category": "DORA"},
+          {"key": "clausole", "when": "nuovo_fornitore: sì funzione_critica: sì", "text": "Inserire nel contratto le clausole dell'art. 30 DORA: audit, livelli di servizio, uscita.", "category": "DORA"},
+          {"key": "uscita", "when": "piano_uscita: no", "text": "Definire la strategia di uscita e il piano di transizione dal fornitore.", "category": "DORA"},
+          {"key": "resilienza", "when": "funzione_critica: sì", "text": "Includere la funzione nei test di resilienza operativa digitale.", "category": "Resilienza"}
+        ]
+      }
+    }
+  ],
+  "types": [
+    {"key": "security_review", "name": "Security review", "description": "Valutazione di sicurezza di ogni applicazione critica toccata dalla richiesta.", "team": "sicurezza", "scope": "impact", "template_key": "security_applicativa", "mandatory": true, "deciders": "team"},
+    {"key": "design_review", "name": "Design review", "description": "Revisione architetturale di ogni intervento su un'applicazione.", "team": "architetture", "scope": "impact", "template_key": "design_review", "mandatory": true, "deciders": "team"},
+    {"key": "dpia_preliminare", "name": "DPIA preliminare", "description": "Prima valutazione privacy della richiesta che tratta dati personali; decide il DPO.", "team": "privacy", "scope": "request", "template_key": "dpia_preliminare", "mandatory": true, "deciders": "lead"},
+    {"key": "parere_compliance", "name": "Parere compliance e DORA", "description": "Parere della Compliance sulle richieste che toccano funzioni critiche.", "team": "compliance", "scope": "request", "template_key": "parere_dora", "mandatory": false, "deciders": "team"}
+  ],
+  "process_patches": [
+    {
+      "process": "demand_standard",
+      "notes": "Valutazioni: regole di attivazione e gate prima dell'approvazione",
+      "gates": [
+        {"key": "valutazioni", "name": "Valutazioni chiuse", "condition": "-valutazioni_obbligatorie_aperte: >0 -valutazioni_non_favorevoli: >0",
+         "message": "servono le valutazioni obbligatorie chiuse e nessun esito non favorevole"}
+      ],
+      "transition_gates": [{"to": "Approvazione", "gate": "valutazioni"}],
+      "rules": [
+        {"key": "valutazione_privacy", "name": "Dati personali: DPIA preliminare del DPO", "on": "enter:Valutazione",
+         "when": "classificazione_dati: personali, particolari", "actions": [{"kind": "open_review", "ref": "dpia_preliminare"}]},
+        {"key": "valutazione_compliance", "name": "Funzione critica: parere della Compliance (DORA)", "on": "enter:Valutazione",
+         "when": "funzione_critica: sì", "actions": [{"kind": "open_review", "ref": "parere_compliance"}]},
+        {"key": "valutazione_sicurezza", "name": "Applicazioni a criticità alta o critica: security review", "on": "enter:Valutazione",
+         "when": "criticita_max: alta, critica", "actions": [{"kind": "open_review", "ref": "security_review", "when": "criticita: alta, critica"}]},
+        {"key": "valutazione_architettura", "name": "Sempre: design review di ogni applicazione", "on": "enter:Valutazione",
+         "actions": [{"kind": "open_review", "ref": "design_review"}]}
+      ]
+    },
+    {
+      "process": "impact_standard",
+      "notes": "Valutazioni: un impatto nuovo riceve le valutazioni delle regole della fase della richiesta",
+      "rules": [
+        {"key": "valutazioni_richiesta", "name": "Le regole delle valutazioni valgono anche per gli impatti nuovi", "on": "create",
+         "actions": [{"kind": "sync_reviews"}]}
+      ]
+    }
+  ]
+}

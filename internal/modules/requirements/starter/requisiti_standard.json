@@ -1,0 +1,92 @@
+{
+  "format": "regia.requirements/v1",
+  "name": "Requisiti di partenza",
+  "description": "Un catalogo breve di requisiti di sicurezza e resilienza scritti per Regia (nessun testo di norme), con tre baseline: di base per ogni applicazione, di sicurezza alta per le applicazioni a criticità alta o critica, di progetto per le richieste che toccano una funzione critica. Livelli di rischio, politica delle deroghe, regola che applica le baseline in Valutazione e gate di rilascio sugli impatti.",
+  "settings": {
+    "risk_levels": [
+      {"key": "basso", "name": "Basso", "score": 1},
+      {"key": "medio", "name": "Medio", "score": 2},
+      {"key": "alto", "name": "Alto", "score": 3},
+      {"key": "critico", "name": "Critico", "score": 4}
+    ],
+    "max_exception_days": 365,
+    "expiry_notice_days": 14
+  },
+  "exception_policy": [
+    {"when": {"risk_lte": 2}, "steps": [{"approvers": [{"role": "requirement_verifier"}]}]},
+    {"when": {}, "steps": [{"approvers": [{"role": "requirement_verifier"}]}, {"approvers": [{"role": "sponsor"}]}]}
+  ],
+  "catalogs": [
+    {
+      "key": "sicurezza_applicativa",
+      "notes": "Pacchetto di partenza",
+      "definition": {
+        "name": "Sicurezza e resilienza applicativa",
+        "description": "Requisiti minimi da adattare allo standard aziendale. Le voci con verifica da evidenza diventeranno automatiche con l'integrazione DevSecOps; fino ad allora le verifica il team indicato.",
+        "items": [
+          {"key": "SEC-01", "title": "Autenticazione a più fattori per gli accessi amministrativi", "category": "Identità e accessi", "regulatory": ["iso27001:A.8.5", "nis2:Art. 21(2)(j)"],
+           "text": "Gli accessi con privilegi amministrativi all'applicazione e alla sua infrastruttura richiedono un secondo fattore, tramite l'accesso unico aziendale.",
+           "verification": {"method": "manual", "team": "sicurezza", "criterion": "Prova di accesso amministrativo e configurazione dell'IdP con il secondo fattore obbligatorio."}},
+          {"key": "SEC-02", "title": "Segreti fuori dal codice sorgente", "category": "Segreti", "regulatory": ["iso27001:A.5.17"],
+           "text": "Password, chiavi e token non stanno nel repository né nelle immagini: si leggono da un gestore dei segreti o da variabili protette della piattaforma.",
+           "verification": {"method": "evidence", "check": "secret_scan", "team": "sicurezza", "criterion": "Scansione dei segreti della pipeline senza risultati aperti sul ramo di rilascio."}},
+          {"key": "SEC-03", "title": "Nessuna vulnerabilità critica o alta correggibile nelle dipendenze", "category": "Vulnerabilità", "regulatory": ["iso27001:A.8.8", "nis2:Art. 21(2)(e)", "dora:Art. 9"],
+           "text": "Al rilascio in produzione l'analisi delle dipendenze non riporta vulnerabilità critiche o alte per cui esiste una versione corretta.",
+           "verification": {"method": "evidence", "check": "sca_block", "team": "sicurezza", "criterion": "Esito dell'analisi delle dipendenze in modalità bloccante sul rilascio."}},
+          {"key": "SEC-04", "title": "Log degli accessi inviati al SIEM", "category": "Monitoraggio", "regulatory": ["iso27001:A.8.15", "dora:Art. 10"],
+           "text": "Accessi, errori di autenticazione e operazioni amministrative sono registrati con utente, ora e origine, e inviati al SIEM aziendale.",
+           "verification": {"method": "manual", "team": "sicurezza", "criterion": "Eventi di prova visibili nel SIEM con i campi attesi."}},
+          {"key": "SEC-05", "title": "Cifratura dei dati in transito", "category": "Crittografia", "regulatory": ["iso27001:A.8.24", "dora:Art. 9", "gdpr:Art. 32"],
+           "text": "Tutte le connessioni verso l'esterno e tra componenti usano TLS 1.2 o superiore con certificati validi.",
+           "verification": {"method": "manual", "team": "sicurezza", "criterion": "Verifica della configurazione TLS degli endpoint pubblicati."}},
+          {"key": "SEC-06", "title": "Test di sicurezza prima del primo rilascio", "category": "Test di sicurezza", "regulatory": ["iso27001:A.8.29", "dora:Art. 25"],
+           "text": "Prima del primo rilascio in produzione (e dopo modifiche rilevanti) si esegue un test di sicurezza applicativa; i risultati alti e critici sono chiusi o coperti da deroga.",
+           "verification": {"method": "manual", "team": "sicurezza", "criterion": "Rapporto del test con lo stato dei risultati."}},
+          {"key": "RES-01", "title": "Backup e ripristino provati", "category": "Continuità", "regulatory": ["iso27001:A.8.13", "dora:Art. 12"],
+           "text": "I dati dell'applicazione hanno backup coerenti con l'RPO dichiarato e il ripristino è stato provato entro l'RTO.",
+           "verification": {"method": "manual", "team": "architetture", "criterion": "Esito dell'ultima prova di ripristino con i tempi misurati."}},
+          {"key": "ARC-01", "title": "Architettura documentata", "category": "Architettura", "regulatory": ["iso27001:A.8.27"],
+           "text": "Componenti, flussi e integrazioni toccati dall'intervento sono aggiornati nella documentazione di architettura.",
+           "verification": {"method": "manual", "team": "architetture", "criterion": "Documento o diagramma aggiornato, collegato al requisito."}},
+          {"key": "TPR-01", "title": "Fornitori ICT censiti nel registro", "category": "Terze parti", "regulatory": ["dora:Art. 28"],
+           "text": "I fornitori ICT che supportano la funzione critica sono censiti nel registro delle informazioni, con contratto e servizi aggiornati.",
+           "verification": {"method": "manual", "team": "compliance", "criterion": "Estratto del registro con le voci dei fornitori coinvolti."}},
+          {"key": "RES-02", "title": "Continuità della funzione critica provata", "category": "Continuità", "regulatory": ["dora:Art. 11"],
+           "text": "Il piano di continuità della funzione critica tiene conto della modifica ed è stato provato con uno scenario realistico.",
+           "verification": {"method": "manual", "team": "compliance", "criterion": "Verbale della prova di continuità."}}
+        ],
+        "baselines": [
+          {"key": "base", "name": "Baseline di base", "description": "Per ogni applicazione toccata.", "scope": "application",
+           "items": ["SEC-02", "SEC-05", "ARC-01"]},
+          {"key": "sicurezza_alta", "name": "Baseline sicurezza alta", "description": "Per le applicazioni a criticità alta o critica.", "scope": "application",
+           "when": "criticita: alta, critica", "items": ["SEC-01", "SEC-03", "SEC-04", "SEC-06", "RES-01"]},
+          {"key": "funzione_critica", "name": "Baseline di progetto per funzioni critiche", "description": "Per le richieste che toccano una funzione critica o importante.", "scope": "project",
+           "when": "funzione_critica: sì", "items": ["TPR-01", "RES-02"]}
+        ]
+      }
+    }
+  ],
+  "process_patches": [
+    {
+      "process": "demand_standard",
+      "notes": "Requisiti: baseline applicate all'ingresso in Valutazione",
+      "rules": [
+        {"key": "requisiti_baseline", "name": "Baseline dei requisiti per ogni applicazione e per il progetto", "on": "enter:Valutazione",
+         "actions": [{"kind": "apply_baseline", "ref": "sicurezza_applicativa"}]}
+      ]
+    },
+    {
+      "process": "impact_standard",
+      "notes": "Requisiti: celle dei requisiti di progetto per gli impatti nuovi e gate di rilascio",
+      "gates": [
+        {"key": "requisiti", "name": "Requisiti verificati o in deroga", "check": "requisiti_rilascio",
+         "message": "ci sono requisiti dell'applicazione non verificati e senza deroga valida"}
+      ],
+      "transition_gates": [{"to": "Rilasciato", "gate": "requisiti"}],
+      "rules": [
+        {"key": "requisiti_impatto", "name": "I requisiti di progetto e le baseline valgono anche per gli impatti nuovi", "on": "create",
+         "actions": [{"kind": "sync_requirements"}]}
+      ]
+    }
+  ]
+}

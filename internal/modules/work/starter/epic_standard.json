@@ -1,0 +1,29 @@
+{
+  "format": "regia.process/v1",
+  "key": "epic_standard",
+  "name": "Ciclo di vita dell'epic",
+  "description": "Pacchetto di partenza: l'epic raccoglie le story di un perimetro (per esempio l'impatto di una richiesta accettato dal team).",
+  "type": "epic",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da fare", "category": "todo", "color": "#6B7280", "description": "Perimetro accettato, lavoro non ancora iniziato."},
+      {"name": "In corso", "category": "in_progress", "color": "#3550C8", "description": "Almeno una story è in lavorazione."},
+      {"name": "Fatto", "category": "done", "color": "#1F2937", "description": "Tutte le story sono chiuse."},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Da fare",
+    "gates": [
+      {"key": "story_chiuse", "name": "Story chiuse", "condition": "-figli_aperti: >0", "message": "ci sono ancora story aperte nell'epic"}
+    ],
+    "transitions": [
+      {"from": ["Da fare"], "to": "In corso", "label": "Avvia"},
+      {"from": ["In corso"], "to": "Fatto", "label": "Chiudi l'epic", "gates": ["story_chiuse"]},
+      {"from": ["In corso"], "to": "Da fare", "label": "Rimetti da fare"},
+      {"from": ["Fatto"], "to": "In corso", "label": "Riapri"},
+      {"from": ["Da fare", "In corso"], "to": "Annullato", "label": "Annulla", "comment_required": true},
+      {"from": ["Annullato"], "to": "Da fare", "label": "Ripristina"}
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "format": "regia.process/v1",
+  "key": "impact_standard",
+  "name": "Ciclo di vita dell'impatto",
+  "description": "Pacchetto di partenza: analisi tecnica di una business request su una applicazione, fino al rilascio (sdlc.md §4).",
+  "type": "impact",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da analizzare", "category": "todo", "color": "#6B7280", "description": "L'applicazione è indicata come toccata dalla richiesta."},
+      {"name": "In analisi", "category": "in_progress", "color": "#6B4FC8", "description": "Analisi tecnica: tipo di intervento, descrizione, stima."},
+      {"name": "Stimato", "category": "in_progress", "color": "#0B6E8E", "description": "In attesa che il team owner accetti il perimetro."},
+      {"name": "Accettato", "category": "in_progress", "color": "#3550C8", "description": "Il team ha preso in carico il perimetro."},
+      {"name": "In realizzazione", "category": "in_progress", "color": "#3A7A1C", "description": "Sviluppo e collaudo."},
+      {"name": "Rilasciato", "category": "done", "color": "#1F2937", "description": "In produzione."},
+      {"name": "Non necessario", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "L'analisi ha escluso l'applicazione."}
+    ],
+    "initial": "Da analizzare",
+    "gates": [
+      {"key": "stima", "name": "Stima dell'impatto", "condition": "giornate: presente", "message": "serve la stima in giornate prima di passarlo al team"},
+      {"key": "team", "name": "Team owner", "condition": "team: presente", "message": "serve il team owner dell'applicazione"}
+    ],
+    "transitions": [
+      {"from": ["Da analizzare"], "to": "In analisi", "label": "Avvia l'analisi", "roles": ["technical_analyst", "demand_manager", "pmo", "project_manager", "architect"]},
+      {"from": ["In analisi"], "to": "Stimato", "label": "Passa al team", "roles": ["technical_analyst", "demand_manager", "pmo", "project_manager", "architect"], "gates": ["stima", "team"]},
+      {"from": ["Stimato"], "to": "Accettato", "label": "Accetta il perimetro", "roles": ["team_lead"]},
+      {"from": ["Stimato"], "to": "In analisi", "label": "Rimanda all'analisi", "roles": ["team_lead"], "comment_required": true},
+      {"from": ["Accettato"], "to": "In realizzazione", "label": "Avvia la realizzazione", "roles": ["team_lead"]},
+      {"from": ["In realizzazione"], "to": "Rilasciato", "label": "Segna come rilasciato", "roles": ["team_lead"]},
+      {"from": ["Da analizzare", "In analisi", "Stimato"], "to": "Non necessario", "label": "Non necessario", "roles": ["technical_analyst", "demand_manager", "pmo", "project_manager", "architect"], "comment_required": true}
+    ],
+    "rules": [
+      {"key": "demand_management", "name": "Il demand management segue ogni impatto", "on": "create",
+       "actions": [{"kind": "assign_role", "role": "demand_manager", "group": "Demand management"}]}
+    ]
+  }
+}

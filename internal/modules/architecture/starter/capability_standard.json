@@ -1,0 +1,23 @@
+{
+  "format": "regia.process/v1",
+  "key": "capability_standard",
+  "name": "Ciclo di vita della capability",
+  "description": "Pacchetto di partenza: una capability di business è attiva, in evoluzione oppure dismessa.",
+  "type": "capability",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Attiva", "category": "in_progress", "color": "#3A7A1C"},
+      {"name": "In evoluzione", "category": "in_progress", "color": "#6B4FC8"},
+      {"name": "Dismessa", "category": "done", "color": "#1F2937"}
+    ],
+    "initial": "Attiva",
+    "transitions": [
+      {"from": ["Attiva"], "to": "In evoluzione", "label": "Avvia l'evoluzione"},
+      {"from": ["In evoluzione"], "to": "Attiva", "label": "Concludi l'evoluzione"},
+      {"from": ["Attiva", "In evoluzione"], "to": "Dismessa", "label": "Dismetti", "comment_required": true},
+      {"from": ["Dismessa"], "to": "Attiva", "label": "Riattiva"}
+    ]
+  }
+}

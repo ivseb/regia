@@ -1,0 +1,20 @@
+{
+  "format": "regia.process/v1",
+  "key": "logical_asset_standard",
+  "name": "Ciclo di vita dell'asset logico",
+  "description": "Pacchetto di partenza: un asset logico è attivo finché il business lo usa.",
+  "type": "logical_asset",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Attivo", "category": "in_progress", "color": "#3A7A1C"},
+      {"name": "Dismesso", "category": "done", "color": "#1F2937"}
+    ],
+    "initial": "Attivo",
+    "transitions": [
+      {"from": ["Attivo"], "to": "Dismesso", "label": "Dismetti", "comment_required": true},
+      {"from": ["Dismesso"], "to": "Attivo", "label": "Riattiva"}
+    ]
+  }
+}

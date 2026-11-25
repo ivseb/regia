@@ -1,0 +1,319 @@
+{
+  "format": "regia.process/v1",
+  "key": "demand_standard",
+  "name": "Ciclo di vita della domanda",
+  "description": "Pacchetto di partenza: stage-gate della business request (demand.md §4). Si modifica dalla configurazione dei processi.",
+  "type": "business_request",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {
+        "name": "Bozza",
+        "category": "todo",
+        "color": "#6B7280",
+        "description": "La richiesta si prepara: chi la apre può ancora modificarla."
+      },
+      {
+        "name": "Inviata",
+        "category": "todo",
+        "color": "#6B7280",
+        "description": "In attesa della presa in carico del demand management."
+      },
+      {
+        "name": "Triage",
+        "category": "in_progress",
+        "color": "#6B4FC8",
+        "description": "Prima analisi: completezza, duplicati, urgenza."
+      },
+      {
+        "name": "Valutazione",
+        "category": "in_progress",
+        "color": "#0B6E8E",
+        "description": "Stima di costi, benefici e rischi."
+      },
+      {
+        "name": "Prioritizzazione",
+        "category": "in_progress",
+        "color": "#3550C8",
+        "description": "Confronto con il resto del portafoglio."
+      },
+      {
+        "name": "Approvazione",
+        "category": "in_progress",
+        "color": "#9A5200",
+        "description": "Decisione dello sponsor e degli organi previsti dalle soglie."
+      },
+      {
+        "name": "Pianificazione",
+        "category": "in_progress",
+        "color": "#0B7A5E",
+        "description": "Team, budget e date."
+      },
+      {
+        "name": "In esecuzione",
+        "category": "in_progress",
+        "color": "#3A7A1C",
+        "description": "Realizzazione e monitoraggio."
+      },
+      {
+        "name": "Chiusa",
+        "category": "done",
+        "color": "#1F2937",
+        "description": "Consegnata e chiusa con i benefici rilevati."
+      },
+      {
+        "name": "Sospesa",
+        "category": "in_progress",
+        "color": "#6B7280",
+        "off_path": true,
+        "description": "Ferma in attesa di una decisione o di una risorsa."
+      },
+      {
+        "name": "Respinta",
+        "category": "cancelled",
+        "color": "#B91C1C",
+        "off_path": true
+      },
+      {
+        "name": "Ritirata",
+        "category": "cancelled",
+        "color": "#6B7280",
+        "off_path": true
+      }
+    ],
+    "initial": "Bozza",
+    "gates": [
+      {
+        "key": "stima",
+        "name": "Stima di costo",
+        "condition": "stima_max: presente",
+        "message": "serve una stima di costo prima di questo passaggio"
+      },
+      {
+        "key": "sponsor",
+        "name": "Sponsor indicato",
+        "condition": "ruolo.sponsor: presente",
+        "message": "serve uno sponsor prima di chiedere l'approvazione"
+      },
+      {
+        "key": "analisi_tecnica",
+        "name": "Analisi tecnica completa",
+        "condition": "-impatti_da_stimare: >0",
+        "message": "ci sono impatti sulle applicazioni ancora da stimare"
+      }
+    ],
+    "transitions": [
+      {
+        "from": [
+          "Bozza"
+        ],
+        "to": "Inviata",
+        "label": "Invia",
+        "roles": [
+          "requester",
+          "business_owner"
+        ]
+      },
+      {
+        "from": [
+          "Inviata"
+        ],
+        "to": "Triage",
+        "label": "Prendi in carico",
+        "roles": [
+          "demand_manager"
+        ]
+      },
+      {
+        "from": [
+          "Inviata",
+          "Triage"
+        ],
+        "to": "Bozza",
+        "label": "Rimanda al richiedente",
+        "roles": [
+          "demand_manager"
+        ],
+        "comment_required": true
+      },
+      {
+        "from": [
+          "Triage"
+        ],
+        "to": "Valutazione",
+        "label": "Avvia la valutazione",
+        "roles": [
+          "demand_manager"
+        ]
+      },
+      {
+        "from": [
+          "Valutazione"
+        ],
+        "to": "Prioritizzazione",
+        "label": "Passa alla prioritizzazione",
+        "roles": [
+          "demand_manager",
+          "pmo"
+        ],
+        "gates": [
+          "stima",
+          "analisi_tecnica"
+        ]
+      },
+      {
+        "from": [
+          "Prioritizzazione"
+        ],
+        "to": "Approvazione",
+        "label": "Chiedi l'approvazione",
+        "roles": [
+          "demand_manager",
+          "pmo"
+        ],
+        "gates": [
+          "stima",
+          "sponsor"
+        ],
+        "approval": "stage_gate"
+      },
+      {
+        "from": [
+          "Approvazione"
+        ],
+        "to": "Pianificazione",
+        "system": true
+      },
+      {
+        "from": [
+          "Approvazione"
+        ],
+        "to": "Respinta",
+        "system": true
+      },
+      {
+        "from": [
+          "Approvazione"
+        ],
+        "to": "Prioritizzazione",
+        "system": true
+      },
+      {
+        "from": [
+          "Triage",
+          "Valutazione",
+          "Prioritizzazione"
+        ],
+        "to": "Respinta",
+        "label": "Respingi",
+        "roles": [
+          "demand_manager",
+          "pmo"
+        ],
+        "comment_required": true
+      },
+      {
+        "from": [
+          "Pianificazione"
+        ],
+        "to": "In esecuzione",
+        "label": "Avvia l'esecuzione",
+        "roles": [
+          "pmo",
+          "project_manager"
+        ]
+      },
+      {
+        "from": [
+          "In esecuzione"
+        ],
+        "to": "Chiusa",
+        "label": "Chiudi",
+        "roles": [
+          "pmo",
+          "project_manager",
+          "sponsor"
+        ]
+      },
+      {
+        "from": [
+          "Triage",
+          "Valutazione",
+          "Prioritizzazione",
+          "Pianificazione",
+          "In esecuzione"
+        ],
+        "to": "Sospesa",
+        "label": "Sospendi",
+        "roles": [
+          "demand_manager",
+          "pmo",
+          "sponsor"
+        ],
+        "comment_required": true
+      },
+      {
+        "from": [
+          "Sospesa"
+        ],
+        "to": "Triage",
+        "label": "Riprendi",
+        "roles": [
+          "demand_manager"
+        ]
+      },
+      {
+        "from": [
+          "Bozza",
+          "Inviata"
+        ],
+        "to": "Ritirata",
+        "label": "Ritira",
+        "roles": [
+          "requester",
+          "sponsor"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "key": "demand_management",
+        "name": "Il demand management segue ogni richiesta",
+        "on": "create",
+        "actions": [
+          {
+            "kind": "assign_role",
+            "role": "demand_manager",
+            "group": "Demand management"
+          }
+        ]
+      },
+      {
+        "key": "pmo",
+        "name": "Il PMO segue ogni richiesta",
+        "on": "create",
+        "actions": [
+          {
+            "kind": "assign_role",
+            "role": "pmo",
+            "group": "PMO"
+          }
+        ]
+      },
+      {
+        "key": "compliance_normative",
+        "name": "Le richieste normative coinvolgono la Compliance",
+        "on": "enter:Valutazione",
+        "when": "driver: normativo oppure obbligatoria: sì",
+        "actions": [
+          {
+            "kind": "assign_role",
+            "role": "compliance",
+            "group": "Compliance"
+          }
+        ]
+      }
+    ]
+  }
+}

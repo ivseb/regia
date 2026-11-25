@@ -1,0 +1,14 @@
+# Backup notturno di Regia (esempio; docs/operativo.md).
+#   systemctl enable --now regia-backup.timer
+#   systemctl list-timers regia-backup.timer
+[Unit]
+Description=Backup notturno di Regia
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=15min
+# Se la macchina era spenta all'ora prevista, il backup parte al riavvio.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

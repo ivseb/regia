@@ -1,0 +1,31 @@
+{
+  "format": "regia.process/v1",
+  "key": "sprint_standard",
+  "name": "Ciclo di vita dello sprint",
+  "description": "Pacchetto di partenza: pianificato, attivo, chiuso. All'avvio si fotografa l'impegno; alla chiusura gli incompiuti passano allo sprint successivo (o al backlog).",
+  "type": "sprint",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Pianificato", "category": "todo", "color": "#6B7280"},
+      {"name": "Attivo", "category": "in_progress", "color": "#3550C8"},
+      {"name": "Chiuso", "category": "done", "color": "#1F2937"},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Pianificato",
+    "gates": [
+      {"key": "date", "name": "Date dello sprint", "condition": "inizio: presente fine: presente", "message": "servono la data di inizio e la data di fine"},
+      {"key": "uno_attivo", "name": "Un solo sprint attivo", "condition": "-sprint_attivi: >0", "message": "nello spazio c'è già uno sprint attivo: chiudilo prima"}
+    ],
+    "transitions": [
+      {"from": ["Pianificato"], "to": "Attivo", "label": "Avvia lo sprint", "gates": ["date", "uno_attivo"]},
+      {"from": ["Attivo"], "to": "Chiuso", "label": "Chiudi lo sprint"},
+      {"from": ["Pianificato"], "to": "Annullato", "label": "Annulla", "comment_required": true}
+    ],
+    "rules": [
+      {"key": "fotografia", "name": "All'avvio si fotografa l'impegno (burndown)", "on": "enter:Attivo", "actions": [{"kind": "sprint_start"}]},
+      {"key": "incompiuti", "name": "Alla chiusura gli incompiuti passano allo sprint successivo", "on": "enter:Chiuso", "actions": [{"kind": "sprint_close", "ref": "next"}]}
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "format": "regia.process/v1",
+  "key": "exception_standard",
+  "name": "Ciclo della deroga",
+  "description": "Pacchetto di partenza: chi realizza chiede la deroga con motivazione, rischio residuo, scadenza e misure compensative; l'approvazione segue la politica @exception a soglie di rischio; alla scadenza la deroga torna aperta e le celle coperte di nuovo da realizzare.",
+  "type": "exception",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Bozza", "category": "todo", "color": "#6B7280", "description": "Motivazione, rischio residuo, scadenza e misure compensative da completare."},
+      {"name": "In approvazione", "category": "in_progress", "color": "#0B6E8E", "description": "Gli approvatori previsti dalla politica per il livello di rischio decidono; chi chiede non approva."},
+      {"name": "In vigore", "category": "in_progress", "color": "#9A5200", "description": "Approvata: copre le celle indicate fino alla scadenza."},
+      {"name": "Scaduta", "category": "done", "color": "#B42318", "description": "La scadenza è passata: le celle sono di nuovo da realizzare. Si può rinnovare."},
+      {"name": "Respinta", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "Non approvata: si può riformulare."},
+      {"name": "Revocata", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "Non serve più, per esempio perché il requisito è stato realizzato."}
+    ],
+    "initial": "Bozza",
+    "transitions": [
+      {"from": ["Bozza"], "to": "In approvazione", "label": "Chiedi l'approvazione", "roles": ["exception_requester"]},
+      {"from": ["In approvazione"], "to": "In vigore", "system": true},
+      {"from": ["In approvazione"], "to": "Respinta", "system": true},
+      {"from": ["In approvazione"], "to": "Bozza", "system": true},
+      {"from": ["In vigore"], "to": "Scaduta", "system": true},
+      {"from": ["Bozza", "In vigore"], "to": "Revocata", "label": "Revoca", "roles": ["exception_requester", "requirement_owner"], "comment_required": true},
+      {"from": ["Scaduta", "Respinta"], "to": "Bozza", "label": "Riapri per rinnovare", "roles": ["exception_requester"]}
+    ],
+    "rules": [
+      {"key": "stadio_bozza", "name": "Bozza", "on": "enter:Bozza", "actions": [{"kind": "exception_stage", "ref": "draft"}]},
+      {"key": "stadio_approvazione", "name": "Si apre l'approvazione secondo il rischio", "on": "enter:In approvazione", "actions": [{"kind": "exception_stage", "ref": "submitted"}]},
+      {"key": "stadio_vigore", "name": "Le celle sono coperte", "on": "enter:In vigore", "actions": [{"kind": "exception_stage", "ref": "approved"}]},
+      {"key": "stadio_respinta", "name": "Respinta", "on": "enter:Respinta", "actions": [{"kind": "exception_stage", "ref": "rejected"}]},
+      {"key": "stadio_scaduta", "name": "Scaduta: le celle tornano aperte", "on": "enter:Scaduta", "actions": [{"kind": "exception_stage", "ref": "expired"}]},
+      {"key": "stadio_revocata", "name": "Revocata: le celle tornano aperte", "on": "enter:Revocata", "actions": [{"kind": "exception_stage", "ref": "revoked"}]}
+    ]
+  }
+}

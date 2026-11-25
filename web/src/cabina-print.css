@@ -1,0 +1,39 @@
+/* Stampa del pacchetto della seduta (cabina di portafoglio). Il pacchetto sta in #print-root,
+   che print.css mostra al posto dell'app; qui solo l'aspetto del contenuto. */
+@media print {
+  #print-root .cabina-print header {
+    border-bottom: 2px solid var(--rule);
+    padding-bottom: 3mm;
+    margin-bottom: 5mm;
+  }
+  #print-root .cabina-print h1 {
+    margin: 0 0 2mm;
+    font-size: 20pt;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  #print-root .cabina-print p {
+    margin: 0 0 1mm;
+  }
+  #print-root .cabina-print table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  #print-root .cabina-print th,
+  #print-root .cabina-print td {
+    border-bottom: 1px solid var(--hair);
+    padding: 1.5mm 2mm;
+    text-align: left;
+    vertical-align: top;
+  }
+  #print-root .cabina-print th {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid var(--rule);
+  }
+  #print-root .cabina-print tr {
+    break-inside: avoid;
+  }
+}

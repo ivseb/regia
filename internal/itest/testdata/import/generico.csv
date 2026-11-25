@@ -1,0 +1,4 @@
+Chiave;Titolo;Tipo;Stato;Assegnatario;Creato;Scadenza;Etichette;Costo stimato;Note interne
+OPS-10;Rinnovo certificati;Attività;Da fare;Anna Bianchi;15/01/2026;28/02/2026;sicurezza;1200,50;solo per il team
+OPS-11;Migrazione del DNS;Storia;In corso;Marco Neri;16/01/2026;;rete|sicurezza;800;
+OPS-12;Backup non completato;Bug;Chiuso;;17/01/2026;;;;da verificare con il fornitore

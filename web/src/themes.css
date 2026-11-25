@@ -1,0 +1,176 @@
+/*
+ * Temi di Regia (replica/design.md, "Temi e font").
+ *
+ * Ogni tema è una direzione visiva con versione chiara e scura:
+ *   [data-skin="x"]                      chiaro, più le misure (raggio, linee, etichette)
+ *   [data-skin="x"][data-theme="dark"]   scuro: solo i colori
+ * Gli attributi stanno su <html> (main.tsx, appearance.ts) oppure su un contenitore
+ * (anteprima nel Profilo): le variabili valgono per tutto ciò che c'è dentro.
+ * "Sistema" diventa chiaro o scuro in theme.ts, quindi qui non servono media query.
+ *
+ * Regole del file, verificate da scripts/check-contrast.mjs (gira prima della build):
+ * - ogni tema definisce tutte le variabili di Atlante, in chiaro e in scuro;
+ * - testo, testo attenuato, accento e segnali almeno AA (4,5:1) su fondo, campo e selezione;
+ *   il tema "contrasto" almeno AAA (7:1);
+ * - i colori sono esadecimali a 6 cifre, un blocco per selettore.
+ */
+
+/* ---------------------------------------------------------------- Atlante */
+/* Bianco, nero e un solo blu oltremare. Angoli vivi, regola forte di 2 px. */
+:root,
+[data-skin="atlante"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --muted: #52525b;
+  --rule: #0a0a0a;
+  --hair: #e4e4e7;
+  --accent: #2b3ff2;
+  --accent-fg: #ffffff;
+  --sel: #eef0ff;
+  --flag: #c2410c;
+  --ok: #0f7a55;
+  --danger: #b42318;
+  --field: #ffffff;
+  --radius: 0px;
+  --rule-strong: 2px;
+  --focus-w: 2px;
+  --label-weight: 600;
+  --label-tracking: 0.08em;
+  --title-weight: 700;
+}
+[data-skin="atlante"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0c0e;
+  --fg: #f4f4f5;
+  --muted: #a1a1aa;
+  --rule: #d4d4d8;
+  --hair: #2a2a30;
+  --accent: #8b9bff;
+  --accent-fg: #0c0c0e;
+  --sel: #171b3a;
+  --flag: #ff8f5a;
+  --ok: #34d3a6;
+  --danger: #ff7a6e;
+  --field: #121215;
+}
+
+/* ---------------------------------------------------------------- Petrolio */
+/* Carta calda, inchiostro, verde petrolio profondo. Linee da 1 px, etichette spaziate
+   e titoli meno pesanti: un registro editoriale. */
+[data-skin="petrolio"] {
+  color-scheme: light;
+  --bg: #faf7f1;
+  --fg: #1c1b18;
+  --muted: #5c574d;
+  --rule: #1c1b18;
+  --hair: #e3ddd1;
+  --accent: #0b5550;
+  --accent-fg: #faf7f1;
+  --sel: #e5eee9;
+  --flag: #a6430c;
+  --ok: #2c673c;
+  --danger: #a0261b;
+  --field: #fffdf9;
+  --radius: 0px;
+  --rule-strong: 1px;
+  --focus-w: 2px;
+  --label-weight: 500;
+  --label-tracking: 0.14em;
+  --title-weight: 600;
+}
+[data-skin="petrolio"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121513;
+  --fg: #ece7dd;
+  --muted: #a49e91;
+  --rule: #d8d1c3;
+  --hair: #2a2e2b;
+  --accent: #6cc3b5;
+  --accent-fg: #0e1413;
+  --sel: #163330;
+  --flag: #f2995f;
+  --ok: #82cc97;
+  --danger: #f2877b;
+  --field: #181b19;
+}
+
+/* ---------------------------------------------------------------- Nebbia */
+/* Per chi usa lo strumento tutto il giorno: fondo grigio-nebbia luminoso, campi bianchi,
+   ardesia al posto del nero, regole grigie, angoli appena smussati. Lo scuro non è nero. */
+[data-skin="nebbia"] {
+  color-scheme: light;
+  --bg: #f3f5f7;
+  --fg: #1f2933;
+  --muted: #56616e;
+  --rule: #626d7a;
+  --hair: #dce1e7;
+  --accent: #2d5282;
+  --accent-fg: #ffffff;
+  --sel: #e2e9f2;
+  --flag: #a8430d;
+  --ok: #1b6c4c;
+  --danger: #b0261e;
+  --field: #ffffff;
+  --radius: 6px;
+  --rule-strong: 2px;
+  --focus-w: 2px;
+  --label-weight: 600;
+  --label-tracking: 0.06em;
+  --title-weight: 700;
+}
+[data-skin="nebbia"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1b2027;
+  --fg: #e2e7ed;
+  --muted: #a1acb9;
+  --rule: #7f8a98;
+  --hair: #2f3640;
+  --accent: #9dbae6;
+  --accent-fg: #1b2027;
+  --sel: #26354a;
+  --flag: #f4a06a;
+  --ok: #72d3a9;
+  --danger: #f59389;
+  --field: #222830;
+}
+
+/* ---------------------------------------------------------------- Contrasto */
+/* Alto contrasto per l'accessibilità (AAA): nero su bianco, blu cobalto, separatori
+   ben visibili, regola forte e focus da 3 px. Nello scuro l'accento è giallo. */
+[data-skin="contrasto"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #000000;
+  --muted: #383838;
+  --rule: #000000;
+  --hair: #767676;
+  --accent: #0030b0;
+  --accent-fg: #ffffff;
+  --sel: #fff3b0;
+  --flag: #8f3300;
+  --ok: #005c36;
+  --danger: #a0000d;
+  --field: #ffffff;
+  --radius: 0px;
+  --rule-strong: 3px;
+  --focus-w: 3px;
+  --label-weight: 700;
+  --label-tracking: 0.06em;
+  --title-weight: 800;
+}
+[data-skin="contrasto"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --fg: #ffffff;
+  --muted: #d4d4d4;
+  --rule: #ffffff;
+  --hair: #8c8c8c;
+  --accent: #ffe14d;
+  --accent-fg: #000000;
+  --sel: #2b2800;
+  --flag: #ffa45c;
+  --ok: #5eeb9b;
+  --danger: #ff9a9a;
+  --field: #0a0a0a;
+}

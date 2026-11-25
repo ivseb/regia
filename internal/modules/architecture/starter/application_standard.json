@@ -1,0 +1,26 @@
+{
+  "format": "regia.process/v1",
+  "key": "application_standard",
+  "name": "Ciclo di vita dell'applicazione",
+  "description": "Pacchetto di partenza: fasi del ciclo di vita di una applicazione del catalogo.",
+  "type": "application",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "In progettazione", "category": "todo", "color": "#6B7280"},
+      {"name": "In sviluppo", "category": "in_progress", "color": "#6B4FC8"},
+      {"name": "In produzione", "category": "in_progress", "color": "#3A7A1C"},
+      {"name": "In dismissione", "category": "in_progress", "color": "#9A5200"},
+      {"name": "Dismessa", "category": "done", "color": "#1F2937"}
+    ],
+    "initial": "In produzione",
+    "transitions": [
+      {"from": ["In progettazione"], "to": "In sviluppo", "label": "Avvia lo sviluppo"},
+      {"from": ["In sviluppo"], "to": "In produzione", "label": "Porta in produzione"},
+      {"from": ["In produzione"], "to": "In dismissione", "label": "Avvia la dismissione", "comment_required": true},
+      {"from": ["In dismissione"], "to": "Dismessa", "label": "Dismetti"},
+      {"from": ["In dismissione"], "to": "In produzione", "label": "Annulla la dismissione"}
+    ]
+  }
+}

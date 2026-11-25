@@ -1,0 +1,47 @@
+{
+  "format": "regia.grc.catalog/v1",
+  "framework": {
+    "key": "nis2",
+    "name": "NIS2 · Cibersicurezza dei soggetti essenziali e importanti",
+    "kind": "directive",
+    "jurisdiction": "EU",
+    "publisher": "Unione europea",
+    "description": "Direttiva (UE) 2022/2555, recepita in Italia con il d.lgs. 138/2024. Misure di gestione dei rischi (art. 21) e obblighi di segnalazione (art. 23)."
+  },
+  "version": {
+    "version": "2022/2555",
+    "effective_from": "2024-10-18",
+    "source_url": "https://eur-lex.europa.eu/eli/dir/2022/2555/oj",
+    "license_note": "Atto dell'Unione pubblico: articoli e titoli dal testo ufficiale, sintesi scritte da Regia. Per gli obblighi nazionali fa fede il decreto di recepimento.",
+    "notes": "Pacchetto di partenza: governance, misure dell'art. 21 per lettera, segnalazioni."
+  },
+  "items": [
+    {"ref": "Capo IV", "kind": "chapter", "title": "Misure di gestione dei rischi di cibersicurezza e obblighi di segnalazione"},
+    {"ref": "Art. 20", "parent": "Capo IV", "kind": "article", "title": "Governance",
+     "summary": "Gli organi di gestione approvano le misure di gestione dei rischi, ne sorvegliano l'attuazione, ne rispondono e seguono una formazione."},
+    {"ref": "Art. 21", "parent": "Capo IV", "kind": "article", "title": "Misure di gestione dei rischi di cibersicurezza",
+     "summary": "Misure tecniche, operative e organizzative adeguate e proporzionate, con un approccio multirischio. Le lettere del paragrafo 2 sono il minimo."},
+    {"ref": "Art. 21(2)(a)", "parent": "Art. 21", "kind": "paragraph", "title": "Analisi dei rischi e sicurezza dei sistemi informativi",
+     "summary": "Politiche di analisi dei rischi e di sicurezza dei sistemi informativi."},
+    {"ref": "Art. 21(2)(b)", "parent": "Art. 21", "kind": "paragraph", "title": "Gestione degli incidenti",
+     "summary": "Prevenzione, rilevamento, risposta e chiusura degli incidenti."},
+    {"ref": "Art. 21(2)(c)", "parent": "Art. 21", "kind": "paragraph", "title": "Continuità operativa e gestione delle crisi",
+     "summary": "Backup, ripristino in caso di disastro e gestione delle crisi."},
+    {"ref": "Art. 21(2)(d)", "parent": "Art. 21", "kind": "paragraph", "title": "Sicurezza della catena di approvvigionamento",
+     "summary": "Sicurezza nei rapporti con fornitori diretti e prestatori di servizi."},
+    {"ref": "Art. 21(2)(e)", "parent": "Art. 21", "kind": "paragraph", "title": "Sicurezza di acquisizione, sviluppo e manutenzione",
+     "summary": "Sicurezza dei sistemi lungo il ciclo di vita, con la gestione e la divulgazione delle vulnerabilità."},
+    {"ref": "Art. 21(2)(f)", "parent": "Art. 21", "kind": "paragraph", "title": "Valutazione dell'efficacia delle misure",
+     "summary": "Politiche e procedure per misurare se le misure funzionano."},
+    {"ref": "Art. 21(2)(g)", "parent": "Art. 21", "kind": "paragraph", "title": "Igiene informatica e formazione",
+     "summary": "Pratiche di base di igiene informatica e formazione sulla cibersicurezza."},
+    {"ref": "Art. 21(2)(h)", "parent": "Art. 21", "kind": "paragraph", "title": "Crittografia",
+     "summary": "Politiche e procedure sull'uso della crittografia e, se opportuno, della cifratura."},
+    {"ref": "Art. 21(2)(i)", "parent": "Art. 21", "kind": "paragraph", "title": "Risorse umane, accessi e gestione degli attivi",
+     "summary": "Sicurezza del personale, politiche di controllo degli accessi e gestione degli attivi."},
+    {"ref": "Art. 21(2)(j)", "parent": "Art. 21", "kind": "paragraph", "title": "Autenticazione a più fattori e comunicazioni protette",
+     "summary": "Autenticazione a più fattori o continua, comunicazioni vocali, video e testuali protette, comunicazioni di emergenza sicure."},
+    {"ref": "Art. 23", "parent": "Capo IV", "kind": "article", "title": "Obblighi di segnalazione",
+     "summary": "Gli incidenti significativi si segnalano al CSIRT o all'autorità: preallarme, notifica dell'incidente, relazione intermedia su richiesta e relazione finale."}
+  ]
+}

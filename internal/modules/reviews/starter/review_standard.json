@@ -1,0 +1,45 @@
+{
+  "format": "regia.process/v1",
+  "key": "review_standard",
+  "name": "Ciclo della valutazione",
+  "description": "Pacchetto di partenza: compilazione del questionario, esame del team valutatore con chiarimenti, esito. Le azioni review_stage dicono al modulo quando parte lo SLA, quando si sospende e quando si compila.",
+  "type": "review",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da compilare", "category": "todo", "color": "#6B7280", "description": "Aperta: il questionario aspetta le prime risposte."},
+      {"name": "In compilazione", "category": "in_progress", "color": "#3550C8", "description": "Chi avvia il questionario e i compilatori delle sezioni rispondono; il salvataggio è automatico."},
+      {"name": "Inviata al team", "category": "in_progress", "color": "#0B6E8E", "description": "Il questionario è completo e lo SLA del team è partito."},
+      {"name": "In esame", "category": "in_progress", "color": "#6B4FC8", "description": "Il team valutatore esamina le risposte e le prescrizioni proposte."},
+      {"name": "Chiarimenti", "category": "in_progress", "color": "#9A5200", "description": "Il team ha chiesto chiarimenti nei commenti: lo SLA è sospeso e le risposte si possono correggere."},
+      {"name": "Conclusa", "category": "done", "color": "#0B7A5E", "description": "Esito registrato, con le prescrizioni accettate."},
+      {"name": "Annullata", "category": "cancelled", "color": "#6B7280", "off_path": true, "description": "Non necessaria: decisione del responsabile del team, motivata."}
+    ],
+    "initial": "Da compilare",
+    "gates": [
+      {
+        "key": "questionario_completo",
+        "name": "Questionario completo",
+        "condition": "domande_mancanti: 0",
+        "message": "mancano risposte obbligatorie nel questionario"
+      }
+    ],
+    "transitions": [
+      {"from": ["Da compilare"], "to": "In compilazione", "label": "Inizia la compilazione", "roles": ["review_owner", "review_compiler"]},
+      {"from": ["Da compilare", "In compilazione"], "to": "Inviata al team", "label": "Invia al team", "roles": ["review_owner"], "gates": ["questionario_completo"]},
+      {"from": ["Inviata al team"], "to": "In esame", "label": "Prendi in carico", "roles": ["reviewer", "review_lead"]},
+      {"from": ["In esame"], "to": "Chiarimenti", "label": "Chiedi chiarimenti", "roles": ["reviewer", "review_lead"], "comment_required": true},
+      {"from": ["Chiarimenti"], "to": "In esame", "label": "Rimanda al team", "roles": ["review_owner", "review_compiler"], "gates": ["questionario_completo"]},
+      {"from": ["In esame"], "to": "Conclusa", "system": true},
+      {"from": ["Da compilare", "In compilazione", "Inviata al team", "In esame", "Chiarimenti"], "to": "Annullata", "label": "Annulla: non necessaria", "roles": ["review_lead"], "comment_required": true}
+    ],
+    "rules": [
+      {"key": "stadio_compilazione", "name": "Si compila", "on": "enter:In compilazione", "actions": [{"kind": "review_stage", "ref": "compile"}]},
+      {"key": "stadio_invio", "name": "Parte lo SLA del team", "on": "enter:Inviata al team", "actions": [{"kind": "review_stage", "ref": "submitted"}]},
+      {"key": "stadio_esame", "name": "Esame del team", "on": "enter:In esame", "actions": [{"kind": "review_stage", "ref": "exam"}]},
+      {"key": "stadio_chiarimenti", "name": "SLA sospeso durante i chiarimenti", "on": "enter:Chiarimenti", "actions": [{"kind": "review_stage", "ref": "clarification"}]},
+      {"key": "stadio_annullata", "name": "Valutazione non necessaria", "on": "enter:Annullata", "actions": [{"kind": "review_stage", "ref": "cancelled"}]}
+    ]
+  }
+}

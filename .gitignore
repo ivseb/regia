@@ -1,0 +1,18 @@
+/data/
+/bin/
+/web/node_modules/
+/internal/webui/dist/app/
+.DS_Store
+*.log
+/web/*.tsbuildinfo
+/data-bench/
+
+# Impostazioni locali dell'editor
+/.claude/
+
+# Esiti degli e2e (Playwright)
+/web/test-results/
+/web/playwright-report/
+
+# Generati da scripts/gen-i18n.mjs (elenco delle aree dei testi)
+*.gen.ts

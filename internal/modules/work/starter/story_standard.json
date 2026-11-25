@@ -1,0 +1,33 @@
+{
+  "format": "regia.process/v1",
+  "key": "story_standard",
+  "name": "Ciclo di vita della story",
+  "description": "Pacchetto di partenza: da fare, in corso, in revisione, fatto. Per iniziare serve un assegnatario; per chiudere, tutti i task chiusi.",
+  "type": "story",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da fare", "category": "todo", "color": "#6B7280"},
+      {"name": "In corso", "category": "in_progress", "color": "#3550C8"},
+      {"name": "In revisione", "category": "in_progress", "color": "#0B6E8E", "description": "Revisione del codice o della soluzione."},
+      {"name": "Fatto", "category": "done", "color": "#1F2937"},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Da fare",
+    "gates": [
+      {"key": "assegnatario", "name": "Assegnatario", "condition": "assegnatario: presente", "message": "serve un assegnatario per iniziare"},
+      {"key": "task_chiusi", "name": "Task chiusi", "condition": "-figli_aperti: >0", "message": "ci sono ancora task aperti nella story"}
+    ],
+    "transitions": [
+      {"from": ["Da fare"], "to": "In corso", "label": "Inizia", "gates": ["assegnatario"]},
+      {"from": ["In corso"], "to": "In revisione", "label": "Manda in revisione"},
+      {"from": ["In corso", "In revisione"], "to": "Fatto", "label": "Chiudi", "gates": ["task_chiusi"]},
+      {"from": ["In revisione"], "to": "In corso", "label": "Rimanda in lavorazione"},
+      {"from": ["In corso"], "to": "Da fare", "label": "Rimetti da fare"},
+      {"from": ["Fatto"], "to": "In corso", "label": "Riapri"},
+      {"from": ["Da fare", "In corso", "In revisione"], "to": "Annullato", "label": "Annulla", "comment_required": true},
+      {"from": ["Annullato"], "to": "Da fare", "label": "Ripristina"}
+    ]
+  }
+}

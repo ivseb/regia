@@ -1,0 +1,64 @@
+name: e2e
+
+# Test end-to-end con Playwright (web/e2e), a ogni push su main e su ogni pull request,
+# in parallelo a ci.yml (in locale durano circa un minuto). Nessun segreto.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Postgres 18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-18 postgresql-18-pgvector
+          echo "REGIA_PG_BIN=/usr/lib/postgresql/18/bin" >> "$GITHUB_ENV"
+
+      - name: Binario con il frontend
+        run: make web build
+
+      - name: Browser
+        run: cd web && pnpm exec playwright install --with-deps chromium
+
+      - name: Test end-to-end
+        run: cd web && pnpm e2e
+        env:
+          E2E_CHANNEL: chromium
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7

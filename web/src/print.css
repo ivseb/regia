@@ -1,0 +1,121 @@
+/* Stampa dello status report (PDF dal browser). Il report da stampare sta in #print-root,
+   fuori dall'app, con data-skin e data-theme="light": i colori sono quelli chiari del tema
+   scelto, anche se lo schermo è scuro. Tutto il resto della pagina sparisce. */
+#print-root {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm 18mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+  #print-root {
+    display: block;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--ui-sans);
+    font-size: 10.5pt;
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #print-root a {
+    color: var(--fg);
+    text-decoration: none;
+  }
+  #print-root h3,
+  #print-root h4,
+  #print-root table,
+  #print-root li,
+  #print-root dl > div {
+    break-inside: avoid;
+  }
+  #print-root h4 {
+    break-after: avoid;
+  }
+  #print-root footer {
+    margin-top: 8mm;
+  }
+}
+
+/* Stampa di una pagina dei documenti (Knowledge): intestazione con versione e stato di
+   approvazione, piè con i numeri di pagina dove il browser supporta i riquadri di @page. */
+@page kbdoc {
+  size: A4;
+  margin: 18mm 16mm 20mm;
+  @bottom-right {
+    content: "pagina " counter(page) " di " counter(pages);
+    font: 8pt var(--ui-mono, monospace);
+    color: #52525b;
+  }
+}
+@media print {
+  #print-root .kb-print {
+    page: kbdoc;
+  }
+  #print-root .kb-print-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2mm;
+    border-bottom: 2px solid var(--rule);
+    padding-bottom: 3mm;
+    margin-bottom: 5mm;
+  }
+  #print-root .kb-print-head h1 {
+    margin: 0;
+    font-size: 22pt;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  #print-root .kb-print-head dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(42mm, 1fr));
+    gap: 2mm 6mm;
+    margin: 1mm 0 0;
+    font-size: 9pt;
+  }
+  #print-root .kb-print-head dt {
+    font-size: 7pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #print-root .kb-print-head dd {
+    margin: 0;
+  }
+  #print-root .kb-print .kb-page {
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+  #print-root .kb-print .kb-page pre,
+  #print-root .kb-print .kb-page table,
+  #print-root .kb-print .kb-page img,
+  #print-root .kb-print .kb-page blockquote {
+    break-inside: avoid;
+  }
+  #print-root .kb-print .kb-page h1,
+  #print-root .kb-print .kb-page h2,
+  #print-root .kb-print .kb-page h3 {
+    break-after: avoid;
+  }
+  #print-root .kb-print-foot {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: -12mm;
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid var(--hair);
+    padding-top: 1mm;
+    font: 7.5pt var(--ui-mono, monospace);
+    color: var(--muted);
+  }
+}

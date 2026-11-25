@@ -1,0 +1,52 @@
+# Interfaccia
+
+## Interfaccia
+- **Design:** Atlante, specifica in [replica/design.md](../../replica/design.md); token in `web/src/styles.css`.
+- **Temi:** chiaro, scuro o quello del sistema.
+- **Font:** inclusi nel pacchetto (nessuna richiesta a Google Fonts, coerente con la CSP `default-src 'self'`).
+- **Schermate:** accesso, richieste (query, lista con stage-gate, tabella, dettaglio con passaggi, stima, persone, approvazioni e storia), le mie approvazioni, nuova richiesta.
+- **Barra della query** (`web/src/query.tsx`, piano passo 16):
+  - evidenziazione della sintassi: campi in blu, valori nel colore del testo, parole chiave e punteggiatura in grigio; errori sottolineati in rosso con il messaggio sotto la barra;
+  - autocompletamento da `/api/v1/query/suggest` mentre si scrive, o con Ctrl+Spazio e freccia giù;
+  - tastiera: frecce per scegliere, Invio o Tab per inserire, Esc per chiudere, Invio a menu chiuso per eseguire.
+- **Palette dei comandi** (`web/src/palette.tsx`, caricata alla prima apertura):
+  - si apre con ⌘K o Ctrl+K da tutta l'app, con il pulsante "Cerca" nella barra mobile o con "Cerca o vai a…" nel menu;
+  - cerca richieste, impatti, applicazioni e asset per chiave o per prefisso del testo;
+  - porta alle pagine;
+  - azioni: nuova richiesta; sull'elemento aperto, i passaggi di fase (con la motivazione quando serve), segui o non seguire, il piano;
+  - ricerche recenti nel browser (`regia.palette.recenti`);
+  - ricerca estesa (ondata 2, proposta 10): elementi di tutti i moduli accesi (anche lavoro: epic, story, task, bug), persone (`/members?q`), unità (`/org/units?q`), pagine e pagine della configurazione (le stesse del menu, `buildNav`), comandi («Crea…», «Crea: tipo», scorciatoie); risultati raggruppati per tipo. Persone e unità aprono la lista richieste filtrata e non compaiono se quella pagina non è visibile (modulo spento, profilo del revisore);
+  - azioni dirette sul risultato: «Apri», «Assegna a me» (solo elementi di lavoro, con `element.write`), «Copia link», «Aperti da»; Tab sceglie l'azione, Invio la esegue. Sotto i 768 px la palette è a tutto schermo e le azioni sono sempre a vista (44 px).
+- **Tastiera e «+ Crea»** (`web/src/shortcuts.ts`, `web/src/tastiera.tsx`, area dei testi `tastiera`):
+  - il guscio ascolta i tasti senza modificatori solo fuori dai campi e con nessun dialogo aperto: `?` (pannello delle scorciatoie), `c` (crea), `/` (cerca), `g` + lettera (`GO_KEYS`, solo le pagine del proprio menu), `j`/`k` (riga evidenziata delle tabelle, attributo `data-riga-attiva`), Invio o `o` (apre), e sull'elemento aperto o evidenziato `a` (assegna a me), `s` (cambia fase: palette con soli passaggi), `m` (commenta), `f` (segui), `l` (copia il link);
+  - «+ Crea» (barra laterale, `c`, e sul telefono un pulsante fisso in basso a destra) apre un dialogo breve per richiesta, story, task, bug, epic, documento, rischio e incidente; i tipi offerti sono quelli di `createKinds()` (permessi, moduli accesi, il revisore non crea);
+  - le azioni sull'elemento stanno in `tastiera.tsx` (`runItemAction`, `assignToMe`, `copyLink`) e si caricano al primo uso; gli avvisi brevi sono una regione `role="status"` del guscio.
+- **Filtro per tipo e colonne delle richieste**: `GET /api/v1/query/fields` aggiunge `types` (i tipi a cui un campo si applica: associazioni dei campi personalizzati e `Types` dei campi dei moduli); il filtro «+ Filtro» mostra in cima «Campi di <tipo>» e nasconde quelli di altri tipi (compaiono cercando per nome). `GET /api/v1/elements?demand=1` aggiunge `demand` (unità, sponsor, stima, scadenza normativa, punteggio, giorni nella fase) per le richieste della pagina; la lista richieste si apre in tabella con le colonne `unit`, `sponsor`, `estimate`, `deadline`, `score`, `stage`, `assignee`.
+- **Vista Tabella delle richieste** (`web/src/pages/RequestsTable.tsx`, `?vista=tabella`):
+  - colonne di sistema e campi personalizzati, scelte e riordinate dal menu "Colonne";
+  - clic sull'intestazione: ordina e scrive `ordina per:` nella query;
+  - larghezza regolabile trascinando il bordo o con le frecce;
+  - scelta salvata nel browser per persona (`regia.tabella.richieste.<membro>`);
+  - sotto i 768 px restano chiave, titolo e fase.
+- **Board, backlog e sprint, il mio lavoro:** sezione «Work management» qui sotto.
+- **Casa della configurazione** (`web/src/casa/`, area di testi `casa`; replica/usabilita.md, proposte 6 e 7A):
+  - **Costruttore unico di condizioni** (`pages/processEditor/ConditionBuilder.tsx`, modello a gruppi in `casa/gruppi.ts`): righe «dato, operatore, valore» (E) in gruppi alternativi (O), la frase «Solo se…» e «Oggi la condizione è vera per N su M elementi». Il testo del linguaggio resta in «avanzato» («Scrivi come testo»). Usato in processi (applicabilità, gate, passaggi, regole), gate di rilascio, questionari, applicabilità GRC, filtro dei webhook, «Visibile se» dei campi, baseline dei requisiti e criteri degli incidenti. Props: `facts` (o `type`, che li chiede al server), `type` (conteggio sugli elementi del tipo) o `count` (conteggio proprio, per i perimetri GRC). Conversione senza perdite da e verso il testo: `web/test/condizioni.test.ts`.
+  - API: `GET /api/v1/conditions/facts?type=<tipo>` (dati usabili per un tipo) e `POST /api/v1/conditions/count` (`{condition, type}` → quanti elementi la soddisfano oggi, i primi 5, al massimo 300 valutati).
+  - **«Modifica → anteprima → pubblica»** (`casa/Bozza.tsx`, differenze in `casa/differenze.ts`): `useBozza(saved, chiave)` tiene la bozza (anche nella sessione del browser), `<BozzaBar>` mostra «n modifiche non salvate», «Cosa cambia» (prima → dopo), l'impatto previsto, Pubblica e Scarta. Applicato a priorità e applicabilità dei processi, regole del gate di rilascio e scheda del tipo di elemento.
+  - **Indice** (`/configurazione`, `pages/ConfigHome.tsx`, elenco in `casa/indice.ts`): le pagine di impostazioni per obiettivo, con ricerca e solo ciò che la persona può aprire. `configEntries(me)` dà l'elenco anche alla palette ⌘K.
+  - **Import unificati** (`/configurazione/import?cosa=lavoro|applicazioni|costi|organizzazione`, `pages/ImportHub.tsx`): una pagina con le procedure esistenti e un modello CSV scaricabile per ognuna (`casa/modelliCsv.ts`).
+  - **Tipo di valutazione**: «Quando si apre» (le regole dei processi pubblicati con azione `open_review`, nel campo `triggers` di `GET /api/v1/review-config`), esiti e ruoli che compilano come righe e menu.
+- **Tipi di elemento** (`web/src/pages/TypesConfig.tsx`, Configurazione → Tipi, `tenant.admin`):
+  - elenco per modulo con anteprima, contatori ed etichette «di sistema» e «archiviato»; scheda con nome, plurale, descrizione, icona e colore dalla palette del tema, anteprima dal vivo, apertura dal portale e nomi in inglese;
+  - «Nuovo tipo» in due passi: da quale tipo partire (fasi, campi e spazi si copiano) e nome, con chiave proposta dal nome; solo moduli senza tabella di estensione (work, knowledge, strategy, core);
+  - un tipo non di sistema si archivia (sparisce dalla creazione, gli elementi restano); quelli di sistema si rinominano soltanto;
+  - API: `GET/POST /api/v1/types`, `PATCH /api/v1/types/{key}`, e `GET /api/v1/type-names[?lang=en]` per i nomi (ogni membro). Nell'interfaccia il nome di un tipo si legge sempre da `useTypeNames()` (`web/src/typesApi.tsx`), mai scritto a mano.
+- **Selettore unico** (`web/src/select.tsx`, logica pura in `selectLogic.ts`, elenchi del server in `entities.ts`): nessun `<select>` nativo nell'interfaccia.
+  - `Select` ha la forma di `<select>` (value, onChange, `<option>`, `<optgroup>`) per le liste statiche; `OptionSelect` prende un vettore di voci, anche a scelta multipla; `EntitySelect` (`kind`: member, group, team, unit, application, supplier, element) cerca sul server.
+  - Da 8 voci statiche in su compare la ricerca (accenti e maiuscole ignorati); sotto resta una scelta semplice. Le liste del server cercano sempre, con 20 risultati e ritardo di 200 ms, e non chiedono nulla finché il pannello non si apre; i nomi delle voci già scelte arrivano con una richiesta unica per tipo (`ids=`).
+  - In cima: «nessuno» se il campo è facoltativo, «io» (persone), recenti per campo (memoria locale `regia.selettore.recenti.<campo>`) e la voce attuale. Scelta multipla a chip (`multiple`).
+  - Tastiera: frecce, Home/End, Pagina su/giù, Invio, Esc, Tab, iniziale (senza ricerca), scrivere sul pulsante apre la ricerca. Sotto i 640 px il pannello è a tutto schermo con la ricerca in alto e voci da 44 px.
+  - Un `<select>` nativo si ammette solo con un commento `select-nativo: motivo` (vedi `web/test/select-nativi.test.ts`, parte di `pnpm test`). Negli e2e si sceglie con `scegli()` di `web/e2e/fixtures.ts`.
+  - API di ricerca: `q` (testo nel nome), `limit` (massimo 200) e `ids` (restringe a quelle voci) su `GET /members`, `/groups`, `/teams`, `/org-units`, `/architecture/applications`, `/ict/providers`; per gli elementi vale `GET /elements?q=…&limit=…`. Test: `internal/itest/ricerca_selettori_test.go`.
+- **Da fare:** client generato da OpenAPI.
+Per il frontend con ricarica a caldo: `make run` in un terminale e `cd web && pnpm dev` in un altro (proxy di /api verso :8080).

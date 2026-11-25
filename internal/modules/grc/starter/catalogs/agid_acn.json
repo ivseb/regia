@@ -1,0 +1,20 @@
+{
+  "format": "regia.grc.catalog/v1",
+  "framework": {
+    "key": "agid_acn",
+    "name": "AgID / ACN · Misure per la pubblica amministrazione",
+    "kind": "guideline",
+    "jurisdiction": "IT",
+    "publisher": "AgID / ACN",
+    "description": "Struttura vuota da completare: misure minime di sicurezza ICT per le PA, requisiti per il cloud della PA e altre misure nazionali che riguardano il tenant."
+  },
+  "version": {
+    "version": "da completare",
+    "license_note": "Struttura senza contenuti: il tenant inserisce identificativi, titoli e sintesi dalle fonti ufficiali vigenti (AgID, ACN).",
+    "notes": "Bozza del pacchetto di partenza: aggiungere i requisiti e pubblicare."
+  },
+  "items": [
+    {"ref": "MMS", "kind": "chapter", "title": "Misure minime di sicurezza ICT per le pubbliche amministrazioni"},
+    {"ref": "CLOUD", "kind": "chapter", "title": "Requisiti per infrastrutture e servizi cloud della PA"}
+  ]
+}

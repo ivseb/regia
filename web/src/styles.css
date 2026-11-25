@@ -1,0 +1,112 @@
+/* Design di Regia (replica/design.md). I colori e le misure di ogni tema stanno in
+   themes.css; i font si caricano solo se scelti (appearance.ts): nessuna richiesta esterna. */
+@import "tailwindcss";
+@import "./themes.css";
+
+/* Prima che parta il JS (che risolve "sistema" in chiaro o scuro) il fondo segue il sistema,
+   così chi usa il tema scuro non vede un lampo bianco. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) { color-scheme: dark; background: #0c0c0e; }
+}
+
+/* Coppie di font (appearance.ts imposta data-font su <html> e carica solo la coppia scelta). */
+:root, [data-font="atkinson"] {
+  --ui-sans: "Atkinson Hyperlegible Next Variable", system-ui, sans-serif;
+  --ui-mono: "Atkinson Hyperlegible Mono Variable", ui-monospace, monospace;
+}
+[data-font="plex"] {
+  --ui-sans: "IBM Plex Sans Variable", system-ui, sans-serif;
+  --ui-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+[data-font="source"] {
+  --ui-sans: "Source Sans 3 Variable", system-ui, sans-serif;
+  --ui-mono: "Source Code Pro Variable", ui-monospace, monospace;
+}
+[data-font="public"] {
+  --ui-sans: "Public Sans Variable", system-ui, sans-serif;
+  --ui-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-hair: var(--hair);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-sel: var(--sel);
+  --color-flag: var(--flag);
+  --color-ok: var(--ok);
+  --color-danger: var(--danger);
+  --color-field: var(--field);
+  --font-sans: var(--ui-sans);
+  --font-mono: var(--ui-mono);
+}
+
+@layer base {
+  html, body { background: var(--bg); color: var(--fg); }
+  body { font-family: var(--font-sans); font-size: 13.5px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+  :focus-visible { outline: var(--focus-w) solid var(--accent); outline-offset: 2px; }
+  ::selection { background: var(--accent); color: var(--accent-fg); }
+  /* Bersagli di almeno 24 px (WCAG 2.2, 2.5.8): caselle e opzioni. */
+  input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; margin: 0; accent-color: var(--accent); vertical-align: middle; flex-shrink: 0; }
+  /* Salto al contenuto: visibile solo con la tastiera. */
+  .skip-link { position: absolute; left: 8px; top: -64px; z-index: 100; padding: 8px 14px; background: var(--fg); color: var(--bg); font-weight: 600; }
+  .skip-link:focus { top: 8px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+}
+
+@layer components {
+  /* Etichetta maiuscola piccola: sezioni, intestazioni di tabella, campi. */
+  .label { font-size: 11px; font-weight: var(--label-weight); letter-spacing: var(--label-tracking); text-transform: uppercase; }
+  .field {
+    width: 100%; box-sizing: border-box; background: var(--field); color: var(--fg);
+    border: 1px solid var(--rule); padding: 8px 10px; font: inherit; border-radius: var(--radius);
+  }
+  .field:focus { outline: var(--focus-w) solid var(--accent); outline-offset: -1px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-weight: 600;
+    border: 1px solid var(--rule); background: transparent; color: var(--fg); cursor: pointer; white-space: nowrap;
+    border-radius: var(--radius);
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* Bersagli minimi: 24 px ovunque (WCAG 2.2, 2.5.8) e 44 px sul telefono, dove si tocca col pollice. */
+  .btn, .field { min-height: 24px; }
+  @media (max-width: 767px), (pointer: coarse) {
+    .btn, button.field, input.field:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]) { min-height: 44px; }
+  }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .tabular { font-variant-numeric: tabular-nums; }
+}
+
+/* Misure del tema applicate alle classi già in uso, senza toccare i componenti:
+   la regola forte (2 px in Atlante) e il peso dei titoli. */
+@layer utilities {
+  .border-b-2 { border-bottom-width: var(--rule-strong); }
+  h1.font-bold, h2.font-bold { font-weight: var(--title-weight); }
+}
+
+/* Commenti in linea di Knowledge: le frasi commentate si evidenziano senza toccare il DOM
+   (CSS Custom Highlight API); quella della discussione aperta nel pannello è più marcata. */
+::highlight(kb-thread) {
+  background-color: color-mix(in srgb, var(--flag) 22%, transparent);
+}
+::highlight(kb-thread-active) {
+  background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+}
+
+/* Ondata 1 (lavoro): azioni negative meno evidenti; sul telefono i bersagli di approvazione hanno almeno 44 px. */
+.btn-quiet { border-color: transparent; color: var(--muted); font-weight: 500; }
+.btn-quiet:hover:not(:disabled) { color: var(--fg); border-color: var(--rule); }
+@media (max-width: 767px) {
+  .touch-44 { min-height: 44px; min-width: 44px; justify-content: center; }
+}
+
+/* Ondata 2 (tastiera): la riga evidenziata con j/k nelle liste. */
+[data-riga-attiva] { outline: 2px solid var(--accent); outline-offset: -2px; }

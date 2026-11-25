@@ -1,0 +1,25 @@
+{
+  "format": "regia.process/v1",
+  "key": "ict_provider_standard",
+  "name": "Ciclo del fornitore ICT",
+  "description": "Pacchetto di partenza: fornitore in valutazione, attivo, in uscita secondo la strategia di uscita, cessato.",
+  "type": "ict_provider",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "In valutazione", "category": "todo", "color": "#6B7280", "description": "Due diligence prima del contratto."},
+      {"name": "Attivo", "category": "in_progress", "color": "#3A7A1C", "description": "Ci sono contratti in vigore."},
+      {"name": "In uscita", "category": "in_progress", "color": "#9A5200", "description": "Si applica la strategia di uscita."},
+      {"name": "Cessato", "category": "done", "color": "#1F2937", "description": "Nessun servizio in corso."}
+    ],
+    "initial": "Attivo",
+    "transitions": [
+      {"from": ["In valutazione"], "to": "Attivo", "label": "Attiva"},
+      {"from": ["Attivo"], "to": "In uscita", "label": "Avvia l'uscita", "comment_required": true},
+      {"from": ["In uscita"], "to": "Attivo", "label": "Annulla l'uscita"},
+      {"from": ["In uscita", "In valutazione"], "to": "Cessato", "label": "Cessa"},
+      {"from": ["Cessato"], "to": "In valutazione", "label": "Riattiva"}
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "format": "regia.process/v1",
+  "key": "page_controlled",
+  "name": "Documento controllato",
+  "description": "Pacchetto di partenza per policy, procedure e documenti che valgono come evidenza: bozza, revisione con revisori e approvatori (motore delle approvazioni), approvazione, obsolescenza. La versione approvata resta consultabile mentre si scrive la successiva.",
+  "type": "page",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Bozza", "category": "todo", "color": "#6B7280"},
+      {"name": "In revisione", "category": "in_progress", "color": "#3550C8"},
+      {"name": "Approvata", "category": "done", "color": "#0F7A55"},
+      {"name": "Obsoleta", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Bozza",
+    "gates": [
+      {"key": "revisori", "name": "Revisori indicati", "condition": "ruolo.doc_reviewer: presente", "message": "indica almeno un revisore del documento"},
+      {"key": "approvatori", "name": "Approvatori indicati", "condition": "ruolo.doc_approver: presente", "message": "indica almeno un approvatore del documento"}
+    ],
+    "transitions": [
+      {"from": ["Bozza"], "to": "In revisione", "label": "Invia in revisione", "gates": ["revisori", "approvatori"], "approval": "kb_document"},
+      {"from": ["In revisione"], "to": "Approvata", "system": true},
+      {"from": ["In revisione"], "to": "Bozza", "system": true},
+      {"from": ["Approvata"], "to": "Bozza", "label": "Avvia una nuova revisione"},
+      {"from": ["Bozza", "Approvata"], "to": "Obsoleta", "label": "Rendi obsoleto", "comment_required": true}
+    ],
+    "rules": []
+  }
+}
