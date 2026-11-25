@@ -421,7 +421,7 @@ const Row = memo(function Row({
       <span className={`min-w-0 flex-1 truncate ${done ? "text-muted" : ""}`} title={it.title}>
         {it.title}
       </span>
-      {it.tags && it.tags.length > 0 && <TagChips tags={it.tags} max={narrow ? 1 : 2} onPick={dnd.onTag} className="max-h-[18px] shrink-0 overflow-hidden" />}
+      {it.tags && it.tags.length > 0 && <TagChips tags={it.tags} max={narrow ? 1 : 2} onPick={dnd.onTag} className="max-h-[18px] min-w-0 shrink overflow-hidden" />}
       {!narrow && epic && (
         <span className="hidden max-w-[160px] truncate font-mono text-[11px] text-muted lg:inline" title={`${epic.key} ${epic.title}`}>
           {epic.key}

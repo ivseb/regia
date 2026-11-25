@@ -273,8 +273,9 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
           <ModuleOff module={moduleOfPath(path)!} />
         )}
       </main>
-      {/* «+ Crea» sul telefono: in basso a destra, dove arriva il pollice. */}
-      {canCreate && !paletteOpen && !creating && (
+      {/* «+ Crea» sul telefono: in basso a destra, dove arriva il pollice. Non sulle pagine che hanno
+          già una barra d'azioni fissa in basso (vista di crisi), dove la coprirebbe. */}
+      {canCreate && !paletteOpen && !creating && !path.startsWith("/crisi/") && (
         <button
           className="btn btn-primary fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 md:hidden"
           aria-haspopup="dialog"

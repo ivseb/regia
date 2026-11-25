@@ -21,7 +21,7 @@ RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 COPY web/ ./
-COPY scripts/check-contrast.mjs /src/scripts/
+COPY scripts/check-contrast.mjs scripts/gen-i18n.mjs /src/scripts/
 RUN pnpm build
 
 FROM golang:1.26-alpine AS go

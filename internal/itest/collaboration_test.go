@@ -329,9 +329,12 @@ func TestCollaboration(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(files, sha[0:2], sha[2:4], sha)); err != nil {
 		t.Fatalf("file su disco: %v", err)
 	}
+	// I file temporanei stanno in <files>/tmp: si guarda il percorso relativo, perché su Linux
+	// anche t.TempDir() sta sotto /tmp.
 	var blobs int
 	_ = filepath.WalkDir(files, func(p string, de os.DirEntry, err error) error {
-		if err == nil && !de.IsDir() && !strings.Contains(p, string(filepath.Separator)+"tmp"+string(filepath.Separator)) {
+		rel, _ := filepath.Rel(files, p)
+		if err == nil && !de.IsDir() && !strings.HasPrefix(rel, "tmp"+string(filepath.Separator)) {
 			blobs++
 		}
 		return nil
