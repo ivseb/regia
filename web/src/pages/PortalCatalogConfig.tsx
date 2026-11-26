@@ -527,7 +527,7 @@ function PreviewPane({ data }: { data: EntryPreview }) {
         {tabs.map((label, i) => (
           <button key={i} type="button" role="tab" aria-selected={i === cur} className={`btn ${i === cur ? "btn-primary" : ""}`} onClick={() => setIdx(i)}>
             <span className="font-mono tabular">{i + 1}</span>
-            <span className="max-w-32 truncate">{label}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
           </button>
         ))}
       </div>

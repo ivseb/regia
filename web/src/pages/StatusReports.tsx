@@ -558,7 +558,7 @@ function History({ items, current, onOpen }: { items: StatusReport[]; current?: 
             >
               <span className="flex min-w-0 flex-col">
                 <span className="font-semibold">{period(r)}</span>
-                <span className="truncate text-[12px] text-muted">
+                <span className="min-w-0 text-[12px] break-words text-muted">
                   {r.author ?? "—"} · {r.acknowledged_at ? t("lavoro.statusreports.ackedShort") : t("lavoro.statusreports.ackPending")}
                 </span>
               </span>

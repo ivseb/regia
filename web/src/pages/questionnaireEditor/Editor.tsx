@@ -587,7 +587,7 @@ function Versions({
                   <span className={v.status === "published" ? "font-semibold text-accent" : v.status === "draft" ? "text-flag" : "text-muted"}>
                     {t(`configurazione.qEditor.status.${v.status}`)}
                   </span>
-                  <span className="truncate text-muted">{v.notes || (v.published_at ? t("configurazione.qEditor.publishedOnShort", { date: date(v.published_at) }) : "—")}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere] text-muted">{v.notes || (v.published_at ? t("configurazione.qEditor.publishedOnShort", { date: date(v.published_at) }) : "—")}</span>
                   <span className="col-span-full font-mono text-[12px] text-muted tabular sm:col-span-1">{t("configurazione.qEditor.reviewCount", { count: v.reviews })}</span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">

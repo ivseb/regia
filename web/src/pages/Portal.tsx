@@ -161,7 +161,7 @@ function Drafts({ drafts, entries }: { drafts: PortalDraft[]; entries: EntryView
         {drafts.map((d) => (
           <li key={d.id} className="flex flex-wrap items-center gap-3 border-b border-hair py-2.5">
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate font-semibold">{d.title || t("lavoro.portal.untitled")}</span>
+              <span className="min-w-0 font-semibold break-words">{d.title || t("lavoro.portal.untitled")}</span>
               <span className="text-[12px] text-muted">
                 {entries.find((x) => x.key === d.entry)?.label ?? d.type} · {t("lavoro.portal.saved", { when: ago(d.updated_at) })}
               </span>
@@ -197,7 +197,7 @@ function MyRequests({ items }: { items: MyRequest[] }) {
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex items-baseline gap-2">
                     <span className="shrink-0 font-mono text-[12px] text-accent">{r.key}</span>
-                    <span className="truncate text-[15px] font-semibold">{r.title}</span>
+                    <span className="min-w-0 text-[15px] font-semibold break-words">{r.title}</span>
                   </span>
                   <span className="text-[13px] text-muted">{r.text}</span>
                   <span className="text-[12px] text-muted">
@@ -360,7 +360,7 @@ function Wizard({ entry, portal, draft, resumed }: { entry: EntryView; portal: P
           {steps.map((s, i) => (
             <li key={s.key} className="flex min-w-0 flex-1 flex-col gap-1.5" aria-current={i === step ? "step" : undefined}>
               <span className={`h-1 ${i < step ? "bg-fg" : i === step ? "bg-accent" : "bg-hair"}`} />
-              <span className={`truncate text-[12px] ${i === step ? "font-semibold" : "text-muted"}`}>
+              <span className={`min-w-0 text-[12px] break-words ${i === step ? "font-semibold" : "text-muted"}`}>
                 <span className="font-mono tabular">{i + 1}</span> <span className="hidden sm:inline">{s.label}</span>
               </span>
             </li>

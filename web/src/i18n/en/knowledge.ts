@@ -4,7 +4,7 @@ import type it from "../it/knowledge";
 export default {
   "knowledge.main.restricted.title": "Only people with a role on the space",
   "knowledge.main.restricted.badge": "RESTRICTED",
-  "knowledge.main.home.path": "governance / documents",
+  "knowledge.main.home.path": "documents",
   "knowledge.main.home.title": "Documents",
   "knowledge.main.home.newSpace": "New space",
   "knowledge.main.home.spaces": "Spaces",

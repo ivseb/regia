@@ -9,6 +9,7 @@ import { privacyApi, type AppRef, type Breach, type Home, type Treatment, type T
 import { useT } from "../i18n/react";
 import { OptionSelect } from "../select";
 import { PageHeader, useMe } from "../shell";
+
 import { ErrorNote, Loading } from "../ui";
 import { crumbs } from "../crumbs";
 import { Dialog } from "./work-ui";
@@ -70,8 +71,9 @@ function Tile({ n, label, to, hot }: { n: number; label: string; to: PrivacyTab;
     <Link
       to="/privacy"
       search={{ scheda: to === "panoramica" ? undefined : to }}
-      className={`flex min-h-[44px] min-w-0 flex-col gap-0.5 border px-3 py-2 no-underline ${hot && n > 0 ? "border-flag" : "border-hair"}`}
+      className={`entra m-grc relative flex min-h-[44px] min-w-0 flex-col gap-0.5 border px-3 pb-2 pt-3 text-fg no-underline ${hot && n > 0 ? "border-flag" : "border-hair"}`}
     >
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
       <span className={`text-[26px] font-bold leading-none tabular ${hot && n > 0 ? "text-flag" : ""}`}>{n}</span>
       <span className="break-words text-[12.5px] text-muted">{label}</span>
     </Link>

@@ -13,6 +13,7 @@ import { fmtMinutes, workApi } from "../workApi";
 import { useT } from "../i18n/react";
 import { useWorkTypes } from "../typesApi";
 import { loc } from "../i18n/format";
+import { ModuleChip } from "../moduleIcon";
 
 
 function Side({ title, aside, open = true, children }: { title: string; aside?: ReactNode; open?: boolean; children: ReactNode }) {
@@ -21,6 +22,7 @@ function Side({ title, aside, open = true, children }: { title: string; aside?: 
       <summary className="flex cursor-pointer list-none items-baseline justify-between border-b-2 border-rule pb-1.5 [&::-webkit-details-marker]:hidden">
         <span className="label m-0">
           <span aria-hidden="true" className="mr-1.5 inline-block w-2 text-muted group-open:rotate-90">›</span>
+          <ModuleChip module="work" size="sm" className="mr-1.5 align-middle" />
           {title}
         </span>
         {aside}
@@ -145,7 +147,7 @@ function DeliveryBlock({ refKey, detail, open }: { refKey: string; detail: Eleme
                   >
                     {e.key}
                   </Link>
-                  <span className="min-w-0 truncate" title={e.title}>
+                  <span className="min-w-0 break-words" title={e.title}>
                     {e.team ?? e.space_key}
                     {e.application ? ` · ${e.application}` : ""}
                   </span>
@@ -200,7 +202,7 @@ function TimeBlock({ refKey, open }: { refKey: string; open: boolean }) {
           {d.entries.slice(0, 8).map((e) => (
             <li key={e.id} className="flex items-baseline gap-2 border-b border-hair py-1">
               <span className="w-[72px] shrink-0 text-muted tabular">{new Date(e.date + "T00:00:00").toLocaleDateString(loc(), { day: "numeric", month: "short" })}</span>
-              <span className="min-w-0 flex-1 truncate" title={e.text ?? undefined}>
+              <span className="min-w-0 flex-1 break-words" title={e.text ?? undefined}>
                 {e.member}
                 {e.text ? <span className="text-muted"> · {e.text}</span> : null}
               </span>

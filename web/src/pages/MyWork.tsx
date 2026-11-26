@@ -76,7 +76,7 @@ export function MyWork() {
                         <Link to="/e/$key" params={{ key: it.key }} className="shrink-0 font-mono text-[12px] text-accent no-underline hover:underline">
                           {it.key}
                         </Link>
-                        <span className="min-w-0 flex-[1_1_240px] truncate"><ElementTitle type={it.type} title={it.title} /></span>
+                        <span className="min-w-0 flex-[1_1_240px] break-words"><ElementTitle type={it.type} title={it.title} /></span>
                         {it.tags && it.tags.length > 0 && <TagChips tags={it.tags} />}
                         <span className="flex shrink-0 items-center gap-2.5 text-[12px] text-muted">
                           {it.priority && (
@@ -85,7 +85,7 @@ export function MyWork() {
                               {it.priority}
                             </span>
                           )}
-                          {it.points != null && <span className="font-mono tabular">{t("lavoro.mywork.points", { points: fmtPoints(it.points) })}</span>}
+                          {it.points != null && <span className="tinta m-work px-1 font-mono text-fg tabular">{t("lavoro.mywork.points", { points: fmtPoints(it.points) })}</span>}
                           {it.sprint && (
                             <Link to="/e/$key" params={{ key: it.sprint }} className="font-mono text-muted no-underline hover:text-fg" title="Sprint" /* i18n-ok: termine uguale in inglese */>
                               {t("lavoro.mywork.sprintLink", { key: it.sprint })}

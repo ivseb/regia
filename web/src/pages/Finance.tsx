@@ -238,7 +238,7 @@ function BudgetTab({ ov, richiesta }: { ov: FinOverview; richiesta?: string }) {
                 <Td>
                   <span className="flex min-w-0 flex-col">
                     <button className="self-start text-left font-mono text-[12px] text-accent" aria-expanded={selected === b.id}>{b.element_key}</button>
-                    <span className="max-w-72 truncate">{b.element_title}</span>
+                    <span className="min-w-0 break-words">{b.element_title}</span>
                   </span>
                 </Td>
                 <Td mono>v{b.version} <span className="font-sans text-muted">{kindLabel(b.kind)}</span></Td>
@@ -599,7 +599,7 @@ function Transfers({ ov, fyID, budgets }: { ov: FinOverview; fyID: string; budge
               <Status s={t.status} />
               {t.decided_by && <span className="block text-[11.5px] text-muted">{t.decided_by}</span>}
             </Td>
-            <Td hide="hidden md:table-cell"><span className="line-clamp-2 max-w-80">{t.reason}</span></Td>
+            <Td hide="hidden md:table-cell"><span className="block max-w-80 break-words">{t.reason}</span></Td>
           </tr>
         ))}
       </Table>
@@ -738,7 +738,7 @@ function CostsTab({ ov, richiesta }: { ov: FinOverview; richiesta?: string }) {
             <Td hide="hidden md:table-cell">{c.category}</Td>
             <Td>
               <span className="font-mono text-[11.5px] text-accent sm:hidden">{c.element_key} </span>
-              <span className="block max-w-[46vw] truncate sm:max-w-80">{c.member ? `${c.member} · ${fmtNumber(c.hours)} ${t("budget.fin.hoursUnit")}` : c.description || "—"}</span>
+              <span className="block max-w-[46vw] break-words sm:max-w-80">{c.member ? `${c.member} · ${fmtNumber(c.hours)} ${t("budget.fin.hoursUnit")}` : c.description || "—"}</span>
               <span className="block text-[11.5px] text-muted">
                 {c.kind === "committed" ? t("budget.fin.impegnato") : t("budget.fin.consuntivo")}
                 {c.supplier ? ` · ${c.supplier}` : ""}
@@ -959,7 +959,7 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
                     <Td mono>{date(p.entry_date)}</Td>
                     <Td mono>{p.element_key}{p.duplicate && <span className="ml-1.5 font-sans text-[11px]">{t("budget.fin.giaImportata")}</span>}</Td>
                     <Td hide="hidden md:table-cell">{p.category}</Td>
-                    <Td hide="hidden lg:table-cell"><span className="block max-w-72 truncate">{p.description || "—"}</span></Td>
+                    <Td hide="hidden lg:table-cell"><span className="block max-w-72 break-words">{p.description || "—"}</span></Td>
                     <Td right mono>{money(p.amount_cents, p.currency, true)}</Td>
                     <Td right mono hide="hidden sm:table-cell">{money(p.amount_base_cents, cur, true)}</Td>
                   </tr>
@@ -994,7 +994,7 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
           {runs.data?.items.map((r) => (
             <tr key={r.id} className="border-b border-hair">
               <Td mono className="whitespace-nowrap">{date(r.created_at)}</Td>
-              <Td><span className="block max-w-56 truncate">{r.file_name}</span></Td>
+              <Td><span className="block max-w-56 [overflow-wrap:anywhere]">{r.file_name}</span></Td>
               <Td hide="hidden md:table-cell">{r.profile ?? "—"}</Td>
               <Td><Status s={r.status} /></Td>
               <Td right mono>{r.status === "preview" ? "—" : r.rows_ok}</Td>
@@ -1070,7 +1070,7 @@ function ProfileEditor({
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {cols.map((c) => (
           <label key={c} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2">
-            <span className="truncate font-mono text-[12.5px]" title={c}>{c}</span>
+            <span className="min-w-0 font-mono text-[12.5px] [overflow-wrap:anywhere]" title={c}>{c}</span>
             <Select className="field" value={m.columns[c] ?? ""} onChange={(e) => setCol(c, e.target.value)}>
               <option value="">{t("budget.fin.nonImportare")}</option>
               {Object.entries(fields).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -1304,7 +1304,7 @@ function EVTab({ ov, richiesta }: { ov: FinOverview; richiesta?: string }) {
             const l = p.latest;
             return (
               <tr key={p.key} className={`cursor-pointer border-b border-hair hover:bg-sel ${sel === p.key ? "bg-sel" : ""}`} onClick={() => setSel(p.key)}>
-                <Td><span className="font-mono text-[12px] text-accent">{p.key}</span> <span className="block max-w-72 truncate">{p.title}</span></Td>
+                <Td><span className="font-mono text-[12px] text-accent">{p.key}</span> <span className="block max-w-72 break-words">{p.title}</span></Td>
                 <Td hide="hidden md:table-cell">{p.ev_method ? methodLabel(p.ev_method) : "—"}</Td>
                 <Td right mono>{pct(l?.percent_complete, 1)}</Td>
                 <Td right mono className={l?.cpi != null && l.cpi < 1 ? "text-danger" : ""}>{ratio(l?.cpi)}</Td>

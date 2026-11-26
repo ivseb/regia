@@ -242,7 +242,7 @@ function ConditionPreview({ baseline }: { baseline: Baseline }) {
         <ul className="m-0 max-h-64 list-none overflow-y-auto p-0 text-[12.5px]">
           {items.map((i) => (
             <li key={i.id} className="flex justify-between gap-3 border-b border-hair py-1">
-              <span className={`min-w-0 truncate ${i.matched ? "" : "text-muted"}`}>
+              <span className={`min-w-0 [overflow-wrap:anywhere] ${i.matched ? "" : "text-muted"}`}>
                 <span className="mr-1.5 inline-block w-3">{i.matched ? "✓" : ""}</span>
                 {i.code ? <span className="font-mono">{i.code} </span> : null}
                 {i.title}

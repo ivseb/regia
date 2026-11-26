@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { EntitySelect, Select } from "../select";
 import { PageHeader } from "../shell";
+import { ModuleChip } from "../moduleIcon";
 import { ErrorNote, SectionTitle, date, Loading } from "../ui";
 import { grcApi, EFFECTIVENESS } from "../grcApi";
 import { auditApi, type EngControl, type EngagementDetail, type Severity } from "../auditApi";
@@ -15,8 +16,9 @@ import { tr } from "../i18n/core";
 
 function Stat({ label, value, sub, tone, testId }: { label: string; value: string; sub?: string; tone?: "danger"; testId?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 border border-hair px-3 py-2" data-testid={testId}>
-      <span className="label text-muted">{label}</span>
+    <div className="entra m-grc relative flex min-w-0 flex-col gap-0.5 border border-hair px-3 pb-2 pt-3" data-testid={testId}>
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
+      <span className="label flex items-center gap-2 text-muted"><ModuleChip module="grc" size="sm" />{label}</span>
       <span className={`text-[24px] leading-tight font-bold tabular ${tone === "danger" ? "text-danger" : ""}`}>{value}</span>
       {sub && <span className="text-[12px] text-muted">{sub}</span>}
     </div>

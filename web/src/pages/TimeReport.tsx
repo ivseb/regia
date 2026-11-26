@@ -211,7 +211,7 @@ export function TimeReport() {
                                 </span>
                               </button>
                             )}
-                            <button className="min-w-0 truncate text-left hover:underline" title={t("lavoro.timereport.filterOnThis")} onClick={() => g.key && addFilter(r.dim1 as Dim, g)}>
+                            <button className="min-w-0 text-left break-words hover:underline" title={t("lavoro.timereport.filterOnThis")} onClick={() => g.key && addFilter(r.dim1 as Dim, g)}>
                               {g.label}
                             </button>
                           </span>
@@ -222,7 +222,7 @@ export function TimeReport() {
                         kids.map((c) => (
                           <tr key={g.key + "|" + c.key} className="border-b border-hair text-right">
                             <th scope="row" className="py-1.5 pr-3 pl-6 text-left font-normal">
-                              <span className="block truncate">{c.label}</span>
+                              <span className="block break-words">{c.label}</span>
                             </th>
                             <Numbers g={c} r={r} hasCap={false} onOpen={() => drill(`${g.label} › ${c.label}`, [[r.dim1 as Dim, g], [r.dim2 as Dim, c]])} />
                             {hasCap && <td className="hidden md:table-cell" colSpan={2} />}
@@ -303,7 +303,7 @@ function RecordsList({ filter }: { filter: TimeFilter }) {
             {d.items.map((x) => (
               <li key={x.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5 border-b border-hair py-1.5">
                 <span className="font-mono text-[11.5px] text-muted tabular">{date(x.date)}</span>
-                <span className="min-w-0 truncate">
+                <span className="min-w-0 break-words">
                   <Link to="/e/$key" params={{ key: x.element_key }} className="font-mono text-[12px] text-accent no-underline hover:underline">
                     {x.element_key}
                   </Link>{" "}
@@ -311,7 +311,7 @@ function RecordsList({ filter }: { filter: TimeFilter }) {
                 </span>
                 <span className="text-right font-mono tabular font-semibold">{totalText(x.minutes)}</span>
                 <span />
-                <span className="min-w-0 truncate text-[12px] text-muted">
+                <span className="min-w-0 break-words text-[12px] text-muted">
                   {x.member}
                   {x.text ? ` · ${x.text}` : ""}
                 </span>

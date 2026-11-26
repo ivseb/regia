@@ -8,7 +8,8 @@ import { mainPath } from "./ui";
 import { useStateName } from "./stateLabels";
 
 /** Chip di fase: tinta per fase e, se si conoscono le fasi del tipo, i quadratini di avanzamento. */
-export function FaseChip({ states, current }: { states?: State[] | null; current: string }) {
+/** `bare`: senza ruolo e nome accessibile propri, quando il testo accanto dice già la fase (scheda dell'elemento). */
+export function FaseChip({ states, current, bare = false }: { states?: State[] | null; current: string; bare?: boolean }) {
   const t = useT();
   const stateName = useStateName();
   const path = mainPath(states);
@@ -18,7 +19,7 @@ export function FaseChip({ states, current }: { states?: State[] | null; current
   const tint = offPath ? "grc" : phaseTint(current, idx, idx >= 0 ? path[idx].category : states?.find((s) => s.name === current)?.category);
   const label = stateName(current, (idx >= 0 ? path[idx] : states?.find((s) => s.name === current))?.labels);
   return (
-    <span role="group" className={`chip-fase m-${tint}`} aria-label={t("common.phaseLabel", { name: label })}>
+    <span role={bare ? undefined : "group"} className={`chip-fase m-${tint}`} aria-label={bare ? undefined : t("common.phaseLabel", { name: label })}>
       {label}
       {known && (
         <span className="gates" aria-hidden="true">

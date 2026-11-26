@@ -104,7 +104,7 @@ function ImportHome({ onOpen, catalog, embedded }: { onOpen: (id: string) => voi
                 </Td>
                 <Td>{SOURCE_LABEL[r.source] ? t(SOURCE_LABEL[r.source]) : r.source}</Td>
                 <Td hide="hidden md:table-cell">
-                  <span className="block max-w-64 truncate">{r.file_name}</span>
+                  <span className="block min-w-0 [overflow-wrap:anywhere]">{r.file_name}</span>
                 </Td>
                 <Td>
                   <RunStatusTag run={r} />

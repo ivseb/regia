@@ -25,6 +25,7 @@ import {
   type Trend,
 } from "../devsecopsApi";
 import { PageHeader } from "../shell";
+import { ModuleChip } from "../moduleIcon";
 import { Criticality, ErrorNote, SectionTitle, ago, Loading } from "../ui";
 import { useNarrow } from "./timeline";
 import { GateRecent } from "./GatePanel";
@@ -44,13 +45,14 @@ function when(iso: string | null | undefined): string {
 }
 
 /** Numero grande con il confronto a sette giorni (in rosso se peggiora, in verde se migliora). */
-function KpiNumber({ label, t, note }: { label: string; t: Trend; note?: ReactNode }) {
+function KpiNumber({ label, t, note, i }: { label: string; t: Trend; note?: ReactNode; i?: number }) {
   const diff = t.now - t.week_ago;
   const tone = diff > 0 ? "text-danger" : diff < 0 ? "text-ok" : "text-muted";
   const delta = diff === 0 ? tr("governance.devsecops.uguale_a_7_giorni_fa") : tr("governance.devsecops.rispetto_a_7_giorni_fa", { p: diff > 0 ? "+" : "−", p2: Math.abs(diff) });
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="label text-muted">{label}</span>
+    <div className="entra relative flex min-w-0 flex-col gap-1.5 border border-hair px-3.5 pb-3 pt-3 m-devsecops" style={{ background: "linear-gradient(color-mix(in srgb, var(--mc) 6%, var(--bg)), var(--bg))", animationDelay: `${(i ?? 0) * 60}ms` }}>
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
+      <span className="label flex items-center gap-2 text-muted"><ModuleChip module="devsecops" size="sm" />{label}</span>
       <span className={`font-mono text-[34px] leading-none font-semibold tabular ${t.now > 0 ? "text-fg" : "text-muted"}`}>{t.now}</span>
       <span className={`text-[12px] tabular ${tone}`}>
         {delta} <span className="text-muted">({t.week_ago})</span>
@@ -62,8 +64,8 @@ function KpiNumber({ label, t, note }: { label: string; t: Trend; note?: ReactNo
 
 function Kpis({ k }: { k: KPIs }) {
   return (
-    <section aria-label={tr("governance.compliance.in_sintesi")} className="grid grid-cols-1 gap-x-8 gap-y-5 border-y-2 border-rule py-4 sm:grid-cols-3">
-      <KpiNumber
+    <section aria-label={tr("governance.compliance.in_sintesi")} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <KpiNumber i={0}
         label={tr("governance.devsecops.cve_critiche_in_produzione")}
         t={k.critical_cves}
         note={
@@ -71,8 +73,8 @@ function Kpis({ k }: { k: KPIs }) {
           </>
         }
       />
-      <KpiNumber label={tr("governance.devsecops.controlli_bloccanti_falliti_o_in")} t={k.blocking_checks} note={tr("governance.devsecops.servizi_sul_rilascio_in_produzione")} />
-      <KpiNumber
+      <KpiNumber i={1} label={tr("governance.devsecops.controlli_bloccanti_falliti_o_in")} t={k.blocking_checks} note={tr("governance.devsecops.servizi_sul_rilascio_in_produzione")} />
+      <KpiNumber i={2}
         label={tr("governance.devsecops.non_rilasciati_da_piu_di", { stale_days: k.stale_days })}
         t={k.stale}
         note={
@@ -278,7 +280,7 @@ function ServiceTr({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
         </td>
         <td className="px-3 py-2 font-mono text-[12.5px] tabular">
           {s.prod_version || <span className="font-sans text-muted">{tr("governance.devsecops.mai_in_produzione")}</span>}
-          {r?.image && <span className="block max-w-[180px] truncate text-[11px] text-muted" title={`${r.image}${r.digest ? "@" + r.digest : ""}`}>{r.digest?.slice(0, 19) ?? r.image}</span>}
+          {r?.image && <span className="block max-w-[180px] [overflow-wrap:anywhere] text-[11px] text-muted" title={`${r.image}${r.digest ? "@" + r.digest : ""}`}>{r.digest?.slice(0, 19) ?? r.image}</span>}
         </td>
         <td className="px-3 py-2">{r ? <Released r={r} /> : <span className="text-muted">{s.prod_since ? when(s.prod_since) : "—"}</span>}</td>
         <td className="px-3 py-2">{r ? <ChangeLink r={r} /> : <span className="text-muted">—</span>}</td>
@@ -857,7 +859,7 @@ function ServicesConfig({ c }: { c: Config }) {
           <li key={s.id} className="grid grid-cols-1 items-center gap-x-4 gap-y-1 border-b border-hair py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_280px]">
             <span className="min-w-0">
               <span className="font-medium">{s.name}</span>
-              {s.repository && <span className="block truncate font-mono text-[11.5px] text-muted">{s.repository}</span>}
+              {s.repository && <span className="block break-words font-mono text-[11.5px] text-muted">{s.repository}</span>}
             </span>
             <span className="text-[12.5px] text-muted">
               {s.declared_application ? <>{tr("governance.devsecops.dichiarata")}{" "}<span className="font-mono text-fg">{s.declared_application}</span></> : tr("governance.devsecops.nessuna_dichiarata")}

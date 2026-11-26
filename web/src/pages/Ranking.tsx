@@ -11,6 +11,8 @@ import { ErrorNote, date, euro, euroRange } from "../ui";
 import { Field, periodOptions, defaultPeriod, mny } from "./budget/budget-ui";
 import { ScoreBar } from "./Evaluation";
 import { ScorecardConfig } from "./ScorecardConfig";
+import { Punteggio } from "../faseChip";
+import { phaseTint } from "../tinte";
 import { crumbs } from "../crumbs";
 
 // Graduatoria del portafoglio (demand.md §6, D04): prima gli obblighi normativi, poi il
@@ -627,7 +629,7 @@ function RankTable(props: {
                     <Link
                       to="/e/$key"
                       params={{ key: it.key }}
-                      className={`line-clamp-2 font-medium no-underline hover:underline sm:line-clamp-1 ${out ? "text-muted" : "text-fg"}`}
+                      className={`min-w-0 font-medium break-words no-underline hover:underline ${out ? "text-muted" : "text-fg"}`}
                     >
                       {it.title}
                     </Link>
@@ -644,7 +646,7 @@ function RankTable(props: {
                           {t("budget.rank.row.pinned")}
                         </button>
                       )}
-                      <span className="truncate text-muted xl:hidden">
+                      <span className="min-w-0 break-words text-muted xl:hidden">
                         {it.state}
                         {it.regulatory_deadline ? <span className="text-flag lg:hidden"> · {date(it.regulatory_deadline)}</span> : null}
                       </span>
@@ -652,7 +654,11 @@ function RankTable(props: {
                   </span>
                 </td>
                 <td className="px-2 whitespace-nowrap">
-                  <ScoreBar value={it.score} stale={it.score_stale} dim={out} />
+                  {it.score != null && !it.score_stale && !out ? (
+                    <Punteggio value={it.score} text={fmtNumber(it.score, { maximumFractionDigits: 1 })} />
+                  ) : (
+                    <ScoreBar value={it.score} stale={it.score_stale} dim={out} />
+                  )}
                   {it.score_stale && <span className="ml-1 font-mono text-[10.5px] text-muted">v{it.score_version}</span>}
                 </td>
                 <td className="hidden px-2 text-right font-mono text-[12.5px] whitespace-nowrap lg:table-cell">
@@ -661,7 +667,7 @@ function RankTable(props: {
                 <td className="hidden px-2 text-right font-mono text-[12.5px] whitespace-nowrap xl:table-cell">
                   {it.value_per_cost != null ? fmtNumber(it.value_per_cost, { maximumFractionDigits: 1 }) : "—"}
                 </td>
-                <td className="hidden px-2 text-[12.5px] whitespace-nowrap xl:table-cell">{it.state}</td>
+                <td className="hidden px-2 text-[12.5px] whitespace-nowrap xl:table-cell"><span className={`chip-fase m-${phaseTint(it.state)}`}>{it.state}</span></td>
                 <td className="hidden px-2 text-[12.5px] whitespace-nowrap lg:table-cell">
                   {it.regulatory_deadline ? (
                     <span className={out ? "" : "font-semibold text-flag"}>{date(it.regulatory_deadline)}</span>

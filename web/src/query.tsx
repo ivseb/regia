@@ -389,7 +389,7 @@ export function QueryBar({ value, onChange, onSubmit, submitted, aside, label = 
                 className={`flex cursor-pointer items-baseline gap-3 border-b border-hair px-3 py-1.5 last:border-b-0 ${i === active ? "bg-sel" : ""}`}
               >
                 <span className={`font-mono text-[12.5px] ${s.kind === "field" || s.kind === "sort" ? "text-accent" : "text-fg"}`}>{s.label}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted">{s.detail}</span>
+                <span className="min-w-0 flex-1 text-[12px] [overflow-wrap:anywhere] text-muted">{s.detail}</span>
                 <span className="font-mono text-[10.5px] text-muted uppercase">{KIND_LABEL[s.kind]()}</span>
               </li>
             ))}

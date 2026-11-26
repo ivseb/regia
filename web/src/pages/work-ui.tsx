@@ -8,6 +8,7 @@ import { COLOR_DOT } from "../fields";
 import { useT } from "../i18n/react";
 import { loc } from "../i18n/format";
 import { useTypeNames } from "../typesApi";
+import { initials, personTint, typeTint } from "../tinte";
 import { TYPE_MARK, fmtMinutes, lastSpace, rememberSpace, workApi, type Option } from "../workApi";
 
 /** Spazi dei team e quello scelto (dalla query, poi l'ultimo usato, poi il primo). */
@@ -44,9 +45,8 @@ export function TypeMark({ type }: { type: string }) {
   const tn = useTypeNames();
   const base = TYPE_MARK[type] ?? { letter: type.slice(0, 1).toUpperCase(), name: type };
   const m = { ...base, name: tn.name(type, base.name) };
-  const tone = type === "bug" ? "border-danger text-danger" : type === "epic" ? "border-fg bg-fg text-bg" : "border-rule text-fg";
   return (
-    <span title={m.name} aria-label={m.name} className={`inline-flex h-[16px] min-w-[16px] shrink-0 items-center justify-center border px-[2px] font-mono text-[10px] leading-none font-semibold ${tone}`}>
+    <span title={m.name} aria-label={m.name} className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center px-1 text-[10px] leading-none font-extrabold text-chip-ink uppercase" style={{ background: `var(--m-${typeTint(type)})` }}>
       {m.letter}
     </span>
   );
@@ -58,7 +58,7 @@ export function PriorityDot({ opt, label = false }: { opt?: Option; label?: bool
   return (
     <span className="inline-flex min-w-0 items-center gap-1 text-[11.5px]" title={t("lavoro.workui.priorityTitle", { name: opt.name })}>
       <span className={`size-2 shrink-0 ${COLOR_DOT[opt.color] ?? "bg-hair"}`} aria-hidden="true" />
-      {label ? <span className="truncate">{opt.name}</span> : <span className="sr-only">{t("lavoro.workui.priority", { name: opt.name })}</span>}
+      {label ? <span className="min-w-0 break-words">{opt.name}</span> : <span className="sr-only">{t("lavoro.workui.priority", { name: opt.name })}</span>}
     </span>
   );
 }
@@ -66,18 +66,13 @@ export function PriorityDot({ opt, label = false }: { opt?: Option; label?: bool
 export function Person({ name, size = 20 }: { name?: string; size?: number }) {
   const t = useT();
   if (!name) return null; // senza assegnatario non si ripete un testo su ogni scheda
-  const ini = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase();
+  const ini = initials(name);
   return (
     <span
       title={name}
       aria-label={t("lavoro.workui.assignedTo", { name })}
-      style={{ width: size, height: size }}
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-accent text-[9.5px] font-bold text-accent-fg"
+      style={{ width: size, height: size, background: `var(--m-${personTint(name)})` }}
+      className="inline-flex shrink-0 items-center justify-center rounded-full text-[9.5px] font-bold text-chip-ink"
     >
       {ini}
     </span>

@@ -89,7 +89,7 @@ export function OptionChip({ o, onRemove }: { o: OptionView; onRemove?: () => vo
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 border border-hair px-1.5 py-px text-[12.5px] leading-[18px]">
       <span className={`size-2 shrink-0 ${COLOR_DOT[o.color ?? ""] ?? "bg-hair"}`} aria-hidden="true" />
-      <span className={`truncate ${o.archived ? "text-muted" : ""}`}>{shown}</span>
+      <span className={`min-w-0 [overflow-wrap:anywhere] ${o.archived ? "text-muted" : ""}`}>{shown}</span>
       {o.archived && <span className="sr-only">{tr("altro.fields.archivedSr")}</span>}
       {onRemove && (
         <button type="button" className="text-muted hover:text-danger" aria-label={tr("altro.fields.remove", { name: shown })} onClick={onRemove}>
@@ -103,7 +103,7 @@ export function OptionChip({ o, onRemove }: { o: OptionView; onRemove?: () => vo
 function Chip({ children, onRemove, label }: { children: ReactNode; onRemove?: () => void; label?: string }) {
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 border border-hair px-1.5 py-px text-[12.5px] leading-[18px]">
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
       {onRemove && (
         <button type="button" className="text-muted hover:text-danger" aria-label={tr("altro.fields.remove", { name: label ?? "" })} onClick={onRemove}>
           ×

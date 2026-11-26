@@ -280,7 +280,7 @@ export function BulkBar({ ids, space, requests, onClear, onDone }: { ids: string
         ) : (
           lastCmd && (
             <p className="m-0 flex flex-wrap items-center gap-3 text-[13px]">
-              <span className="min-w-0 flex-1 truncate text-muted">{t("lavoro.bulkbar.lastCommand", { summary: lastCmd.summary })}</span>
+              <span className="min-w-0 flex-1 break-words text-muted">{t("lavoro.bulkbar.lastCommand", { summary: lastCmd.summary })}</span>
               <button className="text-accent underline disabled:opacity-50" disabled={undo.isPending} onClick={() => undo.mutate()}>
                 {t("lavoro.bulkbar.undo")}
               </button>
@@ -507,7 +507,7 @@ function PreviewDialog({ ids, commands, text, onClose, onApplied }: { ids: strin
                   <li key={i.id} className="flex flex-col gap-0.5 border-b border-hair py-1.5 last:border-b-0">
                     <span className="flex gap-2">
                       <span className="font-mono text-[12px] text-accent">{i.key}</span>
-                      <span className="min-w-0 truncate">{i.title}</span>
+                      <span className="min-w-0 break-words">{i.title}</span>
                     </span>
                     <span className="text-[12.5px] text-muted">{i.reason}</span>
                   </li>
@@ -534,7 +534,7 @@ function PreviewDialog({ ids, commands, text, onClose, onApplied }: { ids: strin
                   <li key={i.id} className="flex flex-col gap-0.5 border-b border-hair py-1.5">
                     <span className="flex gap-2">
                       <span className="font-mono text-[12px] text-accent">{i.key}</span>
-                      <span className="min-w-0 truncate">{i.title}</span>
+                      <span className="min-w-0 break-words">{i.title}</span>
                     </span>
                     <span className="pl-1 text-[12px] text-muted">{i.changes?.join(" · ")}</span>
                   </li>

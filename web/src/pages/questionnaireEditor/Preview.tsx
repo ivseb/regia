@@ -70,7 +70,7 @@ export function Preview({ def, outcomes, facts: known }: { def: QDefinition; out
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {used.map((k) => (
               <label key={k} className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate font-mono text-[11.5px] text-muted">{k}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere] font-mono text-[11.5px] text-muted">{k}</span>
                 <input
                   className="field py-1.5"
                   list={`pf-${k}`}

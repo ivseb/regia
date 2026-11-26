@@ -6,6 +6,7 @@ import { api, ApiError, type Step } from "../api";
 import { kb, type Comparison, type Home, type PageDetail, type Recent, type SearchHit, type Space, type SpaceView, type TreeNode, type VersionInfo } from "../knowledgeApi";
 import { headingsOf, PageMarkdown, citedKeys } from "../kbMarkdown";
 import { PageHeader } from "../shell";
+import { ModuleChip } from "../moduleIcon";
 import { ago, date, DECISIONS, ErrorNote, SectionTitle, StageGate, Loading } from "../ui";
 import { Attachments, Comments } from "./Collaboration";
 import { EvidencePanel } from "./KnowledgeEvidence";
@@ -74,8 +75,9 @@ export function KnowledgeHome() {
           )}
           <ul className="m-0 flex list-none flex-col p-0">
             {h?.spaces.map((s) => (
-              <li key={s.id} className="border-b border-hair">
-                <Link to="/documenti/spazi/$space" params={{ space: s.key }} className="flex min-w-0 items-start gap-3 py-2.5 text-fg no-underline hover:text-accent">
+              <li key={s.id} className="mb-2 list-none">
+                <Link to="/documenti/spazi/$space" params={{ space: s.key }} className="solleva m-knowledge flex min-w-0 items-start gap-3 border border-hair bg-bg px-3 py-2.5 text-fg no-underline hover:text-accent">
+                  <ModuleChip module="knowledge" size="sm" />
                   <span className="w-14 shrink-0 pt-0.5 font-mono text-[12.5px] text-accent">{s.key}</span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex flex-wrap items-center gap-2 font-semibold">
@@ -110,12 +112,13 @@ function Tile({ label, value, note, tone, href }: { label: string; value: number
   const color = value > 0 && tone === "danger" ? "text-danger" : value > 0 && tone === "flag" ? "text-flag" : "text-fg";
   const body = (
     <>
-      <span className="label text-muted">{label}</span>
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
+      <span className="label flex items-center gap-2 text-muted"><ModuleChip module="knowledge" size="sm" />{label}</span>
       <span className={`font-mono text-[28px] leading-none font-semibold tabular ${color}`}>{value}</span>
       <span className="text-[12px] text-muted">{note}</span>
     </>
   );
-  const cls = "flex min-w-0 flex-col gap-1.5 border-t-2 border-rule py-2.5 pr-3 text-fg no-underline";
+  const cls = "entra m-knowledge relative flex min-w-0 flex-col gap-1.5 border border-hair px-3 pb-2.5 pt-3 text-fg no-underline";
   return href ? (
     <a href={href} className={`${cls} hover:text-accent`}>{body}</a>
   ) : (
@@ -165,7 +168,7 @@ function MyReadings({ items }: { items: Home["my_readings"] }) {
         {items.map((r) => (
           <li key={r.key + r.name}>
             <Link to="/documenti/$key" params={{ key: r.key }} hash="letture" className="flex min-w-0 flex-col py-1.5 text-fg no-underline hover:text-accent">
-              <span className="min-w-0 truncate">{r.title}</span>
+              <span className="min-w-0 break-words">{r.title}</span>
               <span className="text-[11.5px] text-muted">
                 <span className="font-mono">{r.key}</span>{t("knowledge.main.mine.version", { version: r.version })}
                 {r.due && <span className={r.overdue ? "font-semibold text-danger" : ""}>{t("knowledge.main.mine.due", { date: fmtDate(new Date(r.due + "T00:00:00")) })}</span>}
@@ -187,8 +190,8 @@ function OpenThreads({ items }: { items: Home["open_threads"] }) {
         {items.map((th) => (
           <li key={th.thread_id}>
             <Link to="/documenti/$key" params={{ key: th.key }} className="flex min-w-0 flex-col gap-0.5 py-1.5 text-fg no-underline hover:text-accent">
-              <span className="min-w-0 truncate text-[12.5px] text-muted">«{th.quote}»{th.orphan ? t("knowledge.main.threads.gone") : ""}</span>
-              <span className="min-w-0 truncate">{th.excerpt}</span>
+              <span className="min-w-0 break-words text-[12.5px] text-muted">«{th.quote}»{th.orphan ? t("knowledge.main.threads.gone") : ""}</span>
+              <span className="min-w-0 break-words">{th.excerpt}</span>
               <span className="text-[11.5px] text-muted">
                 {th.title} · {th.author} · {ago(th.updated_at)}
                 {th.replies > 0 ? t("knowledge.main.threads.replies", { count: th.replies }) : ""}
@@ -211,7 +214,7 @@ function Campaigns({ items }: { items: Home["campaigns"] }) {
           <li key={c.key + c.name}>
             <Link to="/documenti/$key" params={{ key: c.key }} hash="letture" className="flex min-w-0 flex-col gap-1 py-1.5 text-fg no-underline hover:text-accent">
               <span className="flex min-w-0 items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate">{c.title}</span>
+                <span className="min-w-0 break-words">{c.title}</span>
                 <span className="shrink-0 font-mono text-[12px] tabular">{c.confirmed} / {c.total}</span>
               </span>
               <span className="h-1 w-full bg-hair"><span className={`block h-full ${c.overdue ? "bg-danger" : "bg-accent"}`} style={{ width: `${c.total ? Math.round((c.confirmed * 100) / c.total) : 0}%` }} /></span>
@@ -237,7 +240,7 @@ function RecentList({ title, items, empty }: { title: string; items: Recent[]; e
           <li key={r.key}>
             <Link to="/documenti/$key" params={{ key: r.key }} className="flex min-w-0 flex-col py-1.5 text-fg no-underline hover:text-accent">
               <span className="flex min-w-0 items-baseline gap-2">
-                <span className="min-w-0 truncate">{r.title}</span>
+                <span className="min-w-0 break-words">{r.title}</span>
                 <DocState state={r.state} category={r.state_category} controlled={r.controlled} />
               </span>
               <span className="text-[11.5px] text-muted">
@@ -465,7 +468,8 @@ function SpaceTree({ view, current, onPick }: { view: SpaceView; current?: strin
             className={`flex min-w-0 flex-1 items-baseline gap-1.5 py-1 pr-2 no-underline ${active ? "font-semibold text-accent" : "text-fg hover:text-accent"}`}
             aria-current={active ? "page" : undefined}
           >
-            <span className="min-w-0 truncate">{p.title}</span>
+            <span aria-hidden="true" className="m-knowledge relative top-px inline-block size-2 shrink-0 bg-mc" />
+            <span className="min-w-0 break-words">{p.title}</span>
             {p.controlled && p.state && <span className="shrink-0 text-[10.5px] text-muted">{p.state}</span>}
           </Link>
         </div>
@@ -486,7 +490,7 @@ function SpaceTree({ view, current, onPick }: { view: SpaceView; current?: strin
           {matches.map((p) => (
             <li key={p.id}>
               <Link to="/documenti/$key" params={{ key: p.key }} onClick={onPick} className="flex min-w-0 flex-col py-1 text-fg no-underline hover:text-accent">
-                <span className="truncate">{p.title}</span>
+                <span className="min-w-0 break-words">{p.title}</span>
                 <span className="font-mono text-[11px] text-muted">{p.key}</span>
               </Link>
             </li>
@@ -517,7 +521,7 @@ function SpaceShell({ spaceKey, current, children, aside }: { spaceKey: string; 
   const nav = v && (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Link to="/documenti/spazi/$space" params={{ space: v.space.key }} className="min-w-0 flex-1 truncate font-bold text-fg no-underline hover:text-accent">
+        <Link to="/documenti/spazi/$space" params={{ space: v.space.key }} className="min-w-0 flex-1 break-words font-bold text-fg no-underline hover:text-accent">
           {v.space.name}
         </Link>
         <AccessBadge access={v.space.access} />
@@ -539,7 +543,7 @@ function SpaceShell({ spaceKey, current, children, aside }: { spaceKey: string; 
         <button className="btn py-1" aria-expanded={drawer} aria-controls="albero-mobile" onClick={() => setDrawer(true)}>
           {t("knowledge.main.shell.pages")}
         </button>
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{v?.space.name}</span>
+        <span className="min-w-0 flex-1 break-words text-[12.5px] text-muted">{v?.space.name}</span>
       </div>
       {drawer && (
         <div className="fixed inset-0 z-[55] flex bg-fg/30 md:hidden" onMouseDown={(e) => e.target === e.currentTarget && setDrawer(false)}>
@@ -695,7 +699,7 @@ export function SpacePage({ spaceKey, q, onSearch }: { spaceKey: string; q?: str
                 {roots.map((p) => (
                   <li key={p.id}>
                     <Link to="/documenti/$key" params={{ key: p.key }} className="flex items-baseline gap-2 py-1 text-fg no-underline hover:text-accent">
-                      <span className="min-w-0 truncate">{p.title}</span>
+                      <span className="min-w-0 break-words">{p.title}</span>
                       <DocState state={p.state} category={p.state_category} controlled={p.controlled} />
                     </Link>
                   </li>
@@ -708,7 +712,7 @@ export function SpacePage({ spaceKey, q, onSearch }: { spaceKey: string; q?: str
                 {recent.map((p) => (
                   <li key={p.id}>
                     <Link to="/documenti/$key" params={{ key: p.key }} className="flex items-baseline justify-between gap-2 py-1 text-fg no-underline hover:text-accent">
-                      <span className="min-w-0 truncate">{p.title}</span>
+                      <span className="min-w-0 break-words">{p.title}</span>
                       <span className="shrink-0 text-[11.5px] text-muted">{ago(p.updated_at)}</span>
                     </Link>
                   </li>
@@ -1049,7 +1053,7 @@ function PageReader({ d, search, onSearch }: { d: PageDetail; search: PageSearch
             {d.path.map((c) => (
               <span key={c.key} className="flex items-center gap-1">
                 <span aria-hidden="true">/</span>
-                <Link to="/documenti/$key" params={{ key: c.key }} className="max-w-[220px] truncate text-muted no-underline hover:text-accent">{c.title}</Link>
+                <Link to="/documenti/$key" params={{ key: c.key }} className="min-w-0 break-words text-muted no-underline hover:text-accent">{c.title}</Link>
               </span>
             ))}
             <span aria-hidden="true">/</span>
@@ -1137,7 +1141,7 @@ function Toc({ items }: { items: { level: number; text: string; id: string }[] }
     <ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-[12.5px]">
       {items.map((h) => (
         <li key={h.id} style={{ paddingLeft: (h.level - min) * 12 }}>
-          <a href={`#${h.id}`} className="block truncate py-0.5 text-muted no-underline hover:text-accent">{h.text}</a>
+          <a href={`#${h.id}`} className="block break-words py-0.5 text-muted no-underline hover:text-accent">{h.text}</a>
         </li>
       ))}
     </ol>
@@ -1420,7 +1424,7 @@ function LinkDialog({ d, onClose }: { d: PageDetail; onClose: () => void }) {
           <li key={e.id}>
             <button className="flex w-full min-w-0 items-baseline gap-2 py-1.5 text-left hover:text-accent" onClick={() => link.mutate(e.key)}>
               <span className="shrink-0 font-mono text-[12px] text-accent">{e.key}</span>
-              <span className="min-w-0 flex-1 truncate">{e.title}</span>
+              <span className="min-w-0 flex-1 break-words">{e.title}</span>
               <span className="shrink-0 text-[11.5px] text-muted">{e.type_name}</span>
             </button>
           </li>

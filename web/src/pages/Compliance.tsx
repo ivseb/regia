@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../shell";
+import { ModuleChip } from "../moduleIcon";
 import { ErrorNote, SectionTitle, date, Loading } from "../ui";
 import {
   EFFECTIVENESS,
@@ -110,10 +111,11 @@ export function Compliance({ search }: { search: ComplianceSearch }) {
 // ---------------------------------------------------------------------
 // Panoramica
 
-function Stat({ label, value, note, tone }: { label: string; value: ReactNode; note?: ReactNode; tone?: string }) {
+function Stat({ label, value, note, tone, i }: { label: string; value: ReactNode; note?: ReactNode; tone?: string; i?: number }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="label text-muted">{label}</span>
+    <div className="entra relative flex min-w-0 flex-col gap-1.5 border border-hair px-3.5 pb-3 pt-3 m-grc" style={{ background: "linear-gradient(color-mix(in srgb, var(--mc) 6%, var(--bg)), var(--bg))", animationDelay: `${(i ?? 0) * 60}ms` }}>
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
+      <span className="label flex items-center gap-2 text-muted"><ModuleChip module="grc" size="sm" />{label}</span>
       <span className={`font-mono text-[34px] leading-none font-semibold tabular ${tone ?? ""}`}>{value}</span>
       {note && <span className="text-[12px] text-muted">{note}</span>}
     </div>
@@ -124,15 +126,15 @@ function Overview({ d }: { d: Dashboard }) {
   if (d.frameworks.length === 0) return <Empty canEdit={d.can_edit} />;
   return (
     <>
-      <section aria-label={tr("governance.compliance.in_sintesi")} className="grid grid-cols-2 gap-x-6 gap-y-5 border-y-2 border-rule py-4 md:grid-cols-4">
-        <Stat
+      <section aria-label={tr("governance.compliance.in_sintesi")} className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat i={0}
           label={tr("governance.compliance.copertura_pesata_per_criticita")}
           value={d.tenant.applicable ? `${d.tenant.weighted_percent}%` : "—"}
           note={tr("governance.compliance.semplice_coppie_coperte_su_un", { percent: d.tenant.percent, covered: d.tenant.covered, applicable: d.tenant.applicable })}
         />
-        <Stat label={tr("governance.compliance.controlli_in_esercizio")} value={d.controls} />
-        <Stat label={tr("governance.compliance.evidenze_valide")} value={d.valid_evidence} />
-        <Stat label={tr("governance.compliance.evidenze_in_scadenza")} value={d.expiring.length} tone={d.expiring.length ? "text-flag" : ""} note={tr("governance.compliance.entro_giorni", { expiry_notice_days: d.settings.expiry_notice_days })} />
+        <Stat i={1} label={tr("governance.compliance.controlli_in_esercizio")} value={d.controls} />
+        <Stat i={2} label={tr("governance.compliance.evidenze_valide")} value={d.valid_evidence} />
+        <Stat i={3} label={tr("governance.compliance.evidenze_in_scadenza")} value={d.expiring.length} tone={d.expiring.length ? "text-flag" : ""} note={tr("governance.compliance.entro_giorni", { expiry_notice_days: d.settings.expiry_notice_days })} />
       </section>
       <section className="flex flex-col gap-2">
         <SectionTitle>{tr("governance.compliance.per_normativa")}</SectionTitle>
@@ -182,7 +184,7 @@ function Overview({ d }: { d: Dashboard }) {
                 <Link to="/conformita" search={{ tab: "normative", normativa: r.framework, requisito: r.id }} className="flex items-baseline gap-2 no-underline">
                   <FrameworkTag k={r.framework} />
                   <span className="font-mono text-[12px] text-fg">{r.ref}</span>
-                  <span className="min-w-0 truncate text-fg">{r.title}</span>
+                  <span className="min-w-0 break-words text-fg">{r.title}</span>
                 </Link>
               </li>
             ))}
@@ -199,7 +201,7 @@ function Overview({ d }: { d: Dashboard }) {
                   <Link to="/e/$key" params={{ key: c.key }} search={{ scheda: "dettagli" }} className="font-mono text-[12px]">
                     {c.key}
                   </Link>
-                  <span className="min-w-0 truncate">{c.title}</span>
+                  <span className="min-w-0 break-words">{c.title}</span>
                 </span>
                 <span className="text-[12px] text-muted">
                   {c.owner || tr("governance.compliance.senza_responsabile")}{" "}{tr("governance.compliance.manca_in")}{" "}{c.missing.map(scopeLabel).join(", ")}
@@ -1017,7 +1019,7 @@ function DraftEditor({ fwKey }: { fwKey: string }) {
         {items.map((x) => (
           <li key={x.id} className="flex items-baseline gap-2 border-b border-hair py-1 text-[13px]">
             <span className="w-28 shrink-0 font-mono text-[12px]">{x.ref}</span>
-            <span className="min-w-0 flex-1 truncate">{x.title}</span>
+            <span className="min-w-0 flex-1 break-words">{x.title}</span>
             <span className="text-[11.5px] text-muted">{ITEM_KINDS[x.kind]}</span>
             <button className="text-[12px] text-muted hover:text-danger" onClick={() => remove.mutate(x.ref)} aria-label={tr("governance.compliance.togli", { ref: x.ref })}>{tr("governance.compliance.togli_2")}</button>
           </li>
@@ -1186,7 +1188,7 @@ function MappingsSection({ frameworks, canEdit }: { frameworks: FrameworkInfo[];
             <span className="font-mono text-[12px]">{m.from}</span>
             <span className="text-muted">{RELATIONS[m.relation]}</span>
             <span className="font-mono text-[12px]">{m.to}</span>
-            <span className="min-w-0 flex-1 truncate text-muted">
+            <span className="min-w-0 flex-1 break-words text-muted">
               {m.from_title} → {m.to_title}
             </span>
             {canEdit && !m.system && (

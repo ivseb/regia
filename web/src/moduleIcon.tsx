@@ -85,6 +85,15 @@ export function uiModuleOfPath(path: string): UiModule {
   return m === "architecture" ? "arch" : m;
 }
 
+/** Icona del percorso: come la sezione del menu (stella per le pagine personali, elenco, impostazioni). */
+export function uiIconOfPath(path: string): IconKey {
+  const under = (b: string) => path === b || path.startsWith(b + "/");
+  if (under("/da-fare") || under("/notifiche") || under("/profilo")) return "star";
+  if (under("/elenco")) return "list";
+  if (under("/configurazione") || under("/processi")) return "settings";
+  return uiModuleOfPath(path);
+}
+
 /** Avatar tondo con le iniziali, nel colore stabile della persona (tinte.ts). */
 export function Avatar({ name, className = "" }: { name: string; className?: string }) {
   return (

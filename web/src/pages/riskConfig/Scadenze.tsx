@@ -84,7 +84,7 @@ export function Timeline({ stages }: { stages: Stage[] }) {
       <ol className="m-0 flex list-none flex-col gap-1 p-0">
         {shown.map((x) => (
           <li key={x.key} className="grid min-w-0 grid-cols-[minmax(0,9rem)_minmax(0,1fr)_4.5rem] items-center gap-2 text-[12.5px] sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_5rem]">
-            <span className="truncate" title={x.name}>
+            <span className="min-w-0 [overflow-wrap:anywhere]" title={x.name}>
               {x.name}
             </span>
             <span className="h-2.5 bg-hair" aria-hidden="true">

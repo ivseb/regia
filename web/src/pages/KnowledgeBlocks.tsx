@@ -776,14 +776,14 @@ function BlockBody({ b, n, name, api, refInfo }: { b: Block; n: number; name: st
       return (
         <div data-bfocus={b.id} tabIndex={0} role="group" aria-label={name} className="flex min-w-0 items-center gap-2 py-1.5 outline-none focus-visible:outline-2 focus-visible:outline-accent" onKeyDown={(e) => nonText(e, b, api)}>
           <span aria-hidden="true">📎</span>
-          <a href={b.url} className="min-w-0 truncate text-accent underline">{b.text}</a>
+          <a href={b.url} className="min-w-0 break-words text-accent underline">{b.text}</a>
         </div>
       );
     case "ref":
       return (
         <div data-bfocus={b.id} tabIndex={0} role="group" aria-label={`${name}: ${b.text}`} className="flex min-w-0 flex-wrap items-baseline gap-x-2 py-1.5 outline-none focus-visible:outline-2 focus-visible:outline-accent" onKeyDown={(e) => nonText(e, b, api)}>
           <span className="font-mono text-[13px] text-accent">{b.text}</span>
-          {refInfo && <span className="min-w-0 truncate text-[13.5px]">{refInfo.title}</span>}
+          {refInfo && <span className="min-w-0 break-words text-[13.5px]">{refInfo.title}</span>}
           {refInfo && <span className="text-[11.5px] text-muted">{refInfo.type_name}{refInfo.state ? ` · ${refInfo.state}` : ""}</span>}
         </div>
       );
@@ -967,7 +967,7 @@ function ElementPicker({ onPick, onClose }: { onPick: (key: string) => void; onC
           <li key={el.id}>
             <button type="button" className="flex min-h-11 w-full items-baseline gap-2 py-1 text-left hover:text-accent md:min-h-0" onClick={() => onPick(el.key)}>
               <span className="font-mono text-[12px] text-accent">{el.key}</span>
-              <span className="min-w-0 flex-1 truncate">{el.title}</span>
+              <span className="min-w-0 flex-1 break-words">{el.title}</span>
               <span className="text-[11.5px] text-muted">{el.type_name}</span>
             </button>
           </li>

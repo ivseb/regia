@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { commitsApi } from "../commitsApi";
 import { ago, date } from "../ui";
 import { useT } from "../i18n/react";
+import { ModuleChip } from "../moduleIcon";
 import { fmtNumber } from "../i18n/format";
 
 export default function CodiceSection({ refKey, open = true }: { refKey: string; open?: boolean }) {
@@ -19,6 +20,7 @@ export default function CodiceSection({ refKey, open = true }: { refKey: string;
       <summary className="flex cursor-pointer list-none items-baseline justify-between border-b-2 border-rule pb-1.5 [&::-webkit-details-marker]:hidden">
         <span className="label m-0">
           <span aria-hidden="true" className="mr-1.5 inline-block w-2 text-muted group-open:rotate-90">›</span>
+          <ModuleChip module="devsecops" size="sm" className="mr-1.5 align-middle" />
           {t("lavoro.codice.titolo")}
         </span>
         <span className="font-mono text-[11.5px] text-muted tabular">{t("lavoro.codice.commit", { n: data.commits.length })}</span>

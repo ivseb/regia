@@ -5,7 +5,7 @@ import type { Source } from "../types";
 export default {
   "knowledge.main.restricted.title": "Solo chi ha un ruolo sullo spazio",
   "knowledge.main.restricted.badge": "RISERVATO",
-  "knowledge.main.home.path": "governance / documenti",
+  "knowledge.main.home.path": "documenti",
   "knowledge.main.home.title": "Documenti",
   "knowledge.main.home.newSpace": "Nuovo spazio",
   "knowledge.main.home.spaces": "Spazi",

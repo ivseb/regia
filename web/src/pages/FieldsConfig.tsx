@@ -226,7 +226,7 @@ function TypeOrder({ type, fields, catalog }: { type: string; fields: FieldConfi
         {order.map((k, i) => (
           <li key={k} className="flex items-center gap-2 border-b border-hair py-1">
             <span className="w-6 font-mono text-[12px] text-muted tabular">{i + 1}</span>
-            <span className="min-w-0 flex-1 truncate">
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
               {byKey.get(k)?.name}
               {byKey.get(k)?.types.find((a) => a.type === type)?.section && (
                 <span className="text-[12px] text-muted"> · {byKey.get(k)?.types.find((a) => a.type === type)?.section}</span>
@@ -691,7 +691,7 @@ function OptionsEditor({
               <summary className="flex cursor-pointer select-none items-baseline gap-2 marker:content-none">
                 <span aria-hidden className="inline-block w-3 text-[11px] text-muted transition-transform group-open:rotate-90">▸</span>
                 <span className="label">{t("configurazione.etichette.titolo")}</span>
-                <span className="min-w-0 flex-1 truncate text-right text-[12px] text-muted group-open:hidden">
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere] text-right text-[12px] text-muted group-open:hidden">
                   {t("configurazione.etichette.riassunto", { n: options.filter((o) => o.labels?.en?.trim()).length, total: options.filter((o) => o.name.trim()).length })}
                 </span>
               </summary>
@@ -700,7 +700,7 @@ function OptionsEditor({
                 {options.map((o, i) =>
                   o.name.trim() ? (
                     <label key={o.id ?? `t${i}`} className="grid grid-cols-1 items-center gap-1 sm:grid-cols-2 sm:gap-3">
-                      <span className={`truncate text-[13px] ${o.archived ? "text-muted line-through" : ""}`}>{o.name}</span>
+                      <span className={`min-w-0 [overflow-wrap:anywhere] text-[13px] ${o.archived ? "text-muted line-through" : ""}`}>{o.name}</span>
                       <input
                         className="field py-1"
                         aria-label={t("configurazione.etichette.opzioneInglese", { name: o.name })}

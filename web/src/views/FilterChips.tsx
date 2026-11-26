@@ -143,7 +143,7 @@ function Chip({ clause, field, query, open, onOpen, onQuery }: { clause: Clause;
       >
         <span className="font-semibold">{title}</span>
         <span className="text-muted">{clause.neg ? t("altro.views.isNot") : t("altro.views.is")}</span>
-        <span className="min-w-0 max-w-[220px] truncate">{summary(clause)}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere]">{summary(clause)}</span>
       </button>
       <button className="border-l border-hair px-1.5 text-muted hover:bg-sel hover:text-fg" aria-label={t("altro.views.removeFilterOf", { title })} onClick={remove}>
         ×
@@ -226,7 +226,7 @@ function Editor({ initial, existing, field, query, onQuery, onClose }: { initial
       className={`z-40 flex w-[340px] max-w-[calc(100vw-32px)] flex-col border-[1.5px] border-rule bg-bg max-md:fixed max-md:inset-x-4 md:absolute md:top-full md:left-0 mt-1`}
     >
       <div className="label flex items-center justify-between gap-2 border-b-2 border-rule px-3 py-2">
-        <span className="truncate">{title}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
         <label className="flex items-center gap-1.5 text-[12px] font-normal tracking-normal normal-case">
           <input type="checkbox" checked={draft.neg} onChange={(e) => apply({ ...draft, neg: e.target.checked })} />
           {t("altro.views.exclude")}
@@ -292,8 +292,8 @@ function Editor({ initial, existing, field, query, onQuery, onClose }: { initial
             <li key={s.kind + s.label}>
               <label className="flex cursor-pointer items-center gap-2 border-b border-hair px-3 py-1.5 last:border-b-0 hover:bg-sel/60">
                 <input type="checkbox" checked={has(v)} onChange={() => toggle(v)} />
-                <span className="min-w-0 flex-1 truncate">{s.label}</span>
-                {s.detail && <span className="max-w-[40%] truncate text-[11.5px] text-muted">{s.detail}</span>}
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{s.label}</span>
+                {s.detail && <span className="max-w-[40%] text-right text-[11.5px] [overflow-wrap:anywhere] text-muted">{s.detail}</span>}
               </label>
             </li>
           );
@@ -362,7 +362,7 @@ function AddFilter({ fields, used, onPick, typeKey }: { fields: QueryField[]; us
           onPick(f);
         }}
       >
-        <span className="flex-1 truncate">{fieldTitle(f)}</span>
+        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{fieldTitle(f)}</span>
         {used.has(f.name.toLowerCase()) && <span className="text-[11px] text-muted">{t("altro.views.inUse")}</span>}
         <span className="font-mono text-[11px] text-muted">{f.name}</span>
       </button>

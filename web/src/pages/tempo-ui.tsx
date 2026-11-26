@@ -41,7 +41,7 @@ export function LoadBar({ minutes, capacity, label }: { minutes: number; capacit
   return (
     <span className="flex items-center gap-2" aria-label={label}>
       <span className="relative block h-1.5 min-w-[48px] flex-1 bg-hair" aria-hidden="true">
-        <span className={`absolute inset-y-0 left-0 ${pct > 100 ? "bg-flag" : "bg-accent"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+        <span className={`absolute inset-y-0 left-0 ${pct > 100 ? "bg-flag" : "bg-m-work"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </span>
       <span className={`w-10 text-right font-mono text-[11.5px] tabular ${pct > 100 ? "text-flag" : "text-muted"}`}>{capacity > 0 ? `${Math.round(pct)}%` : "—"}</span>
     </span>

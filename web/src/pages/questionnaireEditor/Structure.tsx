@@ -340,7 +340,7 @@ function QuestionRow({
           ⋮⋮
         </span>
         <span className="w-6 shrink-0 font-mono text-[12px] text-muted tabular">{number}</span>
-        <span className={`min-w-0 flex-1 truncate ${q.label ? "" : "text-muted"}`}>{q.label || t("configurazione.qStructure.domandaSenzaTesto")}</span>
+        <span className={`min-w-0 flex-1 [overflow-wrap:anywhere] ${q.label ? "" : "text-muted"}`}>{q.label || t("configurazione.qStructure.domandaSenzaTesto")}</span>
         <span className="hidden shrink-0 flex-wrap items-center justify-end gap-x-2 text-[12px] text-muted sm:flex">
           {q.required && <span>{t("configurazione.qStructure.obbligatoria")}</span>}
           {q.visible_when && <span title={q.visible_when}>{t("configurazione.qStructure.condizionata")}</span>}

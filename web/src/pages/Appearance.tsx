@@ -72,7 +72,7 @@ function Sample({ theme, font, mode }: { theme: ThemeKey; font: FontKey; mode: "
               <span className="font-mono text-[12px] text-accent">{r.id}</span>
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate font-medium">{t(r.title)}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere] font-medium">{t(r.title)}</span>
                   {r.dora && <span className="shrink-0 border border-flag px-1 text-[10.5px] font-semibold text-flag">DORA</span>}
                 </span>
                 <StageGate states={states} current={states[r.phase].name} />

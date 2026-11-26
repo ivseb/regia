@@ -83,7 +83,7 @@ export function ViewsBar({
           onApply(v);
         }}
       >
-        <span className="min-w-0 flex-1 truncate">{v.name}</span>
+        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{v.name}</span>
         {(v.default_me || v.default_tenant) && <span className="text-[11px] text-muted">{v.default_me ? t("altro.views.default") : t("altro.views.defaultOrg")}</span>}
         <span className="text-[11px] text-muted">{v.scope === "group" ? (v.group_name ?? t("altro.views.scope.group")) : t(`altro.views.scope.${v.scope}`)}</span>
       </button>
@@ -104,7 +104,7 @@ export function ViewsBar({
       <div ref={viewsRef} className="relative min-w-0">
         <button className="btn flex max-w-full items-center gap-2 py-1 text-[12.5px]" aria-expanded={menu === "views"} aria-haspopup="true" onClick={() => setMenu(menu === "views" ? "" : "views")}>
           <span className="text-muted">{t("altro.views.view")}</span>
-          <span className="min-w-0 truncate font-semibold">{active ? active.name : t("altro.views.pageDefault")}</span>
+          <span className="min-w-0 font-semibold [overflow-wrap:anywhere]">{active ? active.name : t("altro.views.pageDefault")}</span>
           {modified && <span className="border border-flag px-1 text-[11px] text-flag">{t("altro.views.modified")}</span>}
           <span aria-hidden="true" className="font-mono text-[10px]">▾</span>
         </button>

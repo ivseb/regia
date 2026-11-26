@@ -17,7 +17,7 @@ export function TagChips({ tags, max = 3, onPick, className = "" }: { tags?: Tag
         const inner = (
           <>
             {tg.color && COLOR_DOT[tg.color] && <span className={`size-1.5 shrink-0 ${COLOR_DOT[tg.color]}`} aria-hidden="true" />}
-            <span className="truncate">{tg.name}</span>
+            <span className="truncate" title={tg.name}>{tg.name}</span>
           </>
         );
         return onPick ? (

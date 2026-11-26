@@ -421,7 +421,7 @@ function Grid({ d, rows, editable, onCommit }: { d: TS; rows: TSRow[]; editable:
                   <Link to="/e/$key" params={{ key: r.key }} className="shrink-0 font-mono text-[12px] text-accent no-underline hover:underline">
                     {r.key}
                   </Link>
-                  <span className="min-w-0 truncate" title={r.title}>
+                  <span className="min-w-0 break-words" title={r.title}>
                     {r.title}
                   </span>
                 </span>
@@ -434,7 +434,7 @@ function Grid({ d, rows, editable, onCommit }: { d: TS; rows: TSRow[]; editable:
                 )}
               </th>
               {d.days.map((x, i) => (
-                <td key={x.date} className={`px-0.5 ${!x.workday || x.holiday ? "bg-hair/30" : ""}`}>
+                <td key={x.date} className={`px-0.5 ${r.days[i] > 0 ? "tinta m-work" : !x.workday || x.holiday ? "bg-hair/30" : ""}`}>
                   <CellInput
                     row={r}
                     dayIdx={i}
@@ -498,7 +498,7 @@ function DayView({ d, rows, day, onDay, editable, onCommit }: { d: TS; rows: TSR
               role="tab"
               aria-selected={day === i}
               onClick={() => onDay(i)}
-              className={`flex min-h-[52px] flex-col items-center justify-center border px-0.5 text-[12px] ${day === i ? "border-fg bg-fg text-bg" : "border-hair"} ${!y.workday || y.holiday ? "opacity-70" : ""}`}
+              className={`flex min-h-[52px] flex-col items-center justify-center border px-0.5 text-[12px] ${day === i ? "border-fg bg-fg text-bg" : y.total ? "tinta m-work border-hair" : "border-hair"} ${!y.workday || y.holiday ? "opacity-70" : ""}`}
             >
               <span className="label">{dl.name}</span>
               <span className="font-mono tabular">{dl.num}</span>
@@ -531,7 +531,7 @@ function DayView({ d, rows, day, onDay, editable, onCommit }: { d: TS; rows: TSR
                 </Link>
                 <span className="font-mono text-[11px] text-muted tabular">{t("lavoro.timesheet.inWeek", { time: totalText(r.total) })}</span>
               </span>
-              <span className="truncate">{r.title}</span>
+              <span className="min-w-0 break-words">{r.title}</span>
             </span>
             <span className="w-[104px] shrink-0">
               <CellInput row={r} dayIdx={day} minutes={r.days[day]} disabled={off} title={`${r.key}, ${l.name} ${l.num}`} big onCommit={onCommit} onMove={(dr, dd) => move(r, day, dr, dd)} />
@@ -595,7 +595,7 @@ function AddPanel({ d, rows, onAdd }: { d: TS; rows: TSRow[]; onAdd: (s: TSSugge
                 >
                   <TypeMark type={e.type} />
                   <span className="font-mono text-[12px] text-accent">{e.key}</span>
-                  <span className="min-w-0 flex-1 truncate">{e.title}</span>
+                  <span className="min-w-0 flex-1 break-words">{e.title}</span>
                   <span className="shrink-0 text-[11.5px] text-muted">{have.has(e.id) ? t("lavoro.timesheet.alreadyIn") : e.state}</span>
                 </button>
               </li>
@@ -630,7 +630,7 @@ function Suggestions({ title, empty, items, onAdd, showMinutes }: { title: strin
               </span>
               <TypeMark type={s.type} />
               <span className="font-mono text-[12px] text-accent">{s.key}</span>
-              <span className="min-w-0 flex-1 truncate">{s.title}</span>
+              <span className="min-w-0 flex-1 break-words">{s.title}</span>
               {showMinutes && <span className="shrink-0 font-mono text-[11.5px] text-muted tabular">{totalText(s.minutes)}</span>}
               {!showMinutes && <span className="shrink-0 text-[11.5px] text-muted">{s.state}</span>}
             </button>

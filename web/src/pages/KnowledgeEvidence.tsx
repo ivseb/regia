@@ -80,7 +80,7 @@ export function EvidencePanel({ d }: { d: PageDetail }) {
               <li key={l.id} className="flex items-baseline gap-2 py-1 max-md:min-h-11 max-md:items-center">
                 <Link to="/e/$key" params={{ key: l.key }} className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 text-fg no-underline hover:text-accent">
                   <span className="shrink-0 font-mono text-[12px] text-accent">{l.key}</span>
-                  <span className="min-w-0 truncate">{l.title}</span>
+                  <span className="min-w-0 break-words">{l.title}</span>
                   <span className="shrink-0 text-[11.5px] text-muted">{l.type_name}{l.state ? ` · ${l.state}` : ""}</span>
                 </Link>
                 {d.rights.write && (

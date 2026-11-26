@@ -186,7 +186,7 @@ function IntegrationsTab({ data, selected, onSelect }: { data: GLIntegrationList
                 {i.projects.suggested > 0 && <Tag tone="accent">{t("altro.gitlab.toLink", { count: i.projects.suggested })}</Tag>}
                 <span className="ml-auto text-[12px] text-muted">{i.sync.last_finished_at ? t("altro.gitlab.lastRead", { when: ago(i.sync.last_finished_at) }) : t("altro.gitlab.neverRead")}</span>
               </button>
-              <span className="block truncate font-mono text-[11.5px] text-muted" title={i.config.base_url}>
+              <span className="block min-w-0 [overflow-wrap:anywhere] font-mono text-[11.5px] text-muted" title={i.config.base_url}>
                 {i.config.base_url} · {[...(i.config.groups ?? []), ...(i.config.projects ?? [])].join(", ")}
               </span>
               <span className="block text-[12px] text-muted tabular">

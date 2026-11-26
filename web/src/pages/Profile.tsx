@@ -78,7 +78,7 @@ export function Profile() {
                         {" "}· {t("profile.linkedOn", { date: date(id.linked_at) })}
                         {id.last_login_at && <> · {t("profile.usedWhen", { when: ago(id.last_login_at) })}</>}
                       </span>
-                      <span className="block truncate font-mono text-[11.5px] text-muted" title={id.issuer}>{id.issuer}</span>
+                      <span className="block font-mono text-[11.5px] text-muted [overflow-wrap:anywhere]" title={id.issuer}>{id.issuer}</span>
                     </li>
                   ))}
                   {a.has_password && (

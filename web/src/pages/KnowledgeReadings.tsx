@@ -262,7 +262,7 @@ function AudiencePicker({ value, onChange }: { value: AudienceRef[]; onChange: (
         {list.map((x) => (
           <label key={x.id} className="flex items-center gap-2 py-1">
             <input type="checkbox" checked={has(kind, x.id)} onChange={() => toggle(x.id, x.name)} />
-            <span className="min-w-0 flex-1 truncate">{x.name}</span>
+            <span className="min-w-0 flex-1 break-words">{x.name}</span>
             {x.hint && <span className="text-[12px] text-muted">{x.hint}</span>}
           </label>
         ))}

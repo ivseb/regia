@@ -26,7 +26,7 @@ export function FavoriteViews({ enabled }: { enabled: boolean }) {
           activeOptions={{ exact: true, includeSearch: true }}
           activeProps={{ className: "font-semibold !text-accent" }}
         >
-          <span className="min-w-0 flex-1 truncate">{f.name}</span>
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{f.name}</span>
           <span className="font-mono text-[11px] text-muted tabular" aria-label={f.count == null ? t("altro.views.counterUnavailable") : t(f.more ? "altro.views.resultsOrMore" : "altro.views.results", { count: f.count })}>
             {f.count == null ? "—" : `${f.count}${f.more ? "+" : ""}`}
           </span>

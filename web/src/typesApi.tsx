@@ -135,7 +135,7 @@ export function TypeChip({ icon, color, name }: { icon?: string; color?: string;
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 border border-hair px-1.5 py-px text-[12.5px] leading-[18px]">
       <TypeMark icon={icon} color={color} name={name} size={16} />
-      <span className="truncate">{name}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{name}</span>
     </span>
   );
 }

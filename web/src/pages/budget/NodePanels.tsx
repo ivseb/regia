@@ -153,7 +153,7 @@ export function Distribute({ node, cur, onDone }: { node: AllocationNode; cur: s
           {targets.map((x, i) => (
             <div key={x.key} className="flex items-center gap-3">
               <label className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="min-w-0 flex-1 truncate">{x.label}</span>
+                <span className="min-w-0 flex-1 break-words">{x.label}</span>
                 <input
                   className="field w-24 text-right tabular"
                   inputMode="decimal"

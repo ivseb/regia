@@ -86,6 +86,7 @@ export function TimeHeader({ from, days, px, zoom, label }: { from: number; days
         {top.map((m) => (
           <div
             key={m.x}
+            title={m.text}
             className="absolute top-0 h-[22px] overflow-hidden border-l border-hair pl-1.5 text-[11.5px] font-semibold whitespace-nowrap"
             style={{ left: m.x, width: m.w }}
           >

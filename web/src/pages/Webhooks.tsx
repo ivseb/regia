@@ -116,7 +116,7 @@ function HookRow({ w, events, on, onSelect }: { w: Webhook; events: WebhookEvent
           {w.last_delivery_at ? `${STATUS[w.last_status ?? "pending"].label} ${ago(w.last_delivery_at)}` : t("configurazione.webhooks.nessunaConsegna")}
         </span>
       </button>
-      <span className="block truncate font-mono text-[11.5px] text-muted" title={w.url}>{w.url}</span>
+      <span className="block min-w-0 [overflow-wrap:anywhere] font-mono text-[11.5px] text-muted" title={w.url}>{w.url}</span>
       <span className="block text-[12px] text-muted">
         {w.events.map((e) => events.find((x) => x.key === e)?.name ?? e).join(", ")}
         {w.filter && <Trans k="configurazione.webhooks.filterSuffix" slots={{ filter: <span className="font-mono">{w.filter}</span> }} />}

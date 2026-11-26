@@ -112,7 +112,7 @@ function Jobs({ jobs, dismiss }: { jobs: Job[]; dismiss: (id: number) => void })
       {jobs.map((j) => (
         <li key={j.id} className="flex flex-col gap-1 text-[12.5px]">
           <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate">{j.name}</span>
+            <span className="min-w-0 flex-1 break-words">{j.name}</span>
             {j.error ? (
               <>
                 <span className="text-danger">{j.error}</span>
@@ -164,7 +164,7 @@ function AttachmentRow({ a, onRemoved }: { a: Attachment; onRemoved: () => void 
   const remove = useMutation({ mutationFn: () => collab.removeAttachment(a.id), onSuccess: onRemoved });
   return (
     <li className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-hair py-1.5">
-      <a href={collab.contentUrl(a.id, true)} className="min-w-0 flex-[1_1_160px] truncate font-medium text-fg underline decoration-hair underline-offset-2 hover:text-accent" download={a.name}>
+      <a href={collab.contentUrl(a.id, true)} className="min-w-0 flex-[1_1_160px] font-medium [overflow-wrap:anywhere] text-fg underline decoration-hair underline-offset-2 hover:text-accent" download={a.name}>
         {a.name}
       </a>
       <span className="font-mono text-[12px] text-muted tabular">{bytes(a.size_bytes)}</span>
@@ -457,9 +457,9 @@ export function CommentItem({ c, members, refKey }: { c: Comment; members: Membe
                   href={collab.contentUrl(a.id, !a.preview)}
                   target={a.preview ? "_blank" : undefined}
                   rel="noopener"
-                  className="inline-flex max-w-[240px] items-center gap-1.5 border border-hair px-2 py-0.5 text-[12px] text-fg no-underline hover:border-accent"
+                  className="inline-flex max-w-full items-center gap-1.5 border border-hair px-2 py-0.5 text-[12px] text-fg no-underline hover:border-accent"
                 >
-                  <span className="truncate">{a.name}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{a.name}</span>
                   <span className="font-mono text-muted tabular">{bytes(a.size_bytes)}</span>
                 </a>
               </li>
@@ -543,7 +543,7 @@ export function CommentComposer({ refKey, autoFocus }: { refKey: string; autoFoc
         <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
           {files.map((f, i) => (
             <li key={i} className="inline-flex items-center gap-1.5 border border-hair px-2 py-0.5 text-[12px]">
-              <span className="max-w-[200px] truncate">{f.name}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{f.name}</span>
               <span className="font-mono text-muted tabular">{bytes(f.size)}</span>
               <button type="button" aria-label={t("configurazione.collab.removeFile", { name: f.name })} className="text-muted hover:text-danger" onClick={() => setFiles((fs) => fs.filter((_, j) => j !== i))}>
                 ×

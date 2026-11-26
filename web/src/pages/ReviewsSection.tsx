@@ -6,6 +6,7 @@ import { reviewsApi } from "../reviewsApi";
 import { ErrorNote, SectionTitle } from "../ui";
 import { Due, Outcome } from "./Reviews";
 import { useT } from "../i18n/react";
+import { ModuleChip } from "../moduleIcon";
 
 // Sezione «Valutazioni» nel dettaglio della richiesta e dell'impatto (piano, passo 4):
 // valutazioni aperte dalle regole o a mano, con team, ambito, fase, scadenza ed esito.
@@ -42,6 +43,7 @@ export default function ReviewsSection({ refKey, isImpact }: { refKey: string; i
           ) : undefined
         }
       >
+        <ModuleChip module="grc" size="sm" className="mr-1.5 align-middle" />
         {t("lavoro.reviewssection.title")}
       </SectionTitle>
       <ErrorNote error={list.error} />
@@ -66,7 +68,7 @@ export default function ReviewsSection({ refKey, isImpact }: { refKey: string; i
             <li key={r.id} className="border-b border-hair">
               <Link to="/valutazioni/$key" params={{ key: r.key }} className="flex flex-col gap-0.5 py-2 text-fg no-underline hover:bg-sel/50">
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 break-words">
                     <span className="font-mono text-[12px] text-accent">{r.key}</span> <span className="font-semibold">{r.type_name}</span>
                     {r.mandatory && <span className="text-muted"> {t("lavoro.reviewssection.mandatory")}</span>}
                   </span>
@@ -75,7 +77,7 @@ export default function ReviewsSection({ refKey, isImpact }: { refKey: string; i
                   </span>
                 </span>
                 <span className="flex justify-between gap-3 text-[12.5px] text-muted">
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 break-words">
                     {r.scope === "impact" ? r.application ?? r.impact_key : t("lavoro.reviewssection.wholeRequest")} · {r.team}
                   </span>
                   <span className="shrink-0">{r.state}</span>

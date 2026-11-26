@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { portfolioApi, type Criterion, type ElementDetail, type ScorecardDefinition, type Vote } from "../api";
 import { ErrorNote, SectionTitle, ago } from "../ui";
 import { useT } from "../i18n/react";
+import { ModuleChip } from "../moduleIcon";
 import { Trans } from "../i18n/Trans";
 import { fmtNumber } from "../i18n/format";
 
@@ -101,6 +102,7 @@ export function Evaluation({ detail, onDone }: { detail: ElementDetail; onDone: 
           ) : undefined
         }
       >
+        <ModuleChip module="arch" size="sm" className="mr-1.5 align-middle" />
         {t("lavoro.evaluation.title")}
       </SectionTitle>
       <div className="flex items-baseline gap-3">
@@ -136,7 +138,7 @@ export function Evaluation({ detail, onDone }: { detail: ElementDetail; onDone: 
             return (
               <li key={c.key} className="flex flex-col gap-0.5 border-b border-hair py-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 break-words">
                     {c.name}
                     <span className="ml-1.5 font-mono text-[11px] text-muted tabular">{weightShare(shownDef, c)}%</span>
                     {c.direction === "lower_better" && <span className="ml-1.5 text-[11px] text-muted">{t("lavoro.evaluation.lowerBetter")}</span>}
@@ -233,7 +235,7 @@ export function Evaluation({ detail, onDone }: { detail: ElementDetail; onDone: 
               <li key={h.id} className="grid grid-cols-[48px_36px_minmax(0,1fr)_auto] items-baseline gap-2">
                 <span className="font-mono font-semibold tabular">{fmtScore(h.total)}</span>
                 <span className="font-mono text-muted">v{h.version}</span>
-                <span className="truncate">
+                <span className="min-w-0 break-words">
                   {h.scored_by ?? "—"}
                   {h.comment ? <span className="text-muted"> · {h.comment}</span> : null}
                 </span>

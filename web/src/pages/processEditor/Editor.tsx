@@ -718,7 +718,7 @@ function Collapse({ title, summary, defaultOpen, children }: { title: string; su
       <summary className="flex cursor-pointer select-none items-baseline gap-2 py-0.5 marker:content-none">
         <span aria-hidden className="inline-block w-3 text-[11px] text-muted transition-transform group-open:rotate-90">▸</span>
         <span className="label">{title}</span>
-        {summary && <span className="min-w-0 flex-1 truncate text-right text-[12px] text-muted group-open:hidden">{summary}</span>}
+        {summary && <span className="min-w-0 flex-1 [overflow-wrap:anywhere] text-right text-[12px] text-muted group-open:hidden">{summary}</span>}
       </summary>
       <div className="mt-2 flex flex-col gap-3 pl-5">{children}</div>
     </details>
@@ -1005,7 +1005,7 @@ function TransitionPanel({
                 disabled={eq(p.name, t.to)}
                 onChange={(e) => set((x) => (x.from = e.target.checked ? [...x.from, p.name] : x.from.filter((f) => !eq(f, p.name))), "from")}
               />
-              <span className="truncate">{p.name}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{p.name}</span>
             </label>
           ))}
         </div>
@@ -1033,7 +1033,7 @@ function TransitionPanel({
             {meta.roles.map((r) => (
               <label key={r.key} className="inline-flex min-w-0 items-center gap-2 text-[13px]">
                 <input type="checkbox" checked={!!t.roles?.includes(r.key)} onChange={(e) => set((x) => (x.roles = toggle(x.roles, r.key, e.target.checked)), "roles")} />
-                <span className="truncate">{r.name}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">{r.name}</span>
               </label>
             ))}
           </div>
@@ -1052,7 +1052,7 @@ function TransitionPanel({
             <input type="checkbox" className="mt-0.5" checked={!!t.gates?.includes(g.key)} onChange={(e) => set((x) => (x.gates = toggle(x.gates, g.key, e.target.checked)), "gates")} />
             <span className="min-w-0">
               {g.name}
-              <span className="block truncate text-[11.5px] text-muted" title={g.condition}>{g.condition ? describeCondition(g.condition, factNames(meta.facts)) : g.check ? tr("configurazione.processEditor.checkNamed", { name: humanFact(g.check) }) : ""}</span>
+              <span className="block min-w-0 [overflow-wrap:anywhere] text-[11.5px] text-muted" title={g.condition}>{g.condition ? describeCondition(g.condition, factNames(meta.facts)) : g.check ? tr("configurazione.processEditor.checkNamed", { name: humanFact(g.check) }) : ""}</span>
             </span>
           </label>
         ))}
@@ -1650,7 +1650,7 @@ function GenericAction({ action, onChange }: { action: Record<string, unknown>; 
       <span className="text-[12px] text-muted">{t("configurazione.processEditor.tipoDiAzioneSenza")}</span>
       {entries.map(([k, v]) => (
         <div key={k} className="flex items-center gap-1.5">
-          <span className="w-32 shrink-0 truncate font-mono text-[12px]">{k}</span>
+          <span className="w-32 shrink-0 min-w-0 [overflow-wrap:anywhere] font-mono text-[12px]">{k}</span>
           <input
             className="field py-1"
             aria-label={t("configurazione.processEditor.valueOf", { key: k })}

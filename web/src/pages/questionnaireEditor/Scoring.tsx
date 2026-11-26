@@ -60,7 +60,7 @@ export function ScoringPanel({
           <ul className="m-0 flex list-none flex-col p-0">
             {table.map((r) => (
               <li key={r.key} className="grid grid-cols-[minmax(0,1fr)_72px_64px] items-center gap-x-3 gap-y-1 border-b border-hair py-2 sm:grid-cols-[minmax(0,1fr)_72px_64px_120px]">
-                <button type="button" className="truncate text-left hover:text-accent" onClick={() => goQuestion(r.key)}>
+                <button type="button" className="min-w-0 [overflow-wrap:anywhere] text-left hover:text-accent" onClick={() => goQuestion(r.key)}>
                   {r.label}
                 </button>
                 <label className="flex items-center gap-1 text-[12px] text-muted">

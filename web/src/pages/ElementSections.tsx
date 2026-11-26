@@ -8,6 +8,7 @@ import { primaryFirst } from "../transitions";
 import { useMe } from "../shell";
 import { Criticality, ErrorNote, SectionTitle, ago, date, euro, euroRange } from "../ui";
 import { useT } from "../i18n/react";
+import { Avatar } from "../moduleIcon";
 import { lookup, type Key, type Params } from "../i18n/core";
 import { loc } from "../i18n/format";
 
@@ -185,7 +186,10 @@ export function People({ detail, bare }: { detail: ElementDetail; bare?: boolean
       {detail.stakeholders.map((s) => (
         <div key={s.role + s.name} className="contents">
           <dt className="text-muted">{s.role_name}</dt>
-          <dd className="m-0 min-w-0 break-words">{s.name}{s.group_id ? <span className="text-muted"> {t("lavoro.elementsections.group")}</span> : null}</dd>
+          <dd className="m-0 flex min-w-0 items-start gap-1.5 break-words">
+            {!s.group_id && <Avatar name={s.name} />}
+            <span className="min-w-0 pt-0.5">{s.name}{s.group_id ? <span className="text-muted"> {t("lavoro.elementsections.group")}</span> : null}</span>
+          </dd>
         </div>
       ))}
     </dl>

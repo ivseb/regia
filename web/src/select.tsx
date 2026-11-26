@@ -148,9 +148,9 @@ function Core(p: CoreProps) {
   const single = p.values[0] ?? "";
   let shown: ReactNode;
   if (p.multiple) shown = <span className="text-muted">{ids.length ? tr("altro.select.addAnother") : (p.placeholder ?? tr("altro.select.add"))}</span>;
-  else if (single !== "") shown = <span className="min-w-0 flex-1 truncate">{labelOf(single) || (staticOpts ? "—" : "…")}</span>;
-  else if (staticOpts?.find((o) => o.value === "")) shown = <span className="min-w-0 flex-1 truncate">{staticOpts.find((o) => o.value === "")!.label}</span>;
-  else shown = <span className="min-w-0 flex-1 truncate text-muted">{none ?? p.placeholder ?? tr("altro.select.choose")}</span>;
+  else if (single !== "") shown = <span className="min-w-0 flex-1 text-left [overflow-wrap:anywhere]">{labelOf(single) || (staticOpts ? "—" : "…")}</span>;
+  else if (staticOpts?.find((o) => o.value === "")) shown = <span className="min-w-0 flex-1 text-left [overflow-wrap:anywhere]">{staticOpts.find((o) => o.value === "")!.label}</span>;
+  else shown = <span className="min-w-0 flex-1 text-left [overflow-wrap:anywhere] text-muted">{none ?? p.placeholder ?? tr("altro.select.choose")}</span>;
 
   const close = useCallback((restore: boolean) => {
     setOpen(false);
@@ -178,7 +178,7 @@ function Core(p: CoreProps) {
         <span className="mb-1.5 flex flex-wrap gap-1">
           {ids.map((id) => (
             <span key={id} className="inline-flex max-w-full items-center gap-1 border border-hair px-1.5 py-px text-[12.5px] leading-[18px]">
-              <span className="truncate">{labelOf(id) || "…"}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{labelOf(id) || "…"}</span>
               {!p.disabled && (
                 <button
                   type="button"
@@ -504,7 +504,7 @@ function Panel({ core: p, listId, anchor, seed, onClose }: { core: CoreProps; li
                         </svg>
                       )}
                     </span>
-                    <span className={`min-w-0 flex-1 truncate ${selected ? "font-semibold" : ""} ${o.value === "" ? "text-muted" : ""}`}>{o.label}</span>
+                    <span className={`min-w-0 flex-1 [overflow-wrap:anywhere] ${selected ? "font-semibold" : ""} ${o.value === "" ? "text-muted" : ""}`}>{o.label}</span>
                     {o.detail && <span className="shrink-0 text-[12px] text-muted">{o.detail}</span>}
                   </div>
                 );

@@ -10,7 +10,6 @@ import { api, collab, type ElementDetail } from "../api";
 import { fieldsApi, type LinkedElement } from "../fieldsApi";
 import { CustomFields, useCanWrite, useSaveField } from "../fields";
 import { Markdown } from "../markdown";
-import { useStateName } from "../stateLabels";
 import { ElementTitle, ErrorNote, SectionTitle, StageGate, date, euro, Loading } from "../ui";
 import { CatalogId } from "../catalogId";
 import { ImpactFacts, TechnicalAnalysis } from "./Analysis";
@@ -32,6 +31,8 @@ import { ago } from "../ui";
 import { useT } from "../i18n/react";
 import { fmtDateTime } from "../i18n/format";
 import { useTypeNames } from "../typesApi";
+import { FaseChip } from "../faseChip";
+import { TypeMark } from "./work-ui";
 
 type T = ReturnType<typeof useT>;
 
@@ -159,7 +160,6 @@ export function ElementPage({ refKey, tab, onTab }: { refKey: string; tab?: TabK
 
 function Header({ detail, active, onTab }: { detail: ElementDetail; active: TabKey; onTab: (t: TabKey) => void }) {
   const t = useT();
-  const stateName = useStateName();
   const tn = useTypeNames();
   const el = detail.element;
   const key = el.key || el.id;
@@ -169,7 +169,8 @@ function Header({ detail, active, onTab }: { detail: ElementDetail; active: TabK
   return (
     <header className="flex flex-col gap-3 px-4 pt-5 pb-4 md:px-7 md:pt-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="font-mono text-[11.5px] text-muted">
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11.5px] text-muted">
+          <TypeMark type={el.type} />
           {el.type === "business_request" ? (
             <Link to="/richieste" className="text-muted no-underline hover:text-fg">DEMAND</Link>
           ) : (
@@ -208,9 +209,9 @@ function Header({ detail, active, onTab }: { detail: ElementDetail; active: TabK
       {(detail.phases ?? []).length > 0 && (
         <div className="flex max-w-3xl flex-col gap-1.5">
           <StageGate states={detail.phases} current={el.state} size="lg" names />
-          <p className="m-0 flex flex-wrap gap-x-3 text-[12.5px] text-muted">
+          <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
             <span>
-              {t("lavoro.elementpage.currentStage")} <span className="font-semibold text-fg">{stateName(el.state, detail.phases?.find((p) => p.name === el.state)?.labels)}</span>
+              {t("lavoro.elementpage.currentStage")} <FaseChip states={detail.phases} current={el.state} bare />
             </span>
             {detail.process && (
               <span>
@@ -633,7 +634,7 @@ function PlanPreview({ refKey }: { refKey: string }) {
             const width = ok ? Math.max(((days(k.end!) - days(k.start!) + 1) / span) * 100, 1.5) : 0;
             return (
               <li key={k.id} className="grid grid-cols-1 gap-1 border-b border-hair py-2 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)] sm:items-center sm:gap-3">
-                <span className="min-w-0 truncate text-[12.5px]">
+                <span className="min-w-0 text-[12.5px] break-words">
                   <Link to="/e/$key" params={{ key: k.key }} className="font-mono text-accent no-underline hover:underline">{k.key}</Link> {k.application}
                   {k.team && <span className="text-muted"> · {k.team}</span>}
                 </span>
@@ -756,7 +757,7 @@ function LinkRow({ l }: { l: LinkedElement }) {
     <Link to="/e/$key" params={{ key: l.key || l.id }} className="flex min-w-0 flex-col py-0.5 text-[13px] text-fg no-underline hover:text-accent">
       <span className="flex min-w-0 items-baseline gap-1.5">
         <span className={`shrink-0 font-mono text-[12px] ${closed ? "text-muted line-through" : "text-accent"}`}>{l.key}</span>
-        <span className="min-w-0 truncate">{l.title}</span>
+        <span className="min-w-0 break-words">{l.title}</span>
       </span>
       <span className="text-[11.5px] text-muted">
         {l.relation ? `${l.relation} · ` : ""}

@@ -278,7 +278,7 @@ function RefLinks({ items }: { items: { key: string; title: string }[] }) {
       {items.map((r) => (
         <Link key={r.key} to="/e/$key" params={{ key: r.key }} className="inline-flex min-h-[24px] items-center">
           <span className="font-mono">{r.key}</span>
-          <span className="ml-1 truncate">{r.title}</span>
+          <span className="ml-1 min-w-0 break-words">{r.title}</span>
         </Link>
       ))}
     </span>

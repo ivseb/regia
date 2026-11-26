@@ -47,7 +47,7 @@ export function ScorecardConfig({ scorecardKey }: { scorecardKey: string }) {
               <span className={v.status === "published" ? "font-semibold text-accent" : "text-muted"}>
                 {t(`configurazione.qEditor.status.${v.status}`)}
               </span>
-              <span className="truncate text-muted">{v.notes || "—"}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere] text-muted">{v.notes || "—"}</span>
               <span className="font-mono text-muted tabular">{t("configurazione.scorecard.scoreCount", { count: v.results })}</span>
             </li>
           ))}

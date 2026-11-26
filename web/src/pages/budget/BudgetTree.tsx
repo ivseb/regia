@@ -413,7 +413,7 @@ function Cards({ items, focus, setFocus, ...c }: Omit<Common, "byId"> & { items:
         <div className="flex items-baseline gap-2">
           <span className="font-semibold">{n.label}</span>
           {n.unit_code && <span className="font-mono text-[11px] text-accent">{n.unit_code}</span>}
-          {n.manager_name && <span className="ml-auto truncate text-[11.5px] text-muted">{n.manager_name}</span>}
+          {n.manager_name && <span className="ml-auto min-w-0 text-[11.5px] break-words text-muted">{n.manager_name}</span>}
         </div>
         <NodeBar n={n} />
         <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px]">

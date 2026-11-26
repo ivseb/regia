@@ -618,7 +618,7 @@ function ImpactList({
                 <span className="w-5 shrink-0 text-right font-mono text-[11px] text-muted" title={t("altro.ea.map.level")}>
                   {l}
                 </span>
-                <button className="min-w-0 flex-1 truncate text-left hover:text-accent" onClick={() => onPick(id)}>
+                <button className="min-w-0 flex-1 break-words text-left hover:text-accent" onClick={() => onPick(id)}>
                   {n.name}
                 </button>
                 <span className="shrink-0 text-[11px] text-muted">{n.type_name}</span>

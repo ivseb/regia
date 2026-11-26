@@ -278,7 +278,7 @@ function CompareTable({ rows, scope, onOpen, narrow }: { rows: Dashboard["compar
         {rows.map((r) => (
           <li key={r.id} className="flex flex-col gap-1.5 border-b border-hair py-2.5">
             <div className="flex items-baseline justify-between gap-3">
-              <button type="button" className="min-w-0 truncate bg-transparent p-0 text-left font-medium text-accent underline" onClick={() => onOpen(r.id)}>
+              <button type="button" className="min-w-0 break-words bg-transparent p-0 text-left font-medium text-accent underline" onClick={() => onOpen(r.id)}>
                 {r.name}
               </button>
               <LevelMark level={r.level} compact />

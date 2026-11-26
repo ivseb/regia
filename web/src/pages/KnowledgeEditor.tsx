@@ -526,7 +526,7 @@ export function PageEditor({ detail, onDone }: { detail: PageDetail; onDone: () 
                           insert(el.key + " ");
                         }}>
                           <span className="font-mono text-[12px] text-accent">{el.key}</span>
-                          <span className="min-w-0 flex-1 truncate">{el.title}</span>
+                          <span className="min-w-0 flex-1 break-words">{el.title}</span>
                           <span className="text-[11.5px] text-muted">{el.type_name}</span>
                         </button>
                       </li>

@@ -320,7 +320,7 @@ function LastComments({ refKey }: { refKey: string }) {
             <span>
               <span className="font-semibold">{c.author_name}</span> <span className="text-muted">{ago(c.created_at)}</span>
             </span>
-            <span className="line-clamp-3 break-words text-fg">{c.body}</span>
+            <span className="break-words text-fg">{c.body}</span>
           </li>
         ))}
       </ol>

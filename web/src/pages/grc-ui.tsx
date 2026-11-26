@@ -51,10 +51,10 @@ export function CoverageBar({ c, wide }: { c: Counts; wide?: boolean }) {
         role="img"
         aria-label={tr("governance.grcui.coperti_parziali_senza_evidenza_senza", { covered: c.covered, partial: c.partial, no_evidence: c.no_evidence, no_control: c.no_control, applicable: c.applicable })}
       >
-        {c.covered > 0 && <span className="h-full bg-ok" style={{ width: w(c.covered) }} />}
-        {c.partial > 0 && <span className="h-full bg-muted" style={{ width: w(c.partial) }} />}
-        {c.no_evidence > 0 && <span className="h-full bg-danger opacity-50" style={{ width: w(c.no_evidence) }} />}
-        {c.no_control > 0 && <span className="h-full bg-danger" style={{ width: w(c.no_control) }} />}
+        {c.covered > 0 && <span className="cresce h-full bg-ok" style={{ width: w(c.covered) }} />}
+        {c.partial > 0 && <span className="cresce h-full bg-muted" style={{ width: w(c.partial) }} />}
+        {c.no_evidence > 0 && <span className="cresce h-full bg-danger opacity-50" style={{ width: w(c.no_evidence) }} />}
+        {c.no_control > 0 && <span className="cresce h-full bg-danger" style={{ width: w(c.no_control) }} />}
       </div>
       <span className="w-10 text-right font-mono text-[12.5px] font-semibold tabular">{c.applicable ? `${c.percent}%` : "—"}</span>
     </div>

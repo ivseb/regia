@@ -65,10 +65,10 @@ function Target({ r }: { r: Pick<ReviewSummary, "request_key" | "request_title" 
   const t = useT();
   return (
     <span className="flex min-w-0 flex-col">
-      <span className="truncate">
+      <span className="break-words">
         <span className="font-mono text-[12px] text-muted">{r.request_key}</span> {r.request_title}
       </span>
-      {r.application && <span className="truncate text-[12.5px] text-muted">{t("lavoro.reviews.applicationLabel", { name: r.application })}</span>}
+      {r.application && <span className="break-words text-[12.5px] text-muted">{t("lavoro.reviews.applicationLabel", { name: r.application })}</span>}
     </span>
   );
 }
@@ -795,7 +795,7 @@ export function ReviewPage({ reviewKey }: { reviewKey: string }) {
                     <a href={`#sezione-${s.key}`} className="flex items-baseline justify-between gap-2 py-1.5 text-fg no-underline hover:text-accent">
                       <span className="min-w-0">
                         {s.title}
-                        {who && <span className="block truncate text-[12px] text-muted">{who.name}</span>}
+                        {who && <span className="block break-words text-[12px] text-muted">{who.name}</span>}
                       </span>
                       <span className={`font-mono text-[12px] tabular ${st.missing ? "text-muted" : "text-ok"}`}>
                         {st.answered}/{st.total}
@@ -1018,7 +1018,7 @@ function AttachmentAnswer({
         <ul className="m-0 list-none p-0">
           {ids.map((id) => (
             <li key={id} className="flex items-center justify-between gap-2 border-b border-hair py-1.5">
-              <a href={collab.contentUrl(id, true)} className="truncate">
+              <a href={collab.contentUrl(id, true)} className="min-w-0 [overflow-wrap:anywhere]">
                 {nameOf(id)}
               </a>
               {!disabled && (

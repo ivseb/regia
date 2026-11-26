@@ -380,7 +380,7 @@ function CapDetail({
       <ul className="m-0 flex list-none flex-col p-0">
         {cap.applications.map((a) => (
           <li key={a.id} className="flex items-baseline gap-2 border-b border-hair py-1.5 text-[12.5px]">
-            <Link to="/e/$key" params={{ key: a.key }} className={`min-w-0 flex-1 truncate font-medium text-fg no-underline hover:underline ${a.retired ? "line-through" : ""}`}>
+            <Link to="/e/$key" params={{ key: a.key }} className={`min-w-0 flex-1 break-words font-medium text-fg no-underline hover:underline ${a.retired ? "line-through" : ""}`}>
               {a.name}
             </Link>
             <CatalogId code={a.code} itemKey={a.key} className="shrink-0 text-[11.5px]" />
@@ -395,7 +395,7 @@ function CapDetail({
         ))}
         {cap.assets.map((a) => (
           <li key={a.id} className="flex items-baseline gap-2 border-b border-hair py-1.5 text-[12.5px]">
-            <span className="min-w-0 flex-1 truncate">
+            <span className="min-w-0 flex-1 break-words">
               {a.name} <span className="text-muted">· {t("altro.ea.cap.logicalAsset")}</span>
             </span>
             {canWrite && (

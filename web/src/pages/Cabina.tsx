@@ -8,6 +8,8 @@ import { useT } from "../i18n/react";
 import { OptionSelect } from "../select";
 import { PageHeader } from "../shell";
 import { ErrorNote, date, euro, euroRange } from "../ui";
+import { Punteggio } from "../faseChip";
+import { phaseTint } from "../tinte";
 import { crumbs } from "../crumbs";
 import { Field, defaultPeriod, periodOptions } from "./budget/budget-ui";
 import { ScoreBar } from "./Evaluation";
@@ -423,11 +425,12 @@ function RankList(props: {
                   <td className="py-2 pr-2 font-mono text-[13px] font-semibold">{it.position}</td>
                   <td className="max-w-0 px-2 py-2">
                     <span className="flex min-w-0 flex-col gap-0.5">
-                      <Link to="/e/$key" params={{ key: it.key }} className={`line-clamp-2 font-medium no-underline hover:underline ${out ? "text-muted" : "text-fg"}`}>
+                      <Link to="/e/$key" params={{ key: it.key }} className={`min-w-0 font-medium break-words no-underline hover:underline ${out ? "text-muted" : "text-fg"}`}>
                         {it.title}
                       </Link>
                       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px]">
                         <span className="font-mono whitespace-nowrap text-accent">{it.key}</span>
+                        <span className={`chip-fase m-${phaseTint(it.state)}`}>{it.state}</span>
                         {it.is_mandatory && <span className="border border-flag px-1 text-[10.5px] font-semibold text-flag">{t("budget.rank.row.mandatory")}</span>}
                         {it.pinned && <span className="border border-muted px-1 text-[10.5px]">{t("budget.rank.row.pinned")}</span>}
                         <span data-why className="text-muted">{t(`lavoro.cabina.why.${why.k}` as Key, why.params)}</span>
@@ -450,7 +453,11 @@ function RankList(props: {
                     </span>
                   </td>
                   <td className="hidden px-2 py-2 whitespace-nowrap md:table-cell">
-                    <ScoreBar value={it.score} stale={it.score_stale} dim={out} />
+                    {it.score != null && !it.score_stale && !out ? (
+                      <Punteggio value={it.score} text={fmtNumber(it.score, { maximumFractionDigits: 1 })} />
+                    ) : (
+                      <ScoreBar value={it.score} stale={it.score_stale} dim={out} />
+                    )}
                   </td>
                   <td className="hidden px-2 py-2 text-right font-mono text-[12.5px] whitespace-nowrap md:table-cell">{euroRange(it.estimate_low_cents, it.estimate_high_cents)}</td>
                   <td className="hidden px-2 py-2 font-mono text-[12px] whitespace-nowrap lg:table-cell">
@@ -513,7 +520,7 @@ function CapacityPanel(props: {
               className="touch-44 flex w-full items-center gap-3 py-1 text-left"
               onClick={() => props.onTeam(props.team === s.id ? null : s.id)}
             >
-              <span className="w-32 shrink-0 truncate font-medium sm:w-48">{s.name}</span>
+              <span className="w-32 shrink-0 font-medium break-words sm:w-48">{s.name}</span>
               <span className="relative h-2 min-w-0 flex-1 bg-hair/50" aria-hidden="true">
                 <span className={`absolute inset-y-0 left-0 ${s.overloaded ? "bg-danger" : "bg-fg"}`} style={{ width: `${Math.min(100, (100 * s.peak) / Math.max(s.peak, 1))}%`, opacity: s.overloaded ? 1 : 0.6 }} />
               </span>

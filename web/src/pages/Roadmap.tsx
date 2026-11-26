@@ -8,6 +8,7 @@ import { DRIVERS, ErrorNote, date } from "../ui";
 import { fmtDate } from "../i18n/format";
 import { useT } from "../i18n/react";
 import { Markers, NonWorkdays, PX_PER_DAY, TimeHeader, ZoomSwitch, useNarrow, type Zoom } from "./timeline";
+import { phaseTint } from "../tinte";
 import { crumbs } from "../crumbs";
 
 // Roadmap di portafoglio: ogni richiesta è una barra sulla sua finestra (l'inviluppo dei
@@ -161,10 +162,10 @@ export function RoadmapChart({ items, zoom, cutAfter, error }: { items: RequestW
                 {items.map((r, i) => (
                   <div key={r.id} className={`relative flex flex-col justify-center border-b border-hair/60 px-3 ${cutAfter != null && i >= cutAfter ? "opacity-60" : ""}`} style={{ height: ROW }}>
                     {cutAfter != null && i === cutAfter && <span className="absolute -top-px left-0 z-30 bg-accent px-1 font-mono text-[10px] leading-[14px] font-semibold text-accent-fg">{t("lavoro.cabina.cutLabel")}</span>}
-                    <Link to="/richieste/$key/piano" params={{ key: r.key }} className={`font-medium text-fg no-underline hover:underline ${narrow ? "line-clamp-2 text-[11.5px] leading-[1.15]" : "truncate text-[12.5px]"}`}>
+                    <Link to="/richieste/$key/piano" params={{ key: r.key }} title={r.title} className={`font-medium text-fg no-underline hover:underline ${narrow ? "line-clamp-2 text-[11.5px] leading-[1.15]" : "truncate text-[12.5px]"}`}>
                       {r.title}
                     </Link>
-                    <span className="truncate font-mono text-[10.5px] text-muted">
+                    <span className="truncate font-mono text-[10.5px] text-muted" title={`${r.key} · ${r.state}`}>
                       {r.key} · {r.state}
                       {r.driver && !narrow ? ` · ${DRIVERS[r.driver] ?? r.driver}` : ""}
                     </span>
@@ -268,7 +269,7 @@ function RoadmapMonths({ items, cutAfter, error }: { items: RequestWindow[]; cut
           <ul className="m-0 flex list-none flex-col p-0">
             {groups.get(k)!.rows.map(({ r, out }) => (
               <li key={r.id} className={`flex min-h-[44px] items-center gap-3 border-b border-hair/60 py-1.5 ${out ? "text-muted" : ""}`}>
-                <Link to="/richieste/$key/piano" params={{ key: r.key }} className="line-clamp-2 min-w-0 flex-1 py-1 text-[13px] font-medium text-fg no-underline hover:underline">
+                <Link to="/richieste/$key/piano" params={{ key: r.key }} className="min-w-0 flex-1 py-1 text-[13px] break-words font-medium text-fg no-underline hover:underline">
                   {r.title}
                 </Link>
                 <span className="flex shrink-0 flex-col items-end text-[11px]">
@@ -291,12 +292,14 @@ function RoadmapMonths({ items, cutAfter, error }: { items: RequestWindow[]; cut
 function PhaseSegments({ r }: { r: RequestWindow }) {
   const n = Math.max(r.phase_count, 1);
   const off = r.phase_index < 0;
+  const col = `var(--m-${phaseTint(r.state, r.phase_index)})`;
   return (
     <span className="flex h-full w-full gap-px bg-bg">
       {Array.from({ length: n }, (_, i) => (
         <span
           key={i}
-          className={`h-full flex-1 ${off ? "bg-muted/50" : i < r.phase_index ? "bg-fg" : i === r.phase_index ? "bg-accent" : "bg-accent/25"}`}
+          className={`h-full flex-1 ${off ? "bg-muted/50" : i < r.phase_index ? "bg-fg" : ""}`}
+          style={off || i < r.phase_index ? undefined : { background: i === r.phase_index ? col : `color-mix(in srgb, ${col} 28%, transparent)` }}
         />
       ))}
     </span>

@@ -255,7 +255,7 @@ function Bars({ items, tone, module = "demand" }: { items: { key: string; label:
     <ul className="m-0 flex list-none flex-col p-0">
       {items.map((i) => (
         <li key={i.key} className="grid grid-cols-[minmax(0,40%)_minmax(0,1fr)_48px] items-center gap-3 border-b border-hair py-1.5">
-          <span className="truncate" title={i.label}>{i.label}</span>
+          <span className="min-w-0 break-words" title={i.label}>{i.label}</span>
           <span className={`m-${module} h-3 bg-[color-mix(in_srgb,var(--mc)_22%,transparent)]`}>
             <span className={`cresce block h-full ${tone === "danger" ? "bg-danger" : "bg-mc"}`} style={{ width: `${(100 * i.n.count) / max}%` }} />
           </span>
@@ -369,7 +369,7 @@ function BudgetPanel({ d }: { d: Dash }) {
                 <tbody>
                   {f.by_request.map((r) => (
                     <tr key={r.key} className="border-b border-hair">
-                      <td className="max-w-[220px] truncate py-1.5 pr-3">
+                      <td className="py-1.5 pr-3 break-words">
                         <Link to="/e/$key" params={{ key: r.key }} className="font-mono text-accent no-underline hover:underline">{r.key}</Link> {r.title}
                       </td>
                       <td className="py-1.5 pr-3 text-right font-mono tabular">{money(r.approved_cents, cur)}</td>
@@ -423,7 +423,7 @@ function RagPanel({ d }: { d: Dash }) {
         <ul className="m-0 flex list-none flex-col p-0">
           {r.items.slice(0, 10).map((it) => (
             <li key={it.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-hair py-1.5 text-[12.5px]">
-              <span className="min-w-0 truncate">
+              <span className="min-w-0 break-words">
                 <Link to="/e/$key" params={{ key: it.key }} search={{ scheda: "stato" }} className="font-mono text-accent no-underline hover:underline">
                   {it.key}
                 </Link>{" "}
@@ -460,7 +460,7 @@ function LoadPanel({ d }: { d: Dash }) {
         <ul className="m-0 flex list-none flex-col p-0">
           {d.team_load.map((t) => (
             <li key={t.team} className="grid grid-cols-[minmax(0,1fr)_auto_52px] items-center gap-3 border-b border-hair py-1.5">
-              <Link to="/richieste" search={{ q: t.query }} className="truncate text-fg no-underline hover:text-accent hover:underline" title={tr("lavoro.dashboard.openImpacts", { query: t.query })}>
+              <Link to="/richieste" search={{ q: t.query }} className="min-w-0 break-words text-fg no-underline hover:text-accent hover:underline" title={tr("lavoro.dashboard.openImpacts", { query: t.query })}>
                 {t.team}
               </Link>
               <svg width={8 * 9} height={22} role="img" aria-label={tr("lavoro.dashboard.weekLoad", { list: t.weeks.map((w) => `${w}%`).join(", ") })}>

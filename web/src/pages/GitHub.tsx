@@ -188,7 +188,7 @@ function IntegrationsTab({ data, selected, onSelect }: { data: IntegrationList; 
                   {i.sync.last_finished_at ? t("altro.github.lastRead", { when: ago(i.sync.last_finished_at) }) : t("altro.github.neverRead")}
                 </span>
               </button>
-              <span className="block truncate font-mono text-[11.5px] text-muted" title={i.config.base_url}>
+              <span className="block min-w-0 [overflow-wrap:anywhere] font-mono text-[11.5px] text-muted" title={i.config.base_url}>
                 {i.config.base_url} · {i.config.owners.join(", ")}
               </span>
               <span className="block text-[12px] text-muted tabular">

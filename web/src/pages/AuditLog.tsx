@@ -206,7 +206,7 @@ function AuditRow({ it, actor, onEntity }: { it: AuditItem; actor?: string; onEn
         <span className="font-medium">{ACTIONS[it.action] ?? it.action}</span>{" "}
         <span className="font-mono text-[11.5px] text-muted">{it.action}</span>
         {it.entity_id && (
-          <button type="button" className="block max-w-full truncate text-left font-mono text-[11.5px] text-muted hover:text-accent" title={t("configurazione.audit.mostraSoloQuestaEntita")} onClick={onEntity}>
+          <button type="button" className="block max-w-full min-w-0 [overflow-wrap:anywhere] text-left font-mono text-[11.5px] text-muted hover:text-accent" title={t("configurazione.audit.mostraSoloQuestaEntita")} onClick={onEntity}>
             {it.entity_type} {it.entity_id}
           </button>
         )}

@@ -258,7 +258,7 @@ function MatrixList({ m }: { m: Matrix }) {
             {r.cells.map((c, i) =>
               c ? (
                 <span key={m.columns[i].impact_id} className="flex items-baseline justify-between gap-3 text-[12.5px]">
-                  <span className="min-w-0 truncate text-muted">{m.columns.length > 1 || !m.impact ? m.columns[i].application : tr("governance.compliance.stato")}</span>
+                  <span className="min-w-0 break-words text-muted">{m.columns.length > 1 || !m.impact ? m.columns[i].application : tr("governance.compliance.stato")}</span>
                   <span className="flex shrink-0 flex-col items-end">
                     <StatusMark status={c.status} title={cellTitle(c)} />
                     {c.status === "waived" && c.expires_on && <span className="text-[11.5px] text-muted tabular">{tr("governance.requirements.fino_al", { date: date(c.expires_on) })}</span>}
@@ -656,7 +656,7 @@ function VerifyForm({ refKey, cell, onDone }: { refKey: string; cell: Requiremen
                 checked={chosen.includes(a.id)}
                 onChange={(e) => setChosen(e.target.checked ? [...chosen, a.id] : chosen.filter((x) => x !== a.id))}
               />
-              <span className="min-w-0 truncate">{a.name}</span>
+              <span className="min-w-0 break-words">{a.name}</span>
               <span className="font-mono text-[11px] text-muted">{a.sha256.slice(0, 12)}</span>
             </label>
           ))}
@@ -777,12 +777,12 @@ function Verifications({ v }: { v: RequirementView }) {
             {(x.links.length > 0 || x.attachments.length > 0 || x.evidence_key) && (
               <span className="flex flex-col gap-0.5 text-[12.5px]">
                 {x.links.map((l) => (
-                  <a key={l} href={l} target="_blank" rel="noreferrer noopener" className="truncate text-accent">
+                  <a key={l} href={l} target="_blank" rel="noreferrer noopener" className="[overflow-wrap:anywhere] text-accent">
                     {l}
                   </a>
                 ))}
                 {x.attachments.map((a) => (
-                  <a key={a.id} href={collab.contentUrl(a.id, true)} className="truncate text-accent" title={`SHA-256 ${a.sha256}`}>
+                  <a key={a.id} href={collab.contentUrl(a.id, true)} className="[overflow-wrap:anywhere] text-accent" title={`SHA-256 ${a.sha256}`}>
                     {a.name}
                   </a>
                 ))}
@@ -994,10 +994,10 @@ export function VerifyInbox() {
                     </span>
                   </span>
                   <span className="col-span-2 flex min-w-0 flex-col md:col-span-1">
-                    <span className="truncate">
+                    <span className="break-words">
                       {it.application} <span className="font-mono text-[12px] text-muted">{it.impact_key}</span>
                     </span>
-                    <span className="truncate text-[12.5px] text-muted">
+                    <span className="break-words text-[12.5px] text-muted">
                       {it.request_key} {it.request_title}
                       {it.implemented_by ? tr("governance.requirements.realizzato_da_2", { implemented_by: it.implemented_by }) : ""}
                     </span>

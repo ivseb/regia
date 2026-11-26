@@ -8,6 +8,7 @@ import { ElementTitle, ErrorNote, SectionTitle } from "../ui";
 import { useT } from "../i18n/react";
 import { tr, type Key, type Params } from "../i18n/core";
 import { fmtCurrency, fmtDate, fmtTime } from "../i18n/format";
+import { ModuleChip, type UiModule } from "../moduleIcon";
 import { weekLabel } from "../tempoApi";
 
 // Notifiche in-app (piano, passo 3): elenco per giorno, lettura, preferenze.
@@ -236,20 +237,49 @@ export function useUnread(enabled: boolean) {
   return useQuery({ queryKey: ["notifications", "count"], queryFn: collab.unread, enabled, refetchInterval: 120_000 });
 }
 
+/** Modulo di provenienza di una notifica, ricavato dal tipo di avviso (nessuno per commenti e menzioni). */
+function moduleOfKind(kind: NotificationKind): UiModule | undefined {
+  switch (kind) {
+    case "phase":
+    case "approval":
+    case "referent":
+      return "demand";
+    case "review":
+      return "arch";
+    case "requirement":
+    case "risk":
+    case "sla":
+      return "grc";
+    case "document":
+      return "knowledge";
+    case "vulnerability":
+      return "devsecops";
+    case "budget":
+    case "report":
+      return "budget";
+    case "timesheet":
+      return "work";
+    default:
+      return undefined;
+  }
+}
+
 function Row({ n, onOpen }: { n: Notification; onOpen: (n: Notification) => void }) {
   const t = useT();
   const unread = !n.read_at;
   const excerpt = str(n.payload.excerpt);
+  const mod = moduleOfKind(n.kind);
   const body = (
     <>
       <span className={`mt-1.5 size-2 shrink-0 ${unread ? "bg-accent" : ""}`} aria-hidden="true" />
       {/* Il testo per i lettori di schermo si aggiunge al nome del link, non lo sostituisce
           (prima si sentiva solo l'etichetta, senza il testo della notifica). */}
       {unread && <span className="sr-only">{t("lavoro.notifications.unreadSr")}</span>}
+      {mod && <ModuleChip module={mod} size="sm" className="mt-0.5 shrink-0" />}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className={unread ? "" : "text-muted"}><Describe n={n} /></span>
-        {n.title && <span className="truncate text-[12.5px] text-muted"><ElementTitle type={n.type} title={n.title} /></span>}
-        {excerpt && <span className="line-clamp-2 text-[12.5px] text-muted">«{excerpt}»</span>}
+        {n.title && <span className="min-w-0 text-[12.5px] break-words text-muted"><ElementTitle type={n.type} title={n.title} /></span>}
+        {excerpt && <span className="min-w-0 text-[12.5px] break-words text-muted">«{excerpt}»</span>}
       </span>
       <time dateTime={n.created_at} className="shrink-0 font-mono text-[11.5px] text-muted tabular">
         {fmtTime(n.created_at)}
@@ -334,7 +364,7 @@ function GroupRow({ g, silenced, onOpen, onSilence }: { g: Group; silenced: bool
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 md:px-7">
           <span className={`size-2 shrink-0 ${unread ? "bg-accent" : ""}`} aria-hidden="true" />
           <Link to="/e/$key" params={{ key: g.key }} className="shrink-0 font-mono text-[12.5px] font-medium text-accent no-underline hover:underline">{g.key}</Link>
-          <span className="min-w-0 flex-[1_1_200px] truncate font-medium"><ElementTitle type={g.type} title={g.title} /></span>
+          <span className="min-w-0 flex-[1_1_200px] break-words font-medium"><ElementTitle type={g.type} title={g.title} /></span>
           <span className="shrink-0 text-[12.5px] text-muted">{groupSummary(g, t)}</span>
           <span className="flex shrink-0 gap-2">
             <button className="btn py-1 text-[12.5px]" aria-expanded={open} onClick={() => setOpen(!open)}>

@@ -28,6 +28,8 @@ import { crumbs } from "../crumbs";
 export type BacklogSearch = { spazio?: string; q?: string };
 
 const ROW = 44;
+// Sul telefono il titolo va su una seconda riga a tutta larghezza: la riga è più alta.
+const ROW_NARROW = 78;
 const BACKLOG = "backlog";
 /** Voci del backlog caricate per volta: oltre si chiede il resto (nel benchmark un backlog di 1.400 voci pesava 460 KB). */
 const BACKLOG_PAGE = 300;
@@ -311,7 +313,8 @@ function ItemList({
   const ref = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState(0);
   const [height, setHeight] = useState(600);
-  const own = !!virtual && items.length * ROW > 640;
+  const row = narrow ? ROW_NARROW : ROW;
+  const own = !!virtual && items.length * row > 640;
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !own) return;
@@ -319,12 +322,12 @@ function ItemList({
     ro.observe(el);
     return () => ro.disconnect();
   }, [own]);
-  const start = own ? Math.max(0, Math.floor(scroll / ROW) - 6) : 0;
-  const end = own ? Math.min(items.length, Math.ceil((scroll + height) / ROW) + 6) : items.length;
+  const start = own ? Math.max(0, Math.floor(scroll / row) - 6) : 0;
+  const end = own ? Math.min(items.length, Math.ceil((scroll + height) / row) + 6) : items.length;
   const indexAt = (e: DragEvent) => {
     const el = ref.current!;
     const y = e.clientY - el.getBoundingClientRect().top + el.scrollTop;
-    return Math.max(0, Math.min(items.length, Math.round(y / ROW)));
+    return Math.max(0, Math.min(items.length, Math.round(y / row)));
   };
   const dropIndex = drop && drop.list === list ? drop.index : -1;
   return (
@@ -349,14 +352,14 @@ function ItemList({
       }
       className={`relative ${own ? "max-h-[70vh] overflow-y-auto overscroll-contain" : ""} ${dropIndex >= 0 ? "bg-sel/40" : ""}`}
     >
-      <ul className="relative m-0 list-none p-0" style={{ height: Math.max(items.length * ROW, ROW) }}>
+      <ul className="relative m-0 list-none p-0" style={{ height: Math.max(items.length * row, row) }}>
         {items.length === 0 && (
           <li className="flex h-[44px] items-center border border-dashed border-hair px-3 text-[12.5px] text-muted">
             {list === BACKLOG ? t("lavoro.backlog.emptyBacklog") : t("lavoro.backlog.emptySprint")}
           </li>
         )}
         {items.slice(start, end).map((it, i) => (
-          <li key={it.id} className="absolute inset-x-0" style={{ top: (start + i) * ROW, height: ROW }}>
+          <li key={it.id} className="absolute inset-x-0" style={{ top: (start + i) * row, height: row }}>
             <Row
               it={it}
               d={d}
@@ -370,7 +373,7 @@ function ItemList({
             />
           </li>
         ))}
-        {dropIndex >= 0 && <li aria-hidden="true" className="pointer-events-none absolute inset-x-0 h-[3px] bg-accent" style={{ top: Math.max(0, dropIndex * ROW - 1) }} />}
+        {dropIndex >= 0 && <li aria-hidden="true" className="pointer-events-none absolute inset-x-0 h-[3px] bg-accent" style={{ top: Math.max(0, dropIndex * row - 1) }} />}
       </ul>
     </div>
   );
@@ -411,14 +414,14 @@ const Row = memo(function Row({
       onClick={(e) => {
         if (dnd.canSelect && (e.ctrlKey || e.metaKey || e.shiftKey) && !(e.target as HTMLElement).closest("a,button,select,input")) dnd.onSelect(it.id, e);
       }}
-      className={`flex h-full items-center gap-2.5 border-b border-hair px-1 ${dnd.canDrag ? "cursor-grab" : ""} ${dnd.sel.has(it.id) ? "bg-sel" : "hover:bg-sel/50"}`}
+      className={`flex h-full items-center gap-2.5 border-b border-hair px-1 ${narrow ? "flex-wrap content-center gap-y-1" : ""} ${dnd.canDrag ? "cursor-grab" : ""} ${dnd.sel.has(it.id) ? "bg-sel" : "hover:bg-sel/50"}`}
     >
       {dnd.canSelect && <SelectBox id={it.id} checked={dnd.sel.has(it.id)} label={t("lavoro.backlog.select", { key: it.key })} onToggle={dnd.onSelect} />}
       <TypeMark type={it.type} />
       <Link to="/e/$key" params={{ key: it.key }} className={`shrink-0 font-mono text-[12px] no-underline hover:underline ${done ? "text-muted line-through" : "text-accent"}`}>
         {it.key}
       </Link>
-      <span className={`min-w-0 flex-1 truncate ${done ? "text-muted" : ""}`} title={it.title}>
+      <span className={`line-clamp-2 min-w-0 leading-[1.25] break-words ${narrow ? "order-last basis-full" : "flex-1"} ${done ? "text-muted" : ""}`} title={it.title}>
         {it.title}
       </span>
       {it.tags && it.tags.length > 0 && <TagChips tags={it.tags} max={narrow ? 1 : 2} onPick={dnd.onTag} className="max-h-[18px] min-w-0 shrink overflow-hidden" />}
@@ -429,12 +432,12 @@ const Row = memo(function Row({
       )}
       {!narrow && <span className="w-[86px] shrink-0 truncate text-[12px] text-muted">{stateName(it.state)}</span>}
       <PriorityDot opt={prio} />
-      <span className="w-8 shrink-0 text-right font-mono text-[11.5px] text-muted tabular">{it.points != null ? fmtPoints(it.points) : ""}</span>
+      <span className={`w-8 shrink-0 text-center font-mono text-[11.5px] tabular ${it.points != null ? "tinta m-work text-fg" : "text-muted"}`}>{it.points != null ? fmtPoints(it.points) : ""}</span>
       <Person name={it.assignee ? d.members[it.assignee] : undefined} />
       {d.can_work && (
         <Select
           aria-label={t("lavoro.backlog.move", { key: it.key })}
-          className={`field shrink-0 cursor-pointer appearance-none px-0 py-0.5 text-center text-[13px] ${narrow ? "h-[34px] w-[40px]" : "w-[30px]"}`}
+          className={`field shrink-0 cursor-pointer appearance-none px-0 py-0.5 text-center text-[13px] ${narrow ? "h-[34px] w-[48px]" : "w-[48px]"}`}
           value=""
           onChange={(e) => {
             const v = e.target.value;

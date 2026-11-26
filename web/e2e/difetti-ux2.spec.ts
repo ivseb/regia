@@ -150,16 +150,19 @@ test.describe("a 375 px", () => {
     expect(cut, "«Cumulata» deve stare dentro lo schermo").toBeLessThanOrEqual(0);
   });
 
-  test("roadmap: i titoli a sinistra vanno su due righe invece di essere troncati", async ({ page }) => {
+  test("roadmap: i titoli a sinistra si leggono interi invece di essere troncati", async ({ page }) => {
     await login(page, "pmo");
     await page.goto("/roadmap");
     await expect(page.getByRole("heading", { level: 1, name: /Roadmap/ })).toBeVisible();
     await page.waitForLoadState("networkidle");
-    const clamp = await page.evaluate(() => {
+    // Nessun taglio (ellissi o righe limitate): il titolo va a capo quanto serve.
+    const cut = await page.evaluate(() => {
       const a = document.querySelector("main a[href*='/piano']") as HTMLElement | null;
-      return a ? getComputedStyle(a).webkitLineClamp : "";
+      if (!a) return "manca il titolo";
+      const cs = getComputedStyle(a);
+      return cs.textOverflow === "ellipsis" || a.scrollHeight > a.clientHeight + 1 ? `tagliato (${cs.webkitLineClamp})` : "";
     });
-    expect(clamp).toBe("2");
+    expect(cut).toBe("");
     await expectNoHorizontalScroll(page);
   });
 });

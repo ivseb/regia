@@ -305,10 +305,10 @@ function Gantt({ plan, zoom, narrow }: { plan: Plan; zoom: Zoom; narrow: boolean
                   </div>
                 ) : (
                   <div key={r.t.id} className="flex flex-col justify-center border-b border-hair/60 px-3" style={{ height: ROW }}>
-                    <span className={`truncate text-[12.5px] font-medium ${r.t.state_category === "cancelled" ? "text-muted line-through" : ""}`}>
+                    <span title={r.t.application} className={`truncate text-[12.5px] font-medium ${r.t.state_category === "cancelled" ? "text-muted line-through" : ""}`}>
                       {r.t.application}
                     </span>
-                    <span className="truncate font-mono text-[10.5px] text-muted">
+                    <span className="truncate font-mono text-[10.5px] text-muted" title={`${r.t.key} · ${r.t.state}`}>
                       {r.t.key} · {r.t.state}
                     </span>
                   </div>
@@ -505,7 +505,7 @@ function LoadStrip({ plan, from, days, px, label }: { plan: Plan; from: number; 
           {rows.map((t) => (
             <div key={t.id} className="flex border-b border-hair/60" style={{ height: 30 }}>
               <div className="sticky left-0 z-10 flex shrink-0 flex-col justify-center border-r border-hair bg-bg px-3" style={{ width: label }}>
-                <span className="truncate text-[12.5px] font-medium">{t.name}</span>
+                <span className="truncate text-[12.5px] font-medium" title={t.name}>{t.name}</span>
                 <span className="font-mono text-[10.5px] text-muted">{tr("lavoro.plan.perWeek", { count: t.capacity_days_week })}</span>
               </div>
               <div className="relative" style={{ width: days * px }}>

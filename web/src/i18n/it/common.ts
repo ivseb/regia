@@ -71,6 +71,7 @@ export default {
   "common.crumb.demand": "demand",
   "common.crumb.delivery": "delivery",
   "common.crumb.governance": "governance",
+  "common.crumb.grc": "rischi e conformità",
   "common.crumb.architecture": "architettura",
   "common.crumb.devsecops": "devsecops",
   "common.crumb.configuration": "configurazione",

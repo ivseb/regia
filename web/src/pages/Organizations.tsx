@@ -79,7 +79,7 @@ function Row({ org, member }: { org: OrgRow; member: boolean }) {
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hair py-3" data-testid={`org-${org.slug}`}>
       <div className="flex min-w-0 flex-1 basis-56 flex-col">
-        <span className="truncate font-semibold">{org.name}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere] font-semibold">{org.name}</span>
         <span className="font-mono text-[12px] text-muted">{org.slug}</span>
       </div>
       <span className="text-[12.5px] text-muted">

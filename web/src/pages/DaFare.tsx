@@ -9,6 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, collab } from "../api";
 import { PageHeader, useMe } from "../shell";
+import { ModuleChip, type UiModule } from "../moduleIcon";
 import { ElementTitle, ErrorNote, Loading, ago, euro } from "../ui";
 import { useT } from "../i18n/react";
 import { fmtDate, fmtDateTime, fmtNumber } from "../i18n/format";
@@ -105,19 +106,19 @@ function openAssigned(items: MyItem[]): MyItem[] {
 function JumpBar({ data, hasToday }: { data: Todo; hasToday: boolean }) {
   const t = useT();
   const c = data.counts;
-  const items: { id: string; label: string; n: number }[] = [
-    { id: SECTION_ID.decisions, label: t("dafare.sec.decisions"), n: c.decisions },
-    { id: SECTION_ID.reviews, label: t("dafare.sec.reviews"), n: c.reviews },
-    { id: SECTION_ID.verify, label: t("dafare.sec.verify"), n: c.verifications },
-    { id: SECTION_ID.impacts, label: t("dafare.sec.impacts"), n: c.impacts },
-    { id: SECTION_ID.time, label: t("dafare.sec.time"), n: c.time + c.reports },
-    { id: SECTION_ID.mentions, label: t("dafare.sec.mentions"), n: c.mentions },
+  const items: { id: string; label: string; n: number; m: UiModule }[] = [
+    { id: SECTION_ID.decisions, label: t("dafare.sec.decisions"), n: c.decisions, m: "demand" as UiModule },
+    { id: SECTION_ID.reviews, label: t("dafare.sec.reviews"), n: c.reviews, m: "arch" as UiModule },
+    { id: SECTION_ID.verify, label: t("dafare.sec.verify"), n: c.verifications, m: "grc" as UiModule },
+    { id: SECTION_ID.impacts, label: t("dafare.sec.impacts"), n: c.impacts, m: "arch" as UiModule },
+    { id: SECTION_ID.time, label: t("dafare.sec.time"), n: c.time + c.reports, m: "work" as UiModule },
+    { id: SECTION_ID.mentions, label: t("dafare.sec.mentions"), n: c.mentions, m: "demand" as UiModule },
   ].filter((x) => x.n > 0);
-  if (hasToday) items.push({ id: SECTION_ID.today, label: t("dafare.sec.today"), n: 0 });
+  if (hasToday) items.push({ id: SECTION_ID.today, label: t("dafare.sec.today"), n: 0, m: "work" as UiModule });
   return (
     <nav aria-label={t("dafare.jump")} className="flex flex-wrap gap-2">
       {items.map((x) => (
-        <a key={x.id} href={`#${x.id}`} className="inline-flex min-h-11 items-center gap-1.5 border border-hair px-3 text-fg no-underline hover:border-rule md:min-h-0 md:py-1">
+        <a key={x.id} href={`#${x.id}`} className={`m-${x.m} tinta inline-flex min-h-11 items-center gap-1.5 border border-hair border-l-[3px] border-l-mc px-3 text-fg no-underline hover:border-rule hover:border-l-mc md:min-h-0 md:py-1`}>
           {x.label}
           {x.n > 0 && <span className="font-mono text-[11.5px] text-muted tabular">{x.n}</span>}
         </a>
@@ -126,11 +127,12 @@ function JumpBar({ data, hasToday }: { data: Todo; hasToday: boolean }) {
   );
 }
 
-function Section({ id, title, count, hint, children }: { id: string; title: string; count: number; hint?: string; children: ReactNode }) {
+function Section({ id, title, count, hint, module, children }: { id: string; title: string; count: number; hint?: string; module?: UiModule; children: ReactNode }) {
   if (count === 0) return null;
   return (
     <section id={id} aria-labelledby={`${id}-t`} className="flex scroll-mt-16 flex-col gap-2">
       <h2 id={`${id}-t`} className="m-0 flex items-baseline gap-2 border-b-2 border-rule pb-1.5 text-[17px] font-bold">
+        {module && <ModuleChip module={module} size="sm" className="self-center" />}
         {title}
         <span className="font-mono text-[12px] font-normal text-muted tabular">{count}</span>
       </h2>
@@ -140,9 +142,9 @@ function Section({ id, title, count, hint, children }: { id: string; title: stri
   );
 }
 
-function Card({ children, label }: { children: ReactNode; label?: string }) {
+function Card({ children, label, className = "" }: { children: ReactNode; label?: string; className?: string }) {
   return (
-    <li aria-label={label} className="flex flex-col gap-2.5 border-b border-hair py-3.5">
+    <li aria-label={label} className={`flex flex-col gap-2.5 border-b border-hair py-3.5 ${className}`}>
       {children}
     </li>
   );
@@ -183,7 +185,7 @@ const DECISIONS: { key: Decision; label: "dafare.decision.approved" | "dafare.de
 function Decisions({ items, onDone }: { items: TodoDecision[]; onDone: (m: string) => void }) {
   const t = useT();
   return (
-    <Section id={SECTION_ID.decisions} title={t("dafare.sec.decisions")} count={items.length} hint={t("dafare.hint.decisions")}>
+    <Section module="demand" id={SECTION_ID.decisions} title={t("dafare.sec.decisions")} count={items.length} hint={t("dafare.hint.decisions")}>
       {items.map((d) => (
         <DecisionCard key={d.step_id} d={d} onDone={onDone} />
       ))}
@@ -219,7 +221,7 @@ function DecisionCard({ d, onDone }: { d: TodoDecision; onDone: (m: string) => v
   const noteLabel = choice === "approved_with_conditions" ? t("dafare.note.conditions") : choice === "approved" ? t("dafare.note.optional") : t("dafare.note.reason");
   const cum = d.cumulative_cents;
   return (
-    <Card label={d.element_key}>
+    <Card label={d.element_key} className="m-demand solleva px-3">
       <div className="flex flex-col gap-0.5">
         <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
           <Link to="/e/$key" params={{ key: d.element_key }} search={{ scheda: "approvazioni" }} className="font-mono text-[12.5px] font-medium text-accent no-underline hover:underline">
@@ -307,7 +309,7 @@ function DecisionCard({ d, onDone }: { d: TodoDecision; onDone: (m: string) => v
 function Reviews({ items }: { items: TodoReview[] }) {
   const t = useT();
   return (
-    <Section id={SECTION_ID.reviews} title={t("dafare.sec.reviews")} count={items.length} hint={t("dafare.hint.reviews")}>
+    <Section module="arch" id={SECTION_ID.reviews} title={t("dafare.sec.reviews")} count={items.length} hint={t("dafare.hint.reviews")}>
       {items.map((r) => (
         <Card key={`${r.role}-${r.id}`} label={r.key}>
           <div className="flex flex-col gap-0.5">
@@ -341,7 +343,7 @@ function Reviews({ items }: { items: TodoReview[] }) {
 function Verifications({ items }: { items: TodoVerify[] }) {
   const t = useT();
   return (
-    <Section id={SECTION_ID.verify} title={t("dafare.sec.verify")} count={items.length} hint={t("dafare.hint.verify")}>
+    <Section module="grc" id={SECTION_ID.verify} title={t("dafare.sec.verify")} count={items.length} hint={t("dafare.hint.verify")}>
       {items.map((v) => (
         <Card key={v.requirement_id + v.impact_key} label={v.requirement_key}>
           <div className="flex flex-col gap-0.5">
@@ -376,7 +378,7 @@ function Verifications({ items }: { items: TodoVerify[] }) {
 function Impacts({ items }: { items: TodoImpact[] }) {
   const t = useT();
   return (
-    <Section id={SECTION_ID.impacts} title={t("dafare.sec.impacts")} count={items.length} hint={t("dafare.hint.impacts")}>
+    <Section module="arch" id={SECTION_ID.impacts} title={t("dafare.sec.impacts")} count={items.length} hint={t("dafare.hint.impacts")}>
       {items.map((i) => (
         <ImpactCard key={i.id} i={i} />
       ))}
@@ -490,7 +492,7 @@ function TimeAndReports({ weeks, reports }: { weeks: TodoWeek[]; reports: TodoRe
   const approve = useMutation({ mutationFn: (w: TodoWeek) => tempoApi.decide(w.member_id!, w.week, true), onSuccess: refresh });
   const submit = useMutation({ mutationFn: (w: TodoWeek) => tempoApi.submit(w.week), onSuccess: refresh });
   return (
-    <Section id={SECTION_ID.time} title={t("dafare.sec.time")} count={weeks.length + reports.length} hint={t("dafare.hint.time")}>
+    <Section module="work" id={SECTION_ID.time} title={t("dafare.sec.time")} count={weeks.length + reports.length} hint={t("dafare.hint.time")}>
       {weeks.map((w) => (
         <Card key={`${w.kind}-${w.member_id ?? "me"}-${w.week}`} label={weekLabel(w.week)}>
           <div className="flex flex-col gap-0.5">
@@ -551,7 +553,7 @@ function Mentions({ data }: { data: Todo }) {
             <div className="flex flex-col gap-0.5">
               <span><Describe n={n} /></span>
               {n.title && <span className="text-[12.5px] text-muted"><ElementTitle type={n.type} title={n.title} /></span>}
-              {excerpt && <span className="line-clamp-3 text-[12.5px] text-muted">«{excerpt}»</span>}
+              {excerpt && <span className="min-w-0 text-[12.5px] break-words text-muted">«{excerpt}»</span>}
               <time dateTime={n.created_at} className="text-[12px] text-muted">{ago(n.created_at)}</time>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -655,7 +657,7 @@ function Today({ items, loading }: { items: MyItem[]; loading: boolean }) {
   if (!loading && items.length === 0 && !timer && !sheet?.total) return null;
   return (
     <section id={SECTION_ID.today} aria-labelledby={`${SECTION_ID.today}-t`} className="flex scroll-mt-16 flex-col gap-3">
-      <h2 id={`${SECTION_ID.today}-t`} className="m-0 border-b-2 border-rule pb-1.5 text-[17px] font-bold">{t("dafare.sec.today")}</h2>
+      <h2 id={`${SECTION_ID.today}-t`} className="m-0 flex items-center gap-2 border-b-2 border-rule pb-1.5 text-[17px] font-bold"><ModuleChip module="work" size="sm" />{t("dafare.sec.today")}</h2>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2" aria-live="polite">
         <p className="m-0 text-[16px] font-semibold tabular" data-testid="today-total">
           {day ? t("dafare.today.total", { time: totalText(day.total), capacity: totalText(day.capacity) }) : t("dafare.today.totalNone")}
@@ -669,7 +671,7 @@ function Today({ items, loading }: { items: MyItem[]; loading: boolean }) {
       <ErrorNote error={log.error ?? submit.error} />
       {timer && (
         <div className="flex flex-wrap items-center gap-3 border border-accent px-3 py-2" role="status">
-          <span className="min-w-0 flex-1 truncate">
+          <span className="min-w-0 flex-1 break-words">
             <span className="font-mono text-[12.5px] text-accent">{timer.key}</span> {timer.title}
           </span>
           <span className="font-mono tabular">{t("dafare.today.running", { time: fmtMinutes(elapsed) })}</span>
@@ -686,7 +688,7 @@ function Today({ items, loading }: { items: MyItem[]; loading: boolean }) {
           return (
             <li key={it.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-hair py-2">
               <Link to="/e/$key" params={{ key: it.key }} className="shrink-0 font-mono text-[12px] text-accent no-underline hover:underline">{it.key}</Link>
-              <span className="min-w-0 flex-[1_1_220px] truncate"><ElementTitle type={it.type} title={it.title} /></span>
+              <span className="min-w-0 flex-[1_1_220px] break-words"><ElementTitle type={it.type} title={it.title} /></span>
               <span className="flex shrink-0 flex-wrap items-center gap-2.5 text-[12px] text-muted">
                 <span>{tn.name(it.type, it.type_name)}</span>
                 <span>{stateName(it.state)}</span>

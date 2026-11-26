@@ -99,7 +99,7 @@ export function ImportDialog({ space, parent, onClose }: { space: string; parent
           <button type="button" className="btn" disabled={run.isPending || done} onClick={() => input.current?.click()}>
             {file ? t("knowledge.transfer.pickOther") : t("knowledge.transfer.pickZip")}
           </button>
-          {file && <span className="min-w-0 truncate text-[12.5px] text-muted">{file.name} · {(file.size / 1024).toFixed(file.size > 1048576 ? 0 : 1)} kB</span>}
+          {file && <span className="min-w-0 break-words text-[12.5px] text-muted">{file.name} · {(file.size / 1024).toFixed(file.size > 1048576 ? 0 : 1)} kB</span>}
         </div>
         {parent && (
           <label className="flex items-center gap-2">
@@ -121,9 +121,9 @@ export function ImportDialog({ space, parent, onClose }: { space: string; parent
               {report.items.map((it) => (
                 <li key={it.path} className="flex items-baseline gap-2 border-b border-hair px-2 py-1 last:border-b-0" style={{ paddingLeft: 8 + it.level * 16 }}>
                   {it.key ? (
-                    <Link to="/documenti/$key" params={{ key: it.key }} className="min-w-0 truncate text-accent no-underline hover:underline" onClick={onClose}>{it.title}</Link>
+                    <Link to="/documenti/$key" params={{ key: it.key }} className="min-w-0 break-words text-accent no-underline hover:underline" onClick={onClose}>{it.title}</Link>
                   ) : (
-                    <span className="min-w-0 truncate">{it.title}</span>
+                    <span className="min-w-0 break-words">{it.title}</span>
                   )}
                   {it.synthetic && <span className="shrink-0 text-[11.5px] text-muted">{t("knowledge.transfer.folder")}</span>}
                   {it.attachments > 0 && <span className="shrink-0 text-[11.5px] text-muted">{t("knowledge.transfer.attShort", { count: it.attachments })}</span>}

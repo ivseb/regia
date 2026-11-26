@@ -184,7 +184,7 @@ function MemberRow({ m, editable, busy, onSave, onRemove }: { m: TeamMember; edi
       <span role="cell" className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-1">
         <Person name={m.name} />
         <span className="min-w-0">
-          <span className="block truncate font-semibold">{m.name}</span>
+          <span className="block font-semibold break-words">{m.name}</span>
           {m.absent_now && <span className="text-[11.5px] text-flag">{t("lavoro.teamspage.absentToday")}</span>}
         </span>
       </span>
@@ -353,7 +353,7 @@ function Absences({ canPickOthers }: { canPickOthers: boolean }) {
               {ABSENCE_KINDS[a.kind] ?? a.kind}
               {a.hours_per_day ? t("lavoro.teamspage.absHoursPerDay", { hours: fmtH(a.hours_per_day) }) : ""}
             </span>
-            {a.note && <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{a.note}</span>}
+            {a.note && <span className="min-w-0 flex-1 break-words text-[12.5px] text-muted">{a.note}</span>}
             <button className="ml-auto min-h-[36px] px-2 text-[12.5px] text-danger underline" onClick={() => del.mutate(a)}>
               {t("lavoro.teamspage.absDelete")}
             </button>

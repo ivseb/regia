@@ -11,7 +11,7 @@ import { useLiveUpdates } from "./live";
 import { createKinds, SHORTCUT, useCurrentKey, useKeyboardShortcuts, usePaletteShortcut, type CreateKind, type ItemAction, type PaletteStart } from "./shortcuts";
 import { FavoriteViews } from "./views/FavoriteViews";
 import { buildNav, type NavItem, type NavSection } from "./nav";
-import { Avatar, ModuleChip, uiModuleOfPath } from "./moduleIcon";
+import { Avatar, ModuleChip, uiIconOfPath, uiModuleOfPath } from "./moduleIcon";
 import { useTypeNames } from "./typesApi";
 import { moduleOfPath, moduleOn, pathAfterSwitch, pathOn, type ModuleKey } from "./modules";
 import { useT } from "./i18n/react";
@@ -152,7 +152,7 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
       <a href="#contenuto" className="skip-link">{t("shell.skip")}</a>
       <header className="sticky top-0 z-40 flex items-center gap-2.5 border-b border-rule bg-bg px-4 py-2.5 md:hidden">
         <Logo />
-        <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{tenantName}</span>
+        <span className="min-w-0 flex-1 truncate text-[15px] font-bold" title={tenantName}>{tenantName}</span>
         <button className="btn py-1" aria-haspopup="dialog" onClick={() => openPalette()}>
           {t("shell.search")}
         </button>
@@ -221,8 +221,8 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
             <Link to="/profilo" title={t("shell.profileLink")} className="flex min-w-0 flex-1 items-center gap-2.5 text-fg no-underline hover:text-accent">
             <Avatar name={me.display_name} className="size-7 text-[11px]" />
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate font-semibold">{me.display_name}</span>
-              <span className="truncate text-[12px] text-muted">{me.email}</span>
+              <span className="font-semibold [overflow-wrap:anywhere]">{me.display_name}</span>
+              <span className="text-[12px] [overflow-wrap:anywhere] text-muted">{me.email}</span>
             </span>
             </Link>
             <button className="text-[12px] text-muted underline hover:text-fg" onClick={() => logout.mutate()}>
@@ -458,12 +458,13 @@ function ThemeSwitch() {
 /** Intestazione di pagina: percorso in mono, titolo grande, azioni a destra. */
 export function PageHeader({ path, title, actions }: { path: string; title: string; actions?: ReactNode }) {
   // Il modulo viene dal percorso della pagina: icona nel percorso e striscia sotto il titolo nel suo colore.
-  const module = uiModuleOfPath(useRouterState({ select: (s) => s.location.pathname }));
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const module = uiModuleOfPath(pathname);
   return (
     <header className={`m-${module} flex flex-wrap items-end gap-4 px-4 md:px-7 pt-6 pb-4`}>
       <div className="flex flex-col gap-1">
         <span className="flex items-center gap-2 font-mono text-[11.5px] text-muted">
-          <ModuleChip module={module} size="sm" />
+          <ModuleChip module={module} icon={uiIconOfPath(pathname)} size="sm" />
           {path}
         </span>
         <h1 className="m-0 text-[34px] leading-[1.05] font-bold tracking-[-0.025em]">{title}</h1>
@@ -549,7 +550,7 @@ function PortalShell({ me, children }: { me: Me; children: ReactNode }) {
       <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-rule bg-bg px-4 py-2.5 md:px-7">
         <Link to="/portale" className="flex min-w-0 items-center gap-2.5 text-fg no-underline">
           <Logo />
-          <span className="truncate text-[15px] font-bold">{tenantName}</span>
+          <span className="truncate text-[15px] font-bold" title={tenantName}>{tenantName}</span>
           <span className="hidden font-mono text-[11.5px] text-muted sm:inline">{t("shell.portal.name")}</span>
         </Link>
         <span className="ml-auto flex items-center gap-1.5">

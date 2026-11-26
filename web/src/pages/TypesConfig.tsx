@@ -120,8 +120,8 @@ function TypeRow({ t, on, onSelect }: { t: TypeConfig; on: boolean; onSelect: ()
       <button type="button" onClick={onSelect} aria-current={on ? "true" : undefined} className="flex w-full min-w-0 items-center gap-3 border-0 bg-transparent px-1 py-2.5 text-left text-fg">
         <TypeMark icon={t.icon} color={t.color} name={t.name} size={26} />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className={`truncate font-semibold ${t.archived ? "text-muted" : ""}`}>{t.name}</span>
-          <span className="truncate font-mono text-[11.5px] text-muted">{t.key}</span>
+          <span className={`min-w-0 [overflow-wrap:anywhere] font-semibold ${t.archived ? "text-muted" : ""}`}>{t.name}</span>
+          <span className="min-w-0 [overflow-wrap:anywhere] font-mono text-[11.5px] text-muted">{t.key}</span>
         </span>
         <span className="flex shrink-0 flex-wrap justify-end gap-x-3 gap-y-0.5 text-[12px] text-muted tabular">
           <span>{tr("configurazione.types.elementCount", { count: t.elements })}</span>
@@ -191,7 +191,7 @@ function Preview({ icon, color, name, plural, keyText }: { icon: string; color: 
         <div className="flex min-w-0 items-center gap-3 border-b border-hair pb-2">
           <TypeMark icon={icon} color={color} name={n} size={22} />
           <span className="font-mono text-[12px] text-accent">{keyText}-12</span>
-          <span className="min-w-0 flex-1 truncate">{t("configurazione.types.titoloDiUnElemento")}</span>
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t("configurazione.types.titoloDiUnElemento")}</span>
           <span className="text-[12px] text-muted">{n}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[12.5px] text-muted">

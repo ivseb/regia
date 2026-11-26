@@ -739,7 +739,7 @@ function Proposals({ m, onDone }: { m: MeetingDetail; onDone: (m: MeetingDetail)
             {m.proposals.map((p) => (
               <li key={p.element_id} className="flex items-center gap-3 border-b border-hair py-1.5 text-[13px]">
                 <span className="font-mono text-[12px] text-accent">{p.key}</span>
-                <span className="min-w-0 flex-1 truncate">{p.title}</span>
+                <span className="min-w-0 flex-1 break-words">{p.title}</span>
                 <span className="font-mono text-[12px] tabular">{euro(p.amount_cents)}</span>
                 <button className="btn py-1" disabled={add.isPending} onClick={() => add.mutate(p.key)}>
                   {t("lavoro.governance.add")}

@@ -21,6 +21,7 @@ import {
   type TrendPoint,
 } from "../vulnApi";
 import { PageHeader } from "../shell";
+import { ModuleChip } from "../moduleIcon";
 import { Criticality, ErrorNote, SectionTitle, ago } from "../ui";
 import { useNarrow } from "./timeline";
 import { Dialog } from "./work-ui";
@@ -68,18 +69,21 @@ function Due({ it, soon }: { it: Item; soon: number }) {
 // ---------------------------------------------------------------------
 // Numeri in alto
 
-function Kpi({ label, value, tone, note, onClick, active, className = "" }: { label: string; value: ReactNode; tone?: string; note?: ReactNode; onClick?: () => void; active?: boolean; className?: string }) {
+function Kpi({ label, value, tone, note, onClick, active, className = "", i }: { i?: number; label: string; value: ReactNode; tone?: string; note?: ReactNode; onClick?: () => void; active?: boolean; className?: string }) {
   const body = (
     <>
-      <span className="label text-muted">{label}</span>
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
+      <span className="label flex items-center gap-2 text-muted"><ModuleChip module="devsecops" size="sm" />{label}</span>
       <span className={`font-mono text-[30px] leading-none font-semibold tabular ${tone ?? "text-fg"}`}>{value}</span>
       {note && <span className="text-[12px] text-muted">{note}</span>}
     </>
   );
-  if (!onClick) return <div className={`flex min-w-0 flex-col gap-1.5 ${className}`}>{body}</div>;
+  const tile = "entra relative flex min-w-0 flex-col gap-1.5 border border-hair px-3.5 pb-3 pt-3 m-devsecops";
+  const st = { background: "linear-gradient(color-mix(in srgb, var(--mc) 6%, var(--bg)), var(--bg))", animationDelay: `${(i ?? 0) * 60}ms` };
+  if (!onClick) return <div className={`${tile} ${className}`} style={st}>{body}</div>;
   return (
     <button type="button" onClick={onClick} aria-pressed={active}
-      className={`-mt-[3px] flex min-w-0 cursor-pointer flex-col items-start gap-1.5 border-0 border-t-[3px] bg-transparent p-0 pt-2 text-left text-fg ${active ? "border-accent" : "border-transparent"} ${className}`}>
+      style={st} className={`${tile} cursor-pointer items-start text-left text-fg ${active ? "outline outline-2 -outline-offset-2 outline-accent" : ""} ${className}`}>
       {body}
     </button>
   );
@@ -682,14 +686,14 @@ export function VulnerabilitiesPage() {
         </section>
 
         {k && (
-          <section aria-label={tr("governance.compliance.in_sintesi")} className="grid grid-cols-2 gap-x-6 gap-y-5 border-b-2 border-rule pb-4 max-md:order-first md:grid-cols-3 lg:grid-cols-5">
-            <Kpi label={tr("governance.vulnerabilities.da_correggere_2")} value={k.open} note={tr("governance.vulnerabilities.critiche_di_cui_sulla_versione", { critical_open: k.critical_open, p: k.critical_prod ?? 0 })} onClick={() => { setView("vulnerabilita"); setStage("open"); setDue(""); }} active={view === "vulnerabilita" && stage === "open" && due === ""} />
-            <Kpi className="max-md:order-first" label={tr("governance.vulnerabilities.oltre_la_scadenza_2")} value={k.overdue} tone={k.overdue > 0 ? "text-danger" : "text-muted"} note={k.no_sla > 0 ? tr("governance.vulnerabilities.senza_sla", { no_sla: k.no_sla }) : tr("governance.vulnerabilities.rispetto_allo_sla")}
+          <section aria-label={tr("governance.compliance.in_sintesi")} className="grid grid-cols-2 gap-3 max-md:order-first md:grid-cols-3 lg:grid-cols-5">
+            <Kpi i={0} label={tr("governance.vulnerabilities.da_correggere_2")} value={k.open} note={tr("governance.vulnerabilities.critiche_di_cui_sulla_versione", { critical_open: k.critical_open, p: k.critical_prod ?? 0 })} onClick={() => { setView("vulnerabilita"); setStage("open"); setDue(""); }} active={view === "vulnerabilita" && stage === "open" && due === ""} />
+            <Kpi i={1} className="max-md:order-first" label={tr("governance.vulnerabilities.oltre_la_scadenza_2")} value={k.overdue} tone={k.overdue > 0 ? "text-danger" : "text-muted"} note={k.no_sla > 0 ? tr("governance.vulnerabilities.senza_sla", { no_sla: k.no_sla }) : tr("governance.vulnerabilities.rispetto_allo_sla")}
               onClick={() => { setView("vulnerabilita"); setStage("open"); setDue("overdue"); }} active={view === "vulnerabilita" && stage === "open" && due === "overdue"} />
-            <Kpi label={tr("governance.vulnerabilities.in_scadenza_giorni", { soon_days: k.soon_days })} value={k.soon} tone={k.soon > 0 ? "text-flag" : "text-muted"}
+            <Kpi i={2} label={tr("governance.vulnerabilities.in_scadenza_giorni", { soon_days: k.soon_days })} value={k.soon} tone={k.soon > 0 ? "text-flag" : "text-muted"}
               onClick={() => { setView("vulnerabilita"); setStage("open"); setDue("soon"); }} active={view === "vulnerabilita" && stage === "open" && due === "soon"} />
-            <Kpi label={tr("governance.vulnerabilities.eccezioni_in_vigore")} value={k.exceptions} note={k.exceptions_pending > 0 ? tr("governance.vulnerabilities.in_approvazione_2", { exceptions_pending: k.exceptions_pending }) : tr("governance.vulnerabilities.nessuna_in_attesa")} onClick={() => setView("eccezioni")} active={view === "eccezioni"} />
-            <Kpi label={tr("governance.vulnerabilities.tempo_di_correzione")} value={k.mttr_days == null ? "—" : tr("governance.vulnerabilities.gg", { days: num(k.mttr_days, 0) })} note={tr("governance.vulnerabilities.chiuse_in_30_giorni", { resolved_30d: k.resolved_30d })} />
+            <Kpi i={3} label={tr("governance.vulnerabilities.eccezioni_in_vigore")} value={k.exceptions} note={k.exceptions_pending > 0 ? tr("governance.vulnerabilities.in_approvazione_2", { exceptions_pending: k.exceptions_pending }) : tr("governance.vulnerabilities.nessuna_in_attesa")} onClick={() => setView("eccezioni")} active={view === "eccezioni"} />
+            <Kpi i={4} label={tr("governance.vulnerabilities.tempo_di_correzione")} value={k.mttr_days == null ? "—" : tr("governance.vulnerabilities.gg", { days: num(k.mttr_days, 0) })} note={tr("governance.vulnerabilities.chiuse_in_30_giorni", { resolved_30d: k.resolved_30d })} />
           </section>
         )}
 

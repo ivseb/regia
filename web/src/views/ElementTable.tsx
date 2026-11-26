@@ -505,7 +505,7 @@ export function ElementTable(p: ElementTableProps) {
                         }
                       >
                         <span aria-hidden="true" className="inline-block w-3 font-mono text-[11px] text-muted">{open ? "▾" : "▸"}</span>
-                        <span className="truncate">{s.label}</span>
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{s.label}</span>
                         <span className="font-mono text-[11.5px] font-normal text-muted tabular">{s.items.length}{partial ? "+" : ""}</span>
                       </button>
                     </div>
@@ -592,7 +592,7 @@ function ColumnMenu({ all, chosen, onChange, onReset }: { all: Column[]; chosen:
                 <li key={c.id} className="flex items-center gap-2 border-b border-hair px-3 py-1.5 last:border-b-0">
                   <label className="flex min-w-0 flex-1 items-center gap-2">
                     <input type="checkbox" checked={on} disabled={c.id === "key"} onChange={() => toggle(c.id)} />
-                    <span className="truncate">{c.label}</span>
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{c.label}</span>
                     {c.id.startsWith("f:") && <span className="font-mono text-[10.5px] text-muted">{t("altro.views.fieldTag")}</span>}
                   </label>
                   {on && (

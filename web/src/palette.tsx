@@ -590,8 +590,8 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
                           >
                             <span className="flex items-baseline gap-3">
                               {it.keyText && <span className="shrink-0 font-mono text-[12px] font-medium text-accent">{it.keyText}</span>}
-                              <span className={`min-w-0 flex-1 truncate ${sel ? "font-semibold" : ""}`}>{it.label}</span>
-                              {it.detail && <span className="hidden max-w-[40%] truncate text-[12px] text-muted sm:inline">{it.detail}</span>}
+                              <span className={`min-w-0 flex-1 [overflow-wrap:anywhere] ${sel ? "font-semibold" : ""}`}>{it.label}</span>
+                              {it.detail && <span className="hidden max-w-[40%] text-right text-[12px] [overflow-wrap:anywhere] text-muted sm:inline">{it.detail}</span>}
                               {!!it.more?.length && sel && <span className="hidden shrink-0 md:inline-flex">{chips(false)}</span>}
                             </span>
                             {!!it.more?.length && <span className="mt-1 flex md:hidden">{chips(true)}</span>}
