@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"regia/internal/modules/devsecops/connectors/commitsync"
 	"regia/internal/modules/devsecops/connectors/github/ghapi"
 	"regia/internal/modules/devsecops/connectors/profile"
 	"regia/internal/modules/devsecops/contract"
@@ -42,6 +43,7 @@ type Scope struct {
 	Releases    bool     `json:"releases,omitempty"`
 	Deployments bool     `json:"deployments,omitempty"`
 	Checks      bool     `json:"checks,omitempty"`
+	Commits     bool     `json:"commits,omitempty"`
 	GitOps      bool     `json:"gitops,omitempty"`
 	Discover    bool     `json:"discover,omitempty"`
 	// Full ignora i cursori e rilegge tutto (l'Ingestor scarta i doppioni).
@@ -49,25 +51,25 @@ type Scope struct {
 }
 
 func (sc Scope) all() bool {
-	return !sc.Releases && !sc.Deployments && !sc.Checks && !sc.GitOps && !sc.Discover
+	return !sc.Releases && !sc.Deployments && !sc.Checks && !sc.Commits && !sc.GitOps && !sc.Discover
 }
 
 func (sc Scope) normalized() Scope {
 	if sc.all() {
-		sc.Releases, sc.Deployments, sc.Checks, sc.GitOps, sc.Discover = true, true, true, true, len(sc.RepoIDs) == 0
+		sc.Releases, sc.Deployments, sc.Checks, sc.Commits, sc.GitOps, sc.Discover = true, true, true, true, true, len(sc.RepoIDs) == 0
 	}
 	return sc
 }
 
 func (sc Scope) label() string {
-	if sc.all() || (sc.Releases && sc.Deployments && sc.Checks && sc.GitOps && sc.Discover) {
+	if sc.all() || (sc.Releases && sc.Deployments && sc.Checks && sc.Commits && sc.GitOps && sc.Discover) {
 		if sc.Full {
 			return "completa"
 		}
 		return "tutto"
 	}
 	var parts []string
-	for k, on := range map[string]bool{"release": sc.Releases, "deployment": sc.Deployments, "controlli": sc.Checks, "gitops": sc.GitOps, "repository": sc.Discover} {
+	for k, on := range map[string]bool{"release": sc.Releases, "deployment": sc.Deployments, "controlli": sc.Checks, "commit": sc.Commits, "gitops": sc.GitOps, "repository": sc.Discover} {
 		if on {
 			parts = append(parts, k)
 		}
@@ -87,6 +89,7 @@ type Stats struct {
 	Deployments    int      `json:"deployments"`
 	GitOpsDeploys  int      `json:"gitops_deployments"`
 	CheckRuns      int      `json:"check_runs"`
+	Commits        int      `json:"commits"`
 	Requests       int      `json:"requests"`
 	ProfileVersion int      `json:"profile_version,omitempty"`
 	DurationMS     int64    `json:"duration_ms"`
@@ -122,6 +125,7 @@ type repoCursors struct {
 	Releases    map[string]string `json:"releases,omitempty"`
 	Deployments map[string]string `json:"deployments,omitempty"`
 	ChecksSHA   string            `json:"checks_sha,omitempty"`
+	Commits     commitsync.Cursor `json:"commits,omitzero"`
 }
 
 type gitopsCursor struct {
@@ -425,7 +429,8 @@ func (s *Service) execute(ctx context.Context, c *claim) {
 				st.fail(r.FullName + ": " + err.Error())
 				continue
 			}
-			if err := s.ingestRepo(ctx, c, r, objs, cur); err != nil {
+			linked, err := s.ingestRepo(ctx, c, r, objs, cur)
+			if err != nil {
 				s.repoError(ctx, c.tenantID, r.ID, err)
 				st.fail(r.FullName + ": archiviazione: " + err.Error())
 				continue
@@ -443,6 +448,7 @@ func (s *Service) execute(ctx context.Context, c *claim) {
 			if objs.checkRun != nil {
 				st.CheckRuns++
 			}
+			st.Commits += linked
 		}
 		if sc.GitOps && len(in.gitRepos) > 0 {
 			if in.def == nil || in.def.GitOps == nil {
@@ -477,6 +483,12 @@ func (s *Service) execute(ctx context.Context, c *claim) {
 		}
 	}()
 
+	// Prima sincronizzazione riuscita: le metriche DORA si calcolano subito (poi ogni ora).
+	if status == "ok" || status == "partial" {
+		if err := commitsync.RecomputeFirst(context.WithoutCancel(ctx), s.o.DB, c.tenantID, s.o.Ingestor); err != nil {
+			st.warn("metriche DORA non ricalcolate: " + err.Error())
+		}
+	}
 	if status == "ok" && len(st.Errors) > 0 {
 		status = "partial"
 		errMsg = st.Errors[0]
@@ -575,6 +587,7 @@ type repoObjects struct {
 	releases    []profile.ReleaseOutput
 	deployments []contract.Deployment
 	checkRun    *contract.CheckRun
+	commits     []contract.Commit
 }
 
 const maxReleasesPerSync = 50
@@ -652,7 +665,7 @@ func (s *Service) syncRepo(ctx context.Context, cl *ghapi.Client, in *syncInput,
 	var warns []string
 	var cur repoCursors
 	_ = json.Unmarshal(r.cursors, &cur)
-	next := repoCursors{Releases: map[string]string{}, Deployments: map[string]string{}, ChecksSHA: cur.ChecksSHA}
+	next := repoCursors{Releases: map[string]string{}, Deployments: map[string]string{}, ChecksSHA: cur.ChecksSHA, Commits: cur.Commits}
 	for k, v := range cur.Releases {
 		next.Releases[k] = v
 	}
@@ -774,6 +787,22 @@ func (s *Service) syncRepo(ctx context.Context, cl *ghapi.Client, in *syncInput,
 			}
 		}
 	}
+
+	if sc.Commits {
+		res, err := s.readCommits(ctx, cl, r, svc, cur.Commits, sc.Full)
+		if err != nil {
+			// I commit sono un di più: un errore (repository vuoto, ecc.) non ferma release e controlli;
+			// il cursore dei commit non avanza e la volta dopo si riprova.
+			if _, ok := ghapi.IsRateLimited(err); ok || ctx.Err() != nil {
+				return objs, cur, warns, err
+			}
+			warns = append(warns, err.Error())
+		} else {
+			objs.commits = res.Commits
+			next.Commits = res.Next
+			warns = append(warns, res.Warnings...)
+		}
+	}
 	return objs, next, warns, nil
 }
 
@@ -783,11 +812,14 @@ func terminalMark(m string) bool {
 }
 
 // ingestRepo consegna gli oggetti di un repository e ne salva i cursori, insieme.
-func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repoObjects, cur repoCursors) error {
+// ingestRepo restituisce quanti collegamenti commit → elemento nuovi ha creato.
+func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repoObjects, cur repoCursors) (int, error) {
+	linked := 0
 	curJSON, _ := json.Marshal(cur)
 	ing := s.o.Ingestor
 	act := systemActor(c.actor)
-	return s.o.DB.InTenant(ctx, c.tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+	err := s.o.DB.InTenant(ctx, c.tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+		linked = 0
 		if si, ok := ing.(contract.ServiceIngestor); ok {
 			if err := si.IngestService(ctx, tx, act, r.service()); err != nil {
 				return err
@@ -818,6 +850,13 @@ func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repo
 				return err
 			}
 		}
+		if ci, ok := ing.(contract.CommitIngestor); ok && len(objs.commits) > 0 {
+			n, err := ci.IngestCommits(ctx, tx, act, r.service(), objs.commits)
+			if err != nil {
+				return err
+			}
+			linked = n
+		}
 		if _, err := tx.Exec(ctx, `update connector_repositories set cursors = $2, last_synced_at = now(), last_error = null, updated_at = now()
 			where id = $1`, r.ID, curJSON); err != nil {
 			return err
@@ -827,6 +866,7 @@ func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repo
 			c.integrationID, leaseMinutes)
 		return err
 	})
+	return linked, err
 }
 
 func (s *Service) ingestGitOps(ctx context.Context, c *claim, deps []contract.Deployment) error {

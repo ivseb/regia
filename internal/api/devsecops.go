@@ -39,6 +39,7 @@ func (s *Server) devsecopsRoutes(mux *http.ServeMux) {
 	// Letture e configurazione (interfaccia).
 	mux.HandleFunc("GET /api/v1/devsecops/overview", inTenant(s.dsoOverview))
 	mux.HandleFunc("GET /api/v1/devsecops/elements/{ref}/panel", inTenant(s.dsoPanel))
+	mux.HandleFunc("GET /api/v1/elements/{ref}/commits", inTenant(s.dsoElementCommits))
 	mux.HandleFunc("GET /api/v1/devsecops/services/{id}", inTenant(s.dsoService))
 	mux.HandleFunc("PATCH /api/v1/devsecops/services/{id}", inTenant(s.dsoUpdateService))
 	mux.HandleFunc("GET /api/v1/devsecops/config", inTenant(s.dsoConfig))
@@ -230,6 +231,21 @@ func (s *Server) dsoOverview(w http.ResponseWriter, r *http.Request, p *auth.Pri
 func (s *Server) dsoPanel(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
 		return s.dso.Panel(r.Context(), tx, actorOf(r, p), r.PathValue("ref"))
+	})
+}
+
+// dsoElementCommits: i commit che citano l'elemento (chiave nel messaggio o nella PR) e il rilascio che
+// li contiene. Vale la visibilità dell'elemento: chi non lo vede, per lui non esiste (404).
+func (s *Server) dsoElementCommits(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		if s.dso == nil {
+			return &devsecops.ElementCommits{Commits: []devsecops.ElementCommit{}}, nil
+		}
+		el, err := s.eng.Get(r.Context(), tx, actorOf(r, p), r.PathValue("ref"))
+		if err != nil {
+			return nil, err
+		}
+		return s.dso.ElementCommitsOf(r.Context(), tx, el.ID)
 	})
 }
 

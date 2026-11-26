@@ -6,9 +6,9 @@ package devsecops
 //
 //   - Frequenza di rilascio: deploy riusciti negli ambienti di produzione, per settimana.
 //   - Lead time delle modifiche: dall'inizio della modifica al deploy in produzione, mediana in
-//     giorni. Il contratto non porta l'orario del primo commit: l'inizio è approssimato dal
-//     primo esito dei controlli del commit rilasciato (la pipeline parte al push), altrimenti
-//     dalla creazione del change; il tenant può fissare la fonte (impostazione lead_time_start).
+//     giorni. L'inizio è, in ordine, il primo commit legato a un elemento
+//     (element_commits: letto dai connettori) tra il rilascio precedente e questo, poi il primo esito
+//     dei controlli del commit rilasciato (la pipeline parte al push), poi la creazione del change; il tenant può fissare la fonte (impostazione lead_time_start).
 //   - Tasso di fallimento: deploy di produzione falliti sul totale dei tentativi. Un deploy è
 //     fallito se ha stato failed o rolled_back, se un incidente sull'applicazione (o sul suo
 //     asset) è nato entro N ore dopo il deploy, se un rollback (si torna alla versione
@@ -123,7 +123,7 @@ func OverallLevel(levels map[string]int) int {
 type DoraSettings struct {
 	FailureWindowHours int               `json:"failure_window_hours"`
 	HotfixWords        []string          `json:"hotfix_words"`
-	LeadTimeStart      string            `json:"lead_time_start"` // auto | check_run | change | request
+	LeadTimeStart      string            `json:"lead_time_start"` // auto | commit | check_run | change | request
 	Thresholds         map[string]Ladder `json:"thresholds"`
 	FactDays           int               `json:"fact_days"`
 	UpdatedAt          *time.Time        `json:"updated_at"`
@@ -168,7 +168,7 @@ func (in DoraSettings) normalize() (DoraSettings, error) {
 	if out.FactDays < 7 || out.FactDays > 365 {
 		return out, engine.OutOfRange("fact_days", 7, 365, "i giorni dei fatti vanno da 7 a 365")
 	}
-	if !slices.Contains([]string{"auto", "check_run", "change", "request"}, out.LeadTimeStart) {
+	if !slices.Contains([]string{"auto", "commit", "check_run", "change", "request"}, out.LeadTimeStart) {
 		return out, engine.InvalidValue("lead_time_start", "inizio del lead time non valido")
 	}
 	words := []string{}

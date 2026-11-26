@@ -36,6 +36,7 @@ import { useTypeNames } from "../typesApi";
 type T = ReturnType<typeof useT>;
 
 const ReviewsSection = lazy(() => import("./ReviewsSection"));
+const CodiceSection = lazy(() => import("./CodiceSection"));
 // Status report della richiesta (piano, passo 13): scheda «Stato», caricata alla prima apertura.
 const StatusReportsTab = lazy(() => import("./StatusReports").then((m) => ({ default: m.StatusReportsTab })));
 
@@ -700,6 +701,10 @@ function Sidebar({ detail, narrow }: { detail: ElementDetail; narrow: boolean })
         </dl>
       </SideSection>
       <Links refKey={key} open={!narrow} />
+      {/* Codice: i commit che citano la chiave dell'elemento (compare solo se ce ne sono). */}
+      <Suspense fallback={null}>
+        <CodiceSection refKey={key} open={!narrow} />
+      </Suspense>
       {/* Work management: epic dei team e avanzamento, assegnatario, sprint, ore (WorkSections.tsx). */}
       <WorkSidebar detail={detail} narrow={narrow} />
       <LinkedDocuments refKey={key} open={!narrow} />
