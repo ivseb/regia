@@ -35,7 +35,9 @@ const indexRoute = createRoute({
   beforeLoad: async () => {
     // Per il revisore la pagina iniziale è lo spazio dell'auditor (ondata 3, C6).
     const me = await api.me().catch(() => null);
-    throw redirect({ to: isAuditorProfile(me) && moduleOn(me, "grc") ? "/audit-spazio" : "/richieste" });
+    // Con la domanda spenta (per esempio un'organizzazione di una persona sola) si parte da «Da fare».
+    if (isAuditorProfile(me) && moduleOn(me, "grc")) throw redirect({ to: "/audit-spazio" });
+    throw redirect({ to: me && !moduleOn(me, "demand") ? "/da-fare" : "/richieste" });
   },
 });
 

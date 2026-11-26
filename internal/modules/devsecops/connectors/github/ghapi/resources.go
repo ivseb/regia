@@ -216,9 +216,25 @@ func (c *Client) OwnerRepos(ctx context.Context, owner string, each func(Repo) e
 	}
 	err := c.paginate(ctx, "/orgs/"+esc(owner)+"/repos", url.Values{"type": {"all"}, "sort": {"full_name"}}, "", 100, fn)
 	if IsNotFound(err) {
+		// Per un utente /users/{u}/repos dà solo i repository pubblici, anche al proprietario.
+		// Se l'owner è l'utente del token personale, /user/repos dà anche i privati che il token
+		// vede (con un token fine-grained, solo quelli scelti). Il token di una GitHub App non ha
+		// un utente: /user fallisce e resta l'elenco pubblico.
+		if login, lerr := c.tokenLogin(ctx); lerr == nil && strings.EqualFold(login, owner) {
+			return c.paginate(ctx, "/user/repos", url.Values{"affiliation": {"owner"}, "visibility": {"all"}, "sort": {"full_name"}}, "", 100, fn)
+		}
 		err = c.paginate(ctx, "/users/"+esc(owner)+"/repos", url.Values{"type": {"owner"}, "sort": {"full_name"}}, "", 100, fn)
 	}
 	return err
+}
+
+// tokenLogin è l'utente del token personale (errore con il token di una GitHub App).
+func (c *Client) tokenLogin(ctx context.Context) (string, error) {
+	var a Account
+	if err := c.Get(ctx, "/user", nil, &a); err != nil {
+		return "", err
+	}
+	return a.Login, nil
 }
 
 // Repo legge un repository.

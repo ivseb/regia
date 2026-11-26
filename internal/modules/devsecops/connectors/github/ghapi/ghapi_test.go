@@ -262,3 +262,34 @@ func TestSSRFPolicy(t *testing.T) {
 		}
 	}
 }
+
+// Pilota Home lab: i repository privati di un account utente si vedono solo da /user/repos.
+func TestUserOwnerPrivateRepos(t *testing.T) {
+	fg, hs := newFake(t, false)
+	fg.AddOwner("ivan", "User")
+	fg.AddRepo("ivan", "pubblico")
+	fg.AddRepo("ivan", "privato").Private = true
+	fg.AddRepo("altro", "estraneo")
+	fg.PATs["ghp_ivan"] = true
+	fg.PATLogins["ghp_ivan"] = "ivan"
+	fg.PATs["ghp_terzo"] = true
+	fg.PATLogins["ghp_terzo"] = "terzo"
+	hc, _ := ghapi.NewHTTPClient(ghapi.Any, "", 5*time.Second)
+	list := func(tok string) []string {
+		c, err := ghapi.New(ghapi.Options{BaseURL: hs.URL, HTTP: hc, Auth: ghapi.Auth{Mode: "token", Token: tok}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		if err := c.OwnerRepos(context.Background(), "ivan", func(r ghapi.Repo) error { out = append(out, r.FullName); return nil }); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if got := strings.Join(list("ghp_ivan"), ","); got != "ivan/privato,ivan/pubblico" {
+		t.Fatalf("proprietario del token: %q", got)
+	}
+	if got := strings.Join(list("ghp_terzo"), ","); got != "ivan/pubblico" {
+		t.Fatalf("token di un altro utente: %q", got)
+	}
+}

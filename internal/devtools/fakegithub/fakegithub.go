@@ -43,6 +43,9 @@ type Server struct {
 	TokenTTL       time.Duration
 	// PATs sono i token personali accettati.
 	PATs map[string]bool
+	// PATLogins: l'utente di un token personale (GET /user e /user/repos); un token senza
+	// utente, come quello di una installazione, riceve 403 su /user.
+	PATLogins map[string]string
 	// Permissions dell'installazione (prova di connessione).
 	Permissions map[string]string
 
@@ -136,7 +139,7 @@ func New() *Server {
 	}
 	return &Server{
 		AppID: "4242", AppName: "Regia (finto)", InstallationID: "777", Key: key, TokenTTL: time.Hour,
-		PATs:        map[string]bool{},
+		PATs:        map[string]bool{}, PATLogins: map[string]string{},
 		Permissions: map[string]string{"contents": "read", "metadata": "read", "deployments": "read", "checks": "read"},
 		Limit:       5000, ResetEvery: time.Hour,
 		Now:    time.Now,
@@ -351,6 +354,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+b+"/users/{owner}", s.authed(true, s.owner("User")))
 	mux.HandleFunc("GET "+b+"/orgs/{owner}/repos", s.authed(true, s.ownerRepos("Organization")))
 	mux.HandleFunc("GET "+b+"/users/{owner}/repos", s.authed(true, s.ownerRepos("User")))
+	mux.HandleFunc("GET "+b+"/user", s.authed(true, s.user))
+	mux.HandleFunc("GET "+b+"/user/repos", s.authed(true, s.userRepos))
 	mux.HandleFunc("GET "+b+"/repos/{owner}/{repo}", s.authed(true, s.repo))
 	mux.HandleFunc("GET "+b+"/repos/{owner}/{repo}/releases", s.authed(true, s.releases))
 	mux.HandleFunc("GET "+b+"/repos/{owner}/{repo}/releases/tags/{tag}", s.authed(true, s.releaseByTag))
@@ -588,7 +593,8 @@ func (s *Server) ownerRepos(kind string) http.HandlerFunc {
 		}
 		var names []string
 		for full, rp := range s.repos {
-			if rp.Owner == owner {
+			// Come GitHub: l'elenco di un utente mostra solo i pubblici, anche al proprietario.
+			if rp.Owner == owner && (kind != "User" || !rp.Private) {
 				names = append(names, full)
 			}
 		}
@@ -600,6 +606,42 @@ func (s *Server) ownerRepos(kind string) http.HandlerFunc {
 		s.mu.Unlock()
 		paginate(w, r, items)
 	}
+}
+
+// user è l'utente del token personale; il token di una installazione non ne ha uno.
+func (s *Server) user(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	login := s.PATLogins[bearer(r)]
+	s.mu.Unlock()
+	if login == "" {
+		jsonError(w, http.StatusForbidden, "Resource not accessible by integration")
+		return
+	}
+	writeJSON(w, map[string]any{"login": login, "type": "User"})
+}
+
+// userRepos elenca i repository dell'utente del token, privati compresi.
+func (s *Server) userRepos(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	login := s.PATLogins[bearer(r)]
+	if login == "" {
+		s.mu.Unlock()
+		jsonError(w, http.StatusForbidden, "Resource not accessible by integration")
+		return
+	}
+	var names []string
+	for full, rp := range s.repos {
+		if rp.Owner == login {
+			names = append(names, full)
+		}
+	}
+	sort.Strings(names)
+	var items []map[string]any
+	for _, n := range names {
+		items = append(items, s.repoJSON(s.repos[n], r.Host))
+	}
+	s.mu.Unlock()
+	paginate(w, r, items)
 }
 
 func (s *Server) find(w http.ResponseWriter, r *http.Request) *Repo {
