@@ -183,4 +183,17 @@ func TestBoardTeam(t *testing.T) {
 	if s := nb["settings"].(map[string]any); s["model"] != "scrum" || s["no_sprint"] == true {
 		t.Fatalf("Scrum dopo Supporto: %v", s)
 	}
+
+	// Chiave e modello scelti alla creazione del team (pilota home lab, difetto 7).
+	admin.do("POST", "/api/v1/teams", map[string]any{"name": "Laboratorio", "board_key": "web"}, http.StatusUnprocessableEntity)
+	admin.do("POST", "/api/v1/teams", map[string]any{"name": "Laboratorio", "board_key": "1X"}, http.StatusUnprocessableEntity)
+	admin.do("POST", "/api/v1/teams", map[string]any{"name": "Laboratorio", "board_model": "inesistente"}, http.StatusUnprocessableEntity)
+	admin.do("POST", "/api/v1/teams", map[string]any{"name": "Laboratorio", "board_key": "lab", "board_model": "kanban"}, http.StatusCreated)
+	lab := admin.do("GET", "/api/v1/work/spaces/LAB/board", nil, http.StatusOK)
+	if s := lab["settings"].(map[string]any); s["model"] != "kanban" || s["no_sprint"] != true {
+		t.Fatalf("team con board kanban scelta alla creazione: %v", s)
+	}
+	// Senza chiave né modello resta come prima: chiave proposta dal nome e board predefinita.
+	admin.do("POST", "/api/v1/teams", map[string]any{"name": "Dati"}, http.StatusCreated)
+	admin.do("GET", "/api/v1/work/spaces/DAT/board", nil, http.StatusOK)
 }

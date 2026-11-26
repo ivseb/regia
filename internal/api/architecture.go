@@ -3,9 +3,12 @@ package api
 import (
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
+	"regia/internal/engine"
 	"regia/internal/modules/architecture"
 	"regia/internal/modules/work"
 	"regia/internal/platform/auth"
@@ -43,18 +46,43 @@ func (s *Server) listTeams(w http.ResponseWriter, r *http.Request, p *auth.Princ
 }
 
 func (s *Server) createTeam(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	var in architecture.TeamInput
+	var in struct {
+		architecture.TeamInput
+		// Board del team (pilota home lab, difetto 7): chiave scelta (vuota = proposta dal nome)
+		// e modello (scrum, kanban, supporto; vuoto = board predefinita).
+		BoardKey   string `json:"board_key"`
+		BoardModel string `json:"board_model"`
+	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	key := strings.ToUpper(strings.TrimSpace(in.BoardKey))
+	model := strings.TrimSpace(in.BoardModel)
 	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (any, error) {
-		id, err := s.arch.CreateTeam(r.Context(), tx, actorOf(r, p), in)
+		ctx := r.Context()
+		if model != "" && !slices.ContainsFunc(work.Models(), func(m work.BoardModel) bool { return m.Key == model }) {
+			return nil, engine.InvalidValue("board_model", "modello di board %q inesistente", model)
+		}
+		if key != "" {
+			if err := checkBoardKey(ctx, tx, key); err != nil {
+				return nil, err
+			}
+		}
+		id, err := s.arch.CreateTeam(ctx, tx, actorOf(r, p), in.TeamInput)
 		if err != nil {
 			return nil, err
 		}
-		// Work management: il team nuovo riceve subito il suo spazio di delivery (chiave proposta).
-		spaceID, err := work.EnsureTeamSpace(r.Context(), tx, actorOf(r, p), work.SpaceInput{TeamID: id})
-		return map[string]string{"id": id, "delivery_space_id": spaceID}, err
+		// Work management: il team nuovo riceve subito il suo spazio di delivery (chiave scelta o proposta).
+		spaceID, err := work.EnsureTeamSpace(ctx, tx, actorOf(r, p), work.SpaceInput{TeamID: id, Key: key})
+		if err != nil {
+			return nil, err
+		}
+		if model != "" {
+			if err := s.work.ApplyModelToSpace(ctx, tx, spaceID, model); err != nil {
+				return nil, err
+			}
+		}
+		return map[string]string{"id": id, "delivery_space_id": spaceID}, nil
 	})
 }
 
