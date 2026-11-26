@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"regia/internal/modules/devsecops/connectors/commitsync"
 	"regia/internal/modules/devsecops/connectors/gitea/giteaapi"
 	"regia/internal/modules/devsecops/connectors/github/ghapi"
 	"regia/internal/modules/devsecops/connectors/profile"
@@ -37,29 +38,30 @@ type Scope struct {
 	RepoIDs  []string `json:"repos,omitempty"`
 	Releases bool     `json:"releases,omitempty"`
 	Checks   bool     `json:"checks,omitempty"`
+	Commits  bool     `json:"commits,omitempty"`
 	Discover bool     `json:"discover,omitempty"`
 	// Full ignora i cursori e rilegge tutto (l'Ingestor scarta i doppioni).
 	Full bool `json:"full,omitempty"`
 }
 
-func (sc Scope) all() bool { return !sc.Releases && !sc.Checks && !sc.Discover }
+func (sc Scope) all() bool { return !sc.Releases && !sc.Checks && !sc.Commits && !sc.Discover }
 
 func (sc Scope) normalized() Scope {
 	if sc.all() {
-		sc.Releases, sc.Checks, sc.Discover = true, true, len(sc.RepoIDs) == 0
+		sc.Releases, sc.Checks, sc.Commits, sc.Discover = true, true, true, len(sc.RepoIDs) == 0
 	}
 	return sc
 }
 
 func (sc Scope) label() string {
-	if sc.all() || (sc.Releases && sc.Checks && sc.Discover) {
+	if sc.all() || (sc.Releases && sc.Checks && sc.Commits && sc.Discover) {
 		if sc.Full {
 			return "completa"
 		}
 		return "tutto"
 	}
 	var parts []string
-	for k, on := range map[string]bool{"release": sc.Releases, "controlli": sc.Checks, "repository": sc.Discover} {
+	for k, on := range map[string]bool{"release": sc.Releases, "controlli": sc.Checks, "commit": sc.Commits, "repository": sc.Discover} {
 		if on {
 			parts = append(parts, k)
 		}
@@ -77,6 +79,7 @@ type Stats struct {
 	SBOMs          int      `json:"sboms"`
 	VulnReports    int      `json:"vuln_reports"`
 	CheckRuns      int      `json:"check_runs"`
+	Commits        int      `json:"commits"`
 	Attachments    int      `json:"attachments"`
 	Requests       int      `json:"requests"`
 	ProfileVersion int      `json:"profile_version,omitempty"`
@@ -112,6 +115,7 @@ type Run struct {
 type repoCursors struct {
 	Releases   map[string]string `json:"releases,omitempty"`
 	ChecksMark string            `json:"checks_mark,omitempty"`
+	Commits    commitsync.Cursor `json:"commits,omitzero"`
 }
 
 type claim struct {
@@ -379,7 +383,8 @@ func (s *Service) execute(ctx context.Context, c *claim) {
 				st.fail(r.FullName + ": " + err.Error())
 				continue
 			}
-			if err := s.ingestRepo(ctx, c, r, objs, cur); err != nil {
+			linked, err := s.ingestRepo(ctx, c, r, objs, cur)
+			if err != nil {
 				s.repoError(ctx, c.tenantID, r.ID, err)
 				st.fail(r.FullName + ": archiviazione: " + err.Error())
 				continue
@@ -397,9 +402,16 @@ func (s *Service) execute(ctx context.Context, c *claim) {
 			if objs.checkRun != nil {
 				st.CheckRuns++
 			}
+			st.Commits += linked
 		}
 	}()
 
+	// Prima sincronizzazione riuscita: le metriche DORA si calcolano subito (poi ogni ora).
+	if status == "ok" || status == "partial" {
+		if err := commitsync.RecomputeFirst(context.WithoutCancel(ctx), s.o.DB, c.tenantID, s.o.Ingestor); err != nil {
+			st.warn("metriche DORA non ricalcolate: " + err.Error())
+		}
+	}
 	if status == "ok" && len(st.Errors) > 0 {
 		status = "partial"
 		errMsg = st.Errors[0]
@@ -492,6 +504,7 @@ func (s *Service) Runs(ctx context.Context, tenantID, integrationID string) ([]R
 type repoObjects struct {
 	releases    []profile.ReleaseOutput
 	checkRun    *contract.CheckRun
+	commits     []contract.Commit
 	warnings    []string
 	attachments int
 	// per l'anteprima
@@ -584,7 +597,7 @@ func (s *Service) syncRepo(ctx context.Context, cl *giteaapi.Client, in *syncInp
 	var objs repoObjects
 	var cur repoCursors
 	_ = json.Unmarshal(r.cursors, &cur)
-	next := repoCursors{Releases: map[string]string{}, ChecksMark: cur.ChecksMark}
+	next := repoCursors{Releases: map[string]string{}, ChecksMark: cur.ChecksMark, Commits: cur.Commits}
 	for k, v := range cur.Releases {
 		next.Releases[k] = v
 	}
@@ -653,15 +666,34 @@ func (s *Service) syncRepo(ctx context.Context, cl *giteaapi.Client, in *syncInp
 			}
 		}
 	}
+
+	if sc.Commits && r.DefaultBranch != "" {
+		res, err := commitsync.Read(ctx, commitSource{cl: cl, repo: r.FullName, branch: r.DefaultBranch}, svc, cur.Commits, sc.Full, s.o.Now())
+		if err != nil {
+			// I commit sono un di più: un errore (repository vuoto, Gitea vecchio senza `since`) non ferma
+			// release e controlli; il cursore dei commit non avanza e la volta dopo si riprova.
+			if _, ok := giteaapi.IsRateLimited(err); ok || ctx.Err() != nil {
+				return objs, cur, err
+			}
+			objs.warnings = append(objs.warnings, err.Error())
+		} else {
+			objs.commits = res.Commits
+			next.Commits = res.Next
+			objs.warnings = append(objs.warnings, res.Warnings...)
+		}
+	}
 	return objs, next, nil
 }
 
 // ingestRepo consegna gli oggetti di un repository e ne salva i cursori, insieme.
-func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repoObjects, cur repoCursors) error {
+// ingestRepo restituisce quanti collegamenti commit → elemento nuovi ha creato.
+func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repoObjects, cur repoCursors) (int, error) {
+	linked := 0
 	curJSON, _ := json.Marshal(cur)
 	ing := s.o.Ingestor
 	act := systemActor(c.actor)
-	return s.o.DB.InTenant(ctx, c.tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+	err := s.o.DB.InTenant(ctx, c.tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+		linked = 0
 		if si, ok := ing.(contract.ServiceIngestor); ok {
 			if err := si.IngestService(ctx, tx, act, serviceOf(r.Repo)); err != nil {
 				return err
@@ -687,6 +719,13 @@ func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repo
 				return err
 			}
 		}
+		if ci, ok := ing.(contract.CommitIngestor); ok && len(objs.commits) > 0 {
+			n, err := ci.IngestCommits(ctx, tx, act, serviceOf(r.Repo), objs.commits)
+			if err != nil {
+				return err
+			}
+			linked = n
+		}
 		if _, err := tx.Exec(ctx, `update connector_repositories set cursors = $2, last_synced_at = now(), last_error = null, updated_at = now()
 			where id = $1`, r.ID, curJSON); err != nil {
 			return err
@@ -695,4 +734,5 @@ func (s *Service) ingestRepo(ctx context.Context, c *claim, r repoRow, objs repo
 			c.integrationID, leaseMinutes)
 		return err
 	})
+	return linked, err
 }

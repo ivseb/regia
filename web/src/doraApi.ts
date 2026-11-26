@@ -38,7 +38,7 @@ export type SubjectRef = { scope: Scope; id: string; name: string };
 export type DoraSettings = {
   failure_window_hours: number;
   hotfix_words: string[];
-  lead_time_start: "auto" | "check_run" | "change" | "request";
+  lead_time_start: "auto" | "commit" | "check_run" | "change" | "request";
   thresholds: Record<MetricKey, Ladder>;
   fact_days: number;
   updated_at: string | null;
@@ -75,7 +75,7 @@ export type DrillDeploy = {
   change: string | null;
   release_url: string | null;
   lead_start: string | null;
-  lead_source?: "check_run" | "change" | "request";
+  lead_source?: "commit" | "check_run" | "change" | "request";
   lead_days: number | null;
   failed: boolean;
   reasons: FailReason[];

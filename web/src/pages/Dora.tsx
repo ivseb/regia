@@ -333,7 +333,7 @@ function CompareTable({ rows, scope, onOpen, narrow }: { rows: Dashboard["compar
 // ---------------------------------------------------------------------
 // Approfondimento: i rilasci e gli incidenti che compongono i numeri
 
-const SOURCE: Record<string, string> = { get check_run() { return tr("governance.dora.primo_controllo_del_commit"); }, get change() { return tr("governance.dora.creazione_del_change"); }, get request() { return tr("governance.dora.creazione_della_richiesta"); } };
+const SOURCE: Record<string, string> = { get commit() { return tr("governance.dora.primo_commit"); }, get check_run() { return tr("governance.dora.primo_controllo_del_commit"); }, get change() { return tr("governance.dora.creazione_del_change"); }, get request() { return tr("governance.dora.creazione_della_richiesta"); } };
 
 function DrillPanel({ drill, period, metric, narrow }: { drill: Drill; period: Period; metric: MetricKey | null; narrow: boolean }) {
   const v = drill.values;
@@ -494,7 +494,8 @@ function fromDraft(d: Draft): { body: Omit<DoraSettings, "updated_at" | "default
 }
 
 const START_HELP: Record<DoraSettings["lead_time_start"], string> = {
-  get auto() { return tr("governance.dora.il_primo_controllo_del_commit"); },
+  get auto() { return tr("governance.dora.il_primo_commit"); },
+  get commit() { return tr("governance.dora.il_primo_commit_solo"); },
   get check_run() { return tr("governance.dora.il_primo_controllo_della_pipeline"); },
   get change() { return tr("governance.dora.la_creazione_del_change_in"); },
   get request() { return tr("governance.dora.la_creazione_della_richiesta_collegata"); },
@@ -565,6 +566,7 @@ function SettingsPanel({ settings, period, onSaved }: { settings: DoraSettings; 
             <span className="label">{tr("governance.dora.inizio_della_modifica")}</span>
             <Select className="field" value={draft.start} onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value as Draft["start"] }))}>
               <option value="auto">{tr("governance.dora.automatico")}</option>
+              <option value="commit">{tr("governance.dora.primo_commit_2")}</option>
               <option value="check_run">{tr("governance.dora.primo_controllo_del_commit_2")}</option>
               <option value="change">{tr("governance.dora.creazione_del_change_2")}</option>
               <option value="request">{tr("governance.dora.creazione_della_richiesta_2")}</option>

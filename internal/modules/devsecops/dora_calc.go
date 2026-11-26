@@ -108,7 +108,7 @@ type DeployRow struct {
 	Change      *string      `json:"change"`
 	ReleaseURL  *string      `json:"release_url"`
 	LeadStart   *time.Time   `json:"lead_start"`
-	LeadSource  string       `json:"lead_source,omitempty"` // check_run | change | request
+	LeadSource  string       `json:"lead_source,omitempty"` // commit | check_run | change | request
 	LeadDays    *float64     `json:"lead_days"`
 	Failed      bool         `json:"failed"`
 	Reasons     []FailReason `json:"reasons"`
@@ -116,7 +116,7 @@ type DeployRow struct {
 	source      string
 	linkedIncID string
 	app         *appInfo
-	cand        [3]*time.Time // inizio del lead time: controlli, change, richiesta
+	cand        [4]*time.Time // inizio del lead time: controlli, change, richiesta, primo commit
 }
 
 // IncidentRow è un incidente collegato ad applicazioni o asset.
@@ -181,10 +181,19 @@ func loadDora(ctx context.Context, tx pgx.Tx, from, to time.Time, appID string) 
 		return nil, err
 	}
 
+	// Il candidato «commit» (ultima colonna): il primo committed_at di element_commits dello stesso servizio tra il deploy
+	// di produzione precedente (escluso) e questo (incluso); approssima «primo commit → rilascio che lo contiene». Il deploy
+	// precedente con la stessa versione si ignora: è il gemello di un rilascio registrato due volte.
 	q := `select d.id::text, d.service_id::text, sv.name, coalesce(d.application_element_id, sv.application_element_id)::text,
 		d.version, d.started_at, d.status, d.release_id::text, d.caused_incident_element_id::text, coalesce(d.source, ''),
 		r.commit, r.change_number, coalesce(r.pull_request, ''), r.release_url, coalesce(c.title, ''), c.created_at, req.created_at,
-		(select min(cr.at) from check_runs cr where cr.tenant_id = r.tenant_id and cr.service_id = r.service_id and cr.commit = r.commit)
+		(select min(cr.at) from check_runs cr where cr.tenant_id = r.tenant_id and cr.service_id = r.service_id and cr.commit = r.commit),
+		(select min(ec.committed_at) from element_commits ec where ec.tenant_id = d.tenant_id and ec.service_id = d.service_id
+		   and ec.committed_at <= d.started_at
+		   and ec.committed_at > coalesce((select max(p.started_at) from deployments p
+		     join environments pe on pe.tenant_id = p.tenant_id and pe.id = p.environment_id and pe.is_production
+		     where p.tenant_id = d.tenant_id and p.service_id = d.service_id and p.status <> 'running'
+		       and p.started_at < d.started_at and lower(p.version) <> lower(d.version)), '-infinity'::timestamptz))
 		from deployments d
 		join environments e on e.tenant_id = d.tenant_id and e.id = d.environment_id and e.is_production
 		join services sv on sv.tenant_id = d.tenant_id and sv.id = d.service_id
@@ -201,12 +210,12 @@ func loadDora(ctx context.Context, tx pgx.Tx, from, to time.Time, appID string) 
 	if err != nil {
 		return nil, err
 	}
-	type cand struct{ check, change, request *time.Time }
+	type cand struct{ check, change, request, commit *time.Time }
 	var x DeployRow
 	var linked, relID *string
 	var c cand
 	if _, err := pgx.ForEachRow(rows, []any{&x.ID, &x.ServiceID, &x.Service, &x.AppID, &x.Version, &x.At, &x.Status, &relID, &linked, &x.source,
-		&x.Commit, &x.Change, &x.pr, &x.ReleaseURL, &x.title, &c.change, &c.request, &c.check}, func() error {
+		&x.Commit, &x.Change, &x.pr, &x.ReleaseURL, &x.title, &c.change, &c.request, &c.check, &c.commit}, func() error {
 		y := x
 		y.ReleaseID = relID
 		if linked != nil {
@@ -217,7 +226,7 @@ func loadDora(ctx context.Context, tx pgx.Tx, from, to time.Time, appID string) 
 		if y.AppID != nil {
 			y.app = d.apps[*y.AppID]
 		}
-		y.cand = [3]*time.Time{c.check, c.change, c.request}
+		y.cand = [4]*time.Time{c.check, c.change, c.request, c.commit}
 		d.deploys = append(d.deploys, &y)
 		x, relID, linked, c = DeployRow{}, nil, nil, cand{}
 		return nil

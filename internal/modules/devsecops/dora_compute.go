@@ -11,8 +11,10 @@ import (
 // analyze applica le impostazioni ai dati letti: inizio del lead time di ogni deploy e deploy
 // falliti con il motivo. Si può rifare con impostazioni diverse sugli stessi dati (anteprima).
 func (d *doraData) analyze(st DoraSettings) {
-	order := map[string][]int{"auto": {0, 1}, "check_run": {0}, "change": {1}, "request": {2}}[st.LeadTimeStart]
-	sources := [3]string{"check_run", "change", "request"}
+	// Indici dei candidati: 0 controlli, 1 change, 2 richiesta, 3 primo commit legato a un elemento. In «auto» il commit
+	// viene per primo (è l'inizio vero del lavoro), poi i controlli, poi il change.
+	order := map[string][]int{"auto": {3, 0, 1}, "commit": {3}, "check_run": {0}, "change": {1}, "request": {2}}[st.LeadTimeStart]
+	sources := [4]string{"check_run", "change", "request", "commit"}
 	for _, y := range d.deploys {
 		y.LeadStart, y.LeadSource, y.LeadDays, y.Failed, y.Reasons = nil, "", nil, false, []FailReason{}
 		for _, i := range order {
