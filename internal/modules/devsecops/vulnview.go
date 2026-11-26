@@ -447,7 +447,8 @@ func (s *Service) VulnDashboard(ctx context.Context, tx pgx.Tx, actor engine.Act
 		if err != nil {
 			return nil, err
 		}
-		var out []GroupRow
+		// Mai nil: senza vulnerabilità l'interfaccia riceve [] (con null andava in errore).
+		out := []GroupRow{}
 		for rows.Next() {
 			var r GroupRow
 			var id, key *string

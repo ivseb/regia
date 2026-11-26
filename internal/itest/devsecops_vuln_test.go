@@ -190,6 +190,15 @@ func TestDevsecopsVulnerabilita(t *testing.T) {
 		t.Fatalf("fatti di ORD: %v", admin.do("POST", "/api/v1/conditions/check", map[string]any{"condition": "vuln_scadute: 2", "element": ordKey}, http.StatusOK)["facts"])
 	}
 
+	// --- Cruscotto di un tenant senza vulnerabilità (pilota Home lab): elenchi vuoti, mai null,
+	// altrimenti la pagina va in errore.
+	empty := adminB.do("GET", V+"/dashboard", nil, http.StatusOK)
+	for _, k := range []string{"teams", "applications", "aging", "trend"} {
+		if _, ok := empty[k].([]any); !ok {
+			t.Fatalf("cruscotto vuoto: %q non è un elenco: %s", k, jsonString(empty))
+		}
+	}
+
 	// --- Cruscotto: scadute, aperte, per team e applicazione, andamento.
 	dash := admin.do("GET", V+"/dashboard", nil, http.StatusOK)
 	k := obj(dash["kpis"])
