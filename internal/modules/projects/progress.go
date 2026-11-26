@@ -19,7 +19,9 @@ import (
 //     percentuale dichiarata;
 //   - work package a cascata: media delle attività pesata sulle stime (pari peso senza stime);
 //     senza attività, la percentuale dichiarata;
-//   - work package del fornitore: la percentuale dichiarata (i SAL sono il passo 4);
+//   - work package del fornitore: l'ultimo SAL accettato (percentuale complessiva, oppure importi
+//     accettati sul valore del contratto); senza SAL, i deliverable accettati sul totale; poi la
+//     percentuale dichiarata;
 //   - attività: la percentuale dichiarata, storicizzata in ext_plan_progress;
 //   - una voce chiusa vale 100, una annullata non conta.
 //
@@ -66,6 +68,10 @@ func computeItemProgress(p *Plan) {
 				vs[j] = a.Progress
 			}
 			it.Progress, it.ProgressFrom = weighted(vs, fillWeights(ws, p.Method == "equal")), "activities"
+		case mode == ModeSupplier && it.claimProgress != nil:
+			it.Progress, it.ProgressFrom = *it.claimProgress, "claims"
+		case mode == ModeSupplier && it.DeliverablesAccepted > 0:
+			it.Progress, it.ProgressFrom = float64(it.DeliverablesAccepted)*100/float64(it.Deliverables), "deliverables"
 		case it.declared != nil:
 			it.Progress, it.ProgressFrom = *it.declared, "declared"
 		default:
@@ -217,6 +223,10 @@ type Numbers struct {
 	NextMilestone    *ItemRef   `json:"next_milestone"`
 	Late             []ItemRef  `json:"late"`
 	Blocked          []Blocked  `json:"blocked"`
+	// Fornitori e componenti condivisi (passo 4): SAL da accettare, deliverable consegnati da
+	// accettare e conflitti con altri progetti sulla stessa applicazione.
+	ClaimsPending int        `json:"claims_pending"`
+	Conflicts     []Conflict `json:"conflicts"`
 	// Change request aperte e rischi collegati al progetto o alle sue richieste.
 	OpenChangeRequests int       `json:"open_change_requests"`
 	Risks              []ItemRef `json:"risks"`
@@ -285,7 +295,7 @@ func parse(s *string) *time.Time {
 // computeNumbers calcola i numeri del piano già caricato: è l'unica funzione che li calcola.
 func computeNumbers(p *Plan, now time.Time) Numbers {
 	n := Numbers{Late: []ItemRef{}, Blocked: []Blocked{}, Risks: []ItemRef{}, MissingRoles: []RoleRef{}, ByMode: []ModeStat{}, Reasons: []string{},
-		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance}
+		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance, Conflicts: []Conflict{}}
 	wps, ws := wpWeights(p)
 	vs := make([]float64, len(wps))
 	byMode := map[string]*struct {
@@ -336,6 +346,8 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 		if it.StateCategory != "done" {
 			allDone = false
 		}
+		n.ClaimsPending += it.ClaimsPending
+		n.Conflicts = append(n.Conflicts, it.Conflicts...)
 		if (it.StateCategory == "in_progress" || it.StateCategory == "done") && it.Start != nil {
 			started = append(started, *it.Start)
 		}
@@ -469,6 +481,9 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 		}
 		if len(n.Blocked) > 0 {
 			amber = append(amber, "blocked")
+		}
+		if len(n.Conflicts) > 0 {
+			amber = append(amber, "conflicts")
 		}
 		if n.Signal == "green" && len(amber) > 0 {
 			n.Signal = "amber"

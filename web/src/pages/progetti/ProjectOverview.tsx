@@ -1,20 +1,25 @@
 // «Panoramica» del PM (replica/progetti.md §3 e §6): semaforo con i motivi, avanzamento, prossima milestone,
 // baseline, budget e margine; sotto, ciò che chiede attenzione. Tutti i numeri li calcola il server.
-import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Select } from "../../select";
 import type { TabKey } from "../ElementPage";
 import { projectKeys, projectsApi, type ItemRef, type Overview } from "../../projectsApi";
 import { EmptyState } from "../../emptyState";
 import { ErrorNote, Loading, SectionTitle, date, euro } from "../../ui";
 import { useT } from "../../i18n/react";
-import { ItemLink, ProgressBar, SignalMark } from "./shared";
+import { ItemLink, ProgressBar, SignalMark, useClaimName, useConflictText } from "./shared";
 
 export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: TabKey) => void }) {
   const t = useT();
+  const conflictText = useConflictText();
+  const claimName = useClaimName();
   const q = useQuery({ queryKey: projectKeys.overview(refKey), queryFn: () => projectsApi.overview(refKey) });
   if (q.error) return <ErrorNote error={q.error} />;
   if (!q.data) return <Loading className="m-0 text-muted" />;
   const { numbers: n, phases } = q.data;
+  const conflicts = n.conflicts ?? [];
   const empty = n.work_packages === 0 && n.milestones === 0;
   return (
     <div className="flex max-w-[1000px] flex-col gap-7">
@@ -30,7 +35,7 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
         />
       ) : (
         <>
-          <Head data={q.data} />
+          <Head data={q.data} refKey={refKey} />
           <div className="grid gap-7 md:grid-cols-2">
             <Block title={t("progetti.overview.late")}>
               {n.late.length === 0 ? <None text={t("progetti.overview.lateNone")} /> : <ul className="m-0 list-none p-0">{n.late.map((i) => <LateRow key={i.id} item={i} />)}</ul>}
@@ -67,6 +72,34 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
               {(n.open_change_requests > 0 || n.over_tolerance.length > 0 || n.end_over_tolerance) && (
                 <button type="button" className="btn btn-quiet self-start px-0 underline" onClick={() => onTab("piano")}>
                   {t("progetti.baseline.openPlan")}
+                </button>
+              )}
+            </Block>
+            <Block title={t("progetti.fornitori.conflict.title")}>
+              {conflicts.length === 0 ? (
+                <None text={t("progetti.fornitori.conflict.none")} />
+              ) : (
+                <ul className="m-0 list-none p-0" data-testid="panoramica-conflitti">
+                  {conflicts.map((c) => (
+                    <li key={c.item_id + c.application_id} className="border-b border-hair py-1.5">
+                      <span aria-hidden="true" className="text-flag">▲ </span>
+                      {conflictText(c)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Block>
+            <Block title={t("progetti.fornitori.pending.title")}>
+              {n.claims_pending === 0 ? (
+                <None text={t("progetti.fornitori.pending.none")} />
+              ) : (
+                <p className="m-0 font-semibold" data-testid="panoramica-sal">
+                  {t("progetti.fornitori.pending.count", { name: n.claims_pending === 1 ? claimName.one : claimName.many, count: n.claims_pending })}
+                </p>
+              )}
+              {n.claims_pending > 0 && (
+                <button type="button" className="btn mt-1 self-start touch-44" onClick={() => onTab("wp")}>
+                  {t("progetti.overview.openWp")}
                 </button>
               )}
             </Block>
@@ -136,7 +169,53 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
   );
 }
 
-function Head({ data }: { data: Overview }) {
+/** Riga «Programma»: nome (porta alla pagina del programma) e, per chi pianifica, il selettore. */
+function ProgramRow({ data, refKey }: { data: Overview; refKey: string }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const settings = useQuery({ queryKey: ["project-settings"], queryFn: () => projectsApi.settings(), staleTime: 60_000, retry: false });
+  const program = data.project.program;
+  const canPick = data.can_edit && (settings.data?.programs_enabled ?? false);
+  const programs = useQuery({ queryKey: projectKeys.programs, queryFn: () => projectsApi.programs(), enabled: canPick });
+  const [err, setErr] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  if (!program && !canPick) return null;
+  const set = async (id: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await projectsApi.setProgram(refKey, id);
+      await Promise.all([qc.invalidateQueries({ queryKey: ["project-overview"] }), qc.invalidateQueries({ queryKey: projectKeys.programs }), qc.invalidateQueries({ queryKey: ["program"] }), qc.invalidateQueries({ queryKey: ["element"] })]);
+    } catch (e) {
+      setErr(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const items = programs.data?.items ?? [];
+  return (
+    <div className="flex flex-col gap-1" data-testid="riga-programma">
+      <span className="label text-muted">{t("progetti.fornitori.program.label")}</span>
+      <div className="flex flex-wrap items-center gap-3">
+        {program ? (
+          <Link to="/e/$key" params={{ key: program.key }} className="min-h-[44px] content-center text-accent no-underline hover:underline md:min-h-0">{program.key} · {program.title}</Link>
+        ) : (
+          <span className="text-muted">{t("progetti.fornitori.program.none")}</span>
+        )}
+        {canPick && (
+          <Select className="field w-full sm:w-72" aria-label={t("progetti.fornitori.program.pick")} disabled={busy} value={program?.id ?? ""} onChange={(e) => void set(e.target.value)}>
+            <option value="">{t("progetti.fornitori.program.none")}</option>
+            {program && !items.some((p) => p.id === program.id) && <option value={program.id}>{program.key} · {program.title}</option>}
+            {items.map((p) => <option key={p.id} value={p.id}>{p.key} · {p.title}</option>)}
+          </Select>
+        )}
+      </div>
+      <ErrorNote error={err} />
+    </div>
+  );
+}
+
+function Head({ data, refKey }: { data: Overview; refKey: string }) {
   const t = useT();
   const n = data.numbers;
   const nm = n.next_milestone;
@@ -159,6 +238,7 @@ function Head({ data }: { data: Overview }) {
           </ul>
         )}
       </div>
+      <ProgramRow data={data} refKey={refKey} />
       <dl className="m-0 grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         <Stat label={t("progetti.overview.progress")}>
           <span className="tabular text-[24px] font-bold leading-none">{Math.round(n.progress)}%</span>

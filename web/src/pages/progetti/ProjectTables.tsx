@@ -7,7 +7,7 @@ import { EmptyState } from "../../emptyState";
 import { Select } from "../../select";
 import { ErrorNote, Loading, date } from "../../ui";
 import { useT } from "../../i18n/react";
-import { ItemLink, ProgressBar } from "./shared";
+import { ConflictChip, ItemLink, PendingChip, ProgressBar, useConflictText } from "./shared";
 
 function usePlan(refKey: string) {
   return useQuery({ queryKey: projectKeys.plan(refKey), queryFn: () => projectsApi.plan(refKey) });
@@ -38,6 +38,7 @@ const td = "border-b border-hair px-2 py-2 align-top";
 
 export function WorkPackagesTab({ refKey }: { refKey: string }) {
   const t = useT();
+  const conflictText = useConflictText();
   const q = usePlan(refKey);
   const [mode, setMode] = useState<"" | DeliveryMode>("");
   if (q.error) return <ErrorNote error={q.error} />;
@@ -78,6 +79,7 @@ export function WorkPackagesTab({ refKey }: { refKey: string }) {
                 <th className={th}>{t("progetti.tables.planned")}</th>
                 <th className={th}>{t("progetti.tables.baseline")}</th>
                 <th className={th}>{t("progetti.tables.state")}</th>
+                <th className={th}>{t("progetti.fornitori.pending.column")} · {t("progetti.fornitori.conflict.column")}</th>
               </tr>
             </thead>
             <tbody>
@@ -99,6 +101,12 @@ export function WorkPackagesTab({ refKey }: { refKey: string }) {
                   <td className={`${td} tabular whitespace-nowrap`}>{range(i, none)}</td>
                   <td className={td}><BaselineCell i={i} hasBaseline={plan.baseline != null} /></td>
                   <td className={td}>{i.state}</td>
+                  <td className={td}>
+                    <span className="flex flex-wrap gap-1.5">
+                      <PendingChip count={i.claims_pending} />
+                      <ConflictChip conflicts={i.conflicts ?? []} />
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -121,6 +129,13 @@ export function WorkPackagesTab({ refKey }: { refKey: string }) {
                 <span className="tabular text-[12.5px]">
                   {t("progetti.tables.planned")}: {range(i, none)} · {t("progetti.tables.baseline")}: <BaselineCell i={i} hasBaseline={plan.baseline != null} />
                 </span>
+                {(i.claims_pending > 0 || (i.conflicts?.length ?? 0) > 0) && (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <PendingChip count={i.claims_pending} />
+                    <ConflictChip conflicts={i.conflicts ?? []} />
+                  </span>
+                )}
+                {i.conflicts?.map((c) => <span key={c.item_id + c.application_id} className="text-[12px] text-flag">{conflictText(c)}</span>)}
               </li>
             ))}
           </ul>

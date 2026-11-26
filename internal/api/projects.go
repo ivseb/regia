@@ -12,9 +12,10 @@ import (
 	"regia/internal/platform/auth"
 )
 
-// Progetti (replica/progetti.md, passi 1, 2 e 3; docs/sviluppo/progetti.md): progetto da
+// Progetti (replica/progetti.md, passi 1-4; docs/sviluppo/progetti.md): progetto da
 // richiesta o da zero, piano con fasi, work package, attività, milestone e dipendenze,
-// modi di consegna, avanzamento, Panoramica del PM, baseline e change request.
+// modi di consegna, avanzamento, Panoramica del PM, baseline e change request, fornitori
+// con SAL e deliverable, conflitti sui componenti condivisi, programmi.
 
 func (s *Server) projectsInit() {
 	if s.eng == nil {
@@ -93,6 +94,19 @@ func (s *Server) projectRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+cr+"/{id}", inTenant(s.changeRequest))
 	mux.HandleFunc("POST "+cr+"/{id}/submit", inTenant(s.submitChangeRequest))
 	mux.HandleFunc("POST "+cr+"/{id}/withdraw", inTenant(s.withdrawChangeRequest))
+	// Passo 4: fornitori (contratto, SAL, deliverable) e programmi.
+	pc, dl, pg := "/api/v1/progress-claims", "/api/v1/deliverables", "/api/v1/programs"
+	mux.HandleFunc("GET "+it+"/{id}/supplier", inTenant(s.planItemSupplier))
+	mux.HandleFunc("PUT "+it+"/{id}/supplier", inTenant(s.updatePlanItemSupplier))
+	mux.HandleFunc("POST "+it+"/{id}/claims", inTenant(s.createClaim))
+	mux.HandleFunc("POST "+pc+"/{id}/decision", inTenant(s.decideClaim))
+	mux.HandleFunc("POST "+it+"/{id}/deliverables", inTenant(s.createDeliverable))
+	mux.HandleFunc("POST "+dl+"/{id}/deliver", inTenant(s.deliverDeliverable))
+	mux.HandleFunc("POST "+dl+"/{id}/decision", inTenant(s.decideDeliverable))
+	mux.HandleFunc("GET "+pg, inTenant(s.listPrograms))
+	mux.HandleFunc("POST "+pg, inTenant(s.createProgram))
+	mux.HandleFunc("GET "+pg+"/{ref}", inTenant(s.programView))
+	mux.HandleFunc("PUT "+b+"/{ref}/program", inTenant(s.setProjectProgram))
 	mux.HandleFunc("GET "+b+"/{ref}/plan", inTenant(s.projectPlan))
 	mux.HandleFunc("GET "+b+"/{ref}/overview", inTenant(s.projectOverview))
 	mux.HandleFunc("POST "+b+"/{ref}/plan/auto", inTenant(s.projectAutoPlan))
@@ -382,5 +396,116 @@ func (s *Server) submitChangeRequest(w http.ResponseWriter, r *http.Request, p *
 func (s *Server) withdrawChangeRequest(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.ChangeRequest, error) {
 		return s.proj.WithdrawChangeRequest(r.Context(), tx, actorOf(r, p), r.PathValue("id"))
+	})
+}
+
+func (s *Server) planItemSupplier(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.Supplier(r.Context(), tx, actorOf(r, p), r.PathValue("id"))
+	})
+}
+
+func (s *Server) updatePlanItemSupplier(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.SupplierInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.UpdateSupplier(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in)
+	})
+}
+
+// createClaim dichiara un SAL del work package del fornitore.
+func (s *Server) createClaim(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.ClaimInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.CreateClaim(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in)
+	})
+}
+
+type decisionInput struct {
+	Outcome string `json:"outcome"` // accepted | rejected
+	Note    string `json:"note"`
+}
+
+func (s *Server) decideClaim(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in decisionInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.DecideClaim(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in.Outcome, in.Note)
+	})
+}
+
+func (s *Server) createDeliverable(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.DeliverableInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.CreateDeliverable(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in)
+	})
+}
+
+func (s *Server) deliverDeliverable(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in struct {
+		Note string `json:"note"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.Deliver(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in.Note)
+	})
+}
+
+func (s *Server) decideDeliverable(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in decisionInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.SupplierView, error) {
+		return s.proj.DecideDeliverable(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in.Outcome, in.Note)
+	})
+}
+
+func (s *Server) listPrograms(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		items, err := s.proj.Programs(r.Context(), tx, actorOf(r, p), r.URL.Query().Get("closed") == "true")
+		return map[string]any{"items": items}, err
+	})
+}
+
+func (s *Server) createProgram(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.ProgramInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*engine.Element, error) {
+		return s.proj.CreateProgram(r.Context(), tx, actorOf(r, p), in)
+	})
+}
+
+func (s *Server) programView(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.ProgramView, error) {
+		return s.proj.Program(r.Context(), tx, actorOf(r, p), r.PathValue("ref"))
+	})
+}
+
+// setProjectProgram mette il progetto in un programma (program vuoto lo toglie).
+func (s *Server) setProjectProgram(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in struct {
+		Program string `json:"program"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		ref, err := s.proj.SetProgram(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), in.Program)
+		return map[string]any{"program": ref}, err
 	})
 }

@@ -31,6 +31,7 @@ export const KIND_LABELS: Record<NotificationKind, { label: Key; hint: Key }> = 
   budget: { label: "budget.notif.label", hint: "budget.notif.hint" },
   risk: { label: "lavoro.notifications.kind.risk.label", hint: "lavoro.notifications.kind.risk.hint" },
   timesheet: { label: "lavoro.notifications.kind.timesheet.label", hint: "lavoro.notifications.kind.timesheet.hint" },
+  project: { label: "lavoro.notifications.kind.project.label", hint: "lavoro.notifications.kind.project.hint" },
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -194,6 +195,16 @@ export function Describe({ n }: { n: Notification }) {
       }
       return R("timesheet.plain", { week });
     }
+    case "project":
+      switch (ev) {
+        case "conflict":
+          return R("project.conflict", { project: str(p.project), other: str(p.other), application: str(p.application), until: p.until ? fmtDate(str(p.until)) : "" });
+        case "claim_submitted":
+          return R("project.claim_submitted", { number: String(p.number ?? ""), work_package: str(p.work_package) });
+        case "deliverable_delivered":
+          return R("project.deliverable_delivered");
+      }
+      return R("project.plain");
     case "budget":
       return (
         <>
@@ -258,6 +269,7 @@ function moduleOfKind(kind: NotificationKind): UiModule | undefined {
     case "report":
       return "budget";
     case "timesheet":
+    case "project":
       return "work";
     default:
       return undefined;

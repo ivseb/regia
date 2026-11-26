@@ -100,6 +100,8 @@ func DescribeLang(lang string, it Item) string {
 		return describeBudget(lang, it)
 	case KindTimesheet:
 		return describeTimesheet(lang, it, p)
+	case KindProject:
+		return byEvent(lang, "notify.project", event, p)
 	}
 	return i18n.T(lang, "notify.other", i18n.P{"kind": it.Kind, "key": key})
 }

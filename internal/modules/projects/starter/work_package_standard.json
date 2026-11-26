@@ -21,8 +21,8 @@
     ],
     "transitions": [
       {"from": ["Da pianificare"], "to": "Proposto", "label": "Coinvolgi il team", "gates": ["responsabile"]},
-      {"from": ["Proposto"], "to": "Accettato", "label": "Accetta il work package", "roles": ["team_lead", "project_manager"]},
-      {"from": ["Proposto"], "to": "Da pianificare", "label": "Rimanda al PM", "roles": ["team_lead", "project_manager"], "comment_required": true},
+      {"from": ["Proposto"], "to": "Accettato", "label": "Accetta il work package", "roles": ["team_lead", "supplier_contact", "project_manager"]},
+      {"from": ["Proposto"], "to": "Da pianificare", "label": "Rimanda al PM", "roles": ["team_lead", "supplier_contact", "project_manager"], "comment_required": true},
       {"from": ["Da pianificare", "Accettato"], "to": "In corso", "label": "Avvia"},
       {"from": ["In corso"], "to": "Completato", "label": "Completa"},
       {"from": ["Completato"], "to": "In corso", "label": "Riapri"},

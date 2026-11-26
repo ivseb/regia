@@ -16,6 +16,7 @@ import { ErrorNote, Loading } from "../../ui";
 import { useT } from "../../i18n/react";
 import { Markers, NonWorkdays, PX_PER_DAY, TimeHeader, ZoomSwitch, useNarrow, type Zoom } from "../timeline";
 import { BaselinePanel } from "./ProjectBaseline";
+import { ConflictChip, PendingChip, useConflictText } from "./shared";
 import { H, cascadeFrom, criticalPath, envelope, itemsByPhase, proposedDuration, rowHeight, violated, type Row, type Span } from "./plan-logic";
 
 const LABEL = 320;
@@ -136,6 +137,7 @@ function dateRange(it: { start: string | null; end: string | null }, t: ReturnTy
 
 function PhoneList({ plan }: { plan: ProjectPlan }) {
   const t = useT();
+  const conflictText = useConflictText();
   const rows = itemsByPhase(plan.phases, plan.items, new Map(), new Map(), false);
   const groups: { phase: Phase | null; items: { it: PlanItem; depth: number }[] }[] = [];
   for (const r of rows) {
@@ -167,6 +169,13 @@ function PhoneList({ plan }: { plan: ProjectPlan }) {
                       <span className="block h-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, it.progress))}%` }} />
                     </span>
                   )}
+                  {(it.conflicts?.length || it.claims_pending > 0) && (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <ConflictChip conflicts={it.conflicts ?? []} />
+                      <PendingChip count={it.claims_pending} />
+                    </span>
+                  )}
+                  {it.conflicts?.map((c) => <span key={c.item_id + c.application_id} className="text-[12px] text-flag">{conflictText(c)}</span>)}
                   <span className="flex flex-wrap gap-x-3 font-mono text-[11px] text-muted">
                     <span>{it.key}</span>
                     {it.delivery_mode && <span>{t(`progetti.piano.mode.${it.delivery_mode}`)}</span>}
@@ -552,6 +561,8 @@ function LabelCell(p: LabelProps) {
             {t("progetti.piano.involve")}
           </button>
         )}
+        <ConflictChip conflicts={it.conflicts ?? []} />
+        <PendingChip count={it.claims_pending} />
         {mode === "agile" && it.epics.length > 0 && (
           <Link to="/e/$key" params={{ key: it.epics[0].key }} className="truncate font-mono text-[11px] text-accent">
             {t("progetti.piano.epic", { key: it.epics[0].key })}
@@ -713,6 +724,8 @@ function Bar({
 }) {
   const t = useT();
   const nav = useNavigate();
+  const conflictText = useConflictText();
+  const conflicts = it.conflicts ?? [];
   const ms = it.kind === "milestone";
   const wd = cal.workdays(span.s, span.e);
   const dur = ms ? cal.short(span.s) : isGhost ? t("progetti.piano.toPlan") : t("progetti.piano.daysShort", { count: wd });
@@ -729,7 +742,7 @@ function Bar({
     role: "button" as const,
     tabIndex: 0,
     "aria-label": t("progetti.piano.barAria", { title: it.title, from: cal.short(span.s), to: cal.short(span.e), what: dur }),
-    title: t("progetti.piano.barTitle", { key: it.key, title: it.title, from: cal.shortYear(span.s), to: cal.shortYear(span.e), state: it.state, pct: Math.round(it.progress) }),
+    title: t("progetti.piano.barTitle", { key: it.key, title: it.title, from: cal.shortYear(span.s), to: cal.shortYear(span.e), state: it.state, pct: Math.round(it.progress) }) + (conflicts.length ? `\n▲ ${conflicts.map(conflictText).join("\n▲ ")}` : ""),
     onPointerDown: (e: RPointerEvent<HTMLDivElement>) => onDown(e, it, span, isGhost),
     onPointerMove: onMove,
     onPointerUp: () => onUp(it),
@@ -769,6 +782,7 @@ function Bar({
     >
       {!isGhost && it.progress > 0 && <span aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 h-[3px] bg-bg/70" style={{ width: `${Math.min(100, it.progress)}%` }} />}
       {canEdit && !isGhost && <span className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize opacity-0 group-hover:bg-bg/40 group-hover:opacity-100" />}
+      {conflicts.length > 0 && !isGhost && <span aria-hidden="true" className="shrink-0 pl-1 text-[10px] font-bold">▲</span>}
       <span className="truncate px-1.5 text-[11px] font-semibold whitespace-nowrap">{w > 70 ? dur : ""}</span>
       {canEdit && !isGhost && <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize opacity-0 group-hover:bg-bg/40 group-hover:opacity-100" />}
       {w <= 70 && <span className="pointer-events-none absolute left-full ml-1.5 font-mono text-[10.5px] whitespace-nowrap text-muted">{dur}</span>}

@@ -17,6 +17,11 @@
 // il PM; quando una modifica porta una milestone o la fine del progetto oltre le tolleranze del
 // tenant, nasce una change request (ext_change_request) che passa dal motore delle approvazioni
 // e, approvata, diventa la nuova baseline.
+//
+// Passo 4: il work package del fornitore ha contratto, SAL (ext_progress_claim) e deliverable
+// (ext_deliverable), dichiarati dal contatto del fornitore o dal PM e accettati dal PM; due
+// progetti sulla stessa applicazione nello stesso periodo sono un conflitto, mostrato nel piano e
+// segnalato al team owner; il programma raggruppa progetti con numeri aggregati da computeNumbers.
 package projects
 
 import (
@@ -41,11 +46,17 @@ const (
 	TypeMilestone     = "milestone"
 	TypeDeliverable   = "deliverable"
 	TypeChangeRequest = "change_request"
+	// TypeProgressClaim: SAL, stato di avanzamento lavori di un work package del fornitore (passo 4).
+	TypeProgressClaim = "progress_claim"
 
 	RequestType = "business_request" // modulo demand
 	ImpactType  = "impact"           // modulo architettura
 
 	RelDependsOn = "depends_on"
+
+	// RoleSupplierContact: il contatto del fornitore sul work package. Se il work package lo
+	// prevede (supplier_updates) dichiara i SAL e consegna i deliverable (decisione 3 del 2026-11-26).
+	RoleSupplierContact = "supplier_contact"
 
 	// SubjectPhaseGate: approvazione del cancello di una fase, nel motore delle approvazioni.
 	SubjectPhaseGate = "phase_gate"
@@ -75,7 +86,8 @@ var planRoles = []string{"project_manager", "pmo"}
 var starters embed.FS
 
 var processFiles = []string{"program_standard.json", "project_standard.json", "work_package_standard.json",
-	"plan_activity_standard.json", "milestone_standard.json", "change_request_standard.json"}
+	"plan_activity_standard.json", "milestone_standard.json", "change_request_standard.json",
+	"progress_claim_standard.json", "deliverable_standard.json"}
 
 // BudgetFunc restituisce il budget delle richieste confluite nel progetto (il budget resta
 // sulla richiesta fino al passo 5): la imposta il server con il modulo finance.
@@ -155,12 +167,14 @@ func canUpdateItem(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID
 	if el.AssigneeID != nil && *el.AssigneeID == actor.MemberID {
 		return true, nil
 	}
-	ok, err := engine.HasRole(ctx, tx, el.ID, actor.MemberID, []string{"team_lead"})
+	// Il contatto del fornitore aggiorna il suo work package come il referente del team (§5).
+	owners := []string{"team_lead", RoleSupplierContact}
+	ok, err := engine.HasRole(ctx, tx, el.ID, actor.MemberID, owners)
 	if err != nil || ok || el.ParentID == nil {
 		return ok, err
 	}
 	// Le attività ereditano il referente del work package.
-	return engine.HasRole(ctx, tx, *el.ParentID, actor.MemberID, []string{"team_lead"})
+	return engine.HasRole(ctx, tx, *el.ParentID, actor.MemberID, owners)
 }
 
 // sysActor agisce per conto del motore (regole, migrazione): chi ha fatto avanzare la
@@ -260,6 +274,12 @@ func (s *Service) afterTransition(ctx context.Context, tx pgx.Tx, ev engine.Tran
 	switch el.TypeKey {
 	case RequestType:
 		return s.requestMoved(ctx, tx, ev)
+	case TypeProgressClaim, TypeDeliverable:
+		// «Ritira» il SAL o «Annulla» il deliverable dal processo.
+		if el.StateCategory == "cancelled" {
+			return supplierCancelled(ctx, tx, el)
+		}
+		return nil
 	case TypeChangeRequest:
 		// «Ritira» dal processo: la change request da inviare non serve più.
 		if el.StateCategory == "cancelled" {

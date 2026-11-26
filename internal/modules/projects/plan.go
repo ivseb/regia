@@ -97,10 +97,19 @@ type Item struct {
 	BaselineStart *string `json:"baseline_start"`
 	BaselineEnd   *string `json:"baseline_end"`
 	VarianceDays  *int    `json:"variance_days"`
+	// Fornitore (passo 4): il contatto del fornitore dichiara i SAL (supplier_updates); SAL da
+	// accettare, deliverable non annullati e accettati.
+	SupplierUpdates      bool `json:"supplier_updates"`
+	ClaimsPending        int  `json:"claims_pending"`
+	Deliverables         int  `json:"deliverables"`
+	DeliverablesAccepted int  `json:"deliverables_accepted"`
+	// Conflicts: altri progetti che toccano la stessa applicazione nello stesso periodo.
+	Conflicts []Conflict `json:"conflicts,omitempty"`
 	// Restricted: l'attore non può leggere la voce; restano date, avanzamento e dipendenze.
-	Restricted   bool           `json:"restricted,omitempty"`
-	declared     *float64       // ultima percentuale dichiarata (work package senza epic)
-	epicProgress *work.Progress // avanzamento degli epic (work package agile)
+	Restricted    bool           `json:"restricted,omitempty"`
+	declared      *float64       // ultima percentuale dichiarata (work package senza epic)
+	epicProgress  *work.Progress // avanzamento degli epic (work package agile)
+	claimProgress *float64       // avanzamento dai SAL accettati (work package del fornitore)
 }
 
 // Plan è il piano del progetto.
@@ -366,6 +375,12 @@ func (s *Service) loadPlan(ctx context.Context, tx pgx.Tx, el *engine.Element) (
 		}
 	}
 	if err := loadBaseline(ctx, tx, p); err != nil {
+		return nil, err
+	}
+	if err := loadSupplier(ctx, tx, p); err != nil {
+		return nil, err
+	}
+	if err := loadConflicts(ctx, tx, p); err != nil {
 		return nil, err
 	}
 	computeItemProgress(p)

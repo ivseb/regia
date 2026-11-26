@@ -75,6 +75,7 @@ export const TAB_KEYS: TabKey[] = [
 // Progetti (replica/progetti.md, passi 1 e 2): Panoramica del PM, Piano, Work package e Milestone del
 // progetto; «Dettagli» delle voci di piano; il progetto della richiesta nella scheda «Piano».
 const ProjectOverview = lazy(() => import("./progetti/ProjectOverview").then((m) => ({ default: m.ProjectOverview })));
+const ProgramOverview = lazy(() => import("./progetti/ProgramOverview").then((m) => ({ default: m.ProgramOverview })));
 const ProjectPlanTab = lazy(() => import("./progetti/ProjectPlan").then((m) => ({ default: m.ProjectPlanTab })));
 const WorkPackagesTab = lazy(() => import("./progetti/ProjectTables").then((m) => ({ default: m.WorkPackagesTab })));
 const MilestonesTab = lazy(() => import("./progetti/ProjectTables").then((m) => ({ default: m.MilestonesTab })));
@@ -85,13 +86,14 @@ const PLAN_ITEM_TYPES = ["work_package", "plan_activity", "milestone"];
 type Tab = { key: TabKey; label: string; count?: number };
 
 /** Schede presenti per tipo di elemento. */
-function tabsFor(t: T, d: ElementDetail): Tab[] {
+function tabsFor(t: T, d: ElementDetail, tn: ReturnType<typeof useTypeNames>): Tab[] {
   const ty = d.element.type;
   const tabs: Tab[] = [];
   // La sintesi apre la richiesta («decisione prima») e l'applicazione (vista 360).
   if (ty === "business_request" || ty === "application") tabs.push({ key: "sintesi", label: t("scheda.tab") });
   // Il progetto si apre sulla Panoramica del PM; Piano, Work package e Milestone vengono dopo l'attività.
-  if (ty === "project") tabs.push({ key: "panoramica", label: t("progetti.tab.overview") });
+  // Il programma, come il progetto, si apre sulla Panoramica (numeri aggregati e roadmap dei suoi progetti).
+  if (ty === "project" || ty === "program") tabs.push({ key: "panoramica", label: t("progetti.tab.overview") });
   if (PLAN_ITEM_TYPES.includes(ty)) tabs.push({ key: "dettagli", label: t("lavoro.elementpage.tabDetails") });
   tabs.push({ key: "attivita", label: t("lavoro.elementpage.tabActivity") });
   if (ty === "business_request" || d.impact || d.application || ty === "review" || ty === "requirement" || ty === "exception")
@@ -103,7 +105,7 @@ function tabsFor(t: T, d: ElementDetail): Tab[] {
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "valutazioni", label: t("lavoro.elementpage.tabReviews") });
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "requisiti", label: t("lavoro.elementpage.tabRequirements") });
   if (ty === "business_request" || ty === "project") tabs.push({ key: "piano", label: t("lavoro.elementpage.tabPlan") });
-  if (ty === "project") tabs.push({ key: "wp", label: t("progetti.tab.workPackages") }, { key: "milestone", label: t("progetti.tab.milestones") });
+  if (ty === "project") tabs.push({ key: "wp", label: tn.plural("work_package", t("progetti.tab.workPackages")) }, { key: "milestone", label: t("progetti.tab.milestones") });
   if (ty === "business_request") tabs.push({ key: "stato", label: t("lavoro.elementpage.tabStatus") });
   if (ty === "logical_asset") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabProduction") });
   if (ty === "application") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabServices") });
@@ -135,6 +137,7 @@ function defaultTab(d: ElementDetail, tabs: Tab[], memberId?: string): TabKey {
 
 export function ElementPage({ refKey, tab, onTab }: { refKey: string; tab?: TabKey; onTab: (t: TabKey) => void }) {
   const t = useT();
+  const tn = useTypeNames();
   const detail = useQuery({ queryKey: ["element", refKey], queryFn: () => api.element(refKey) });
   const d = detail.data;
   const narrow = useNarrow();
@@ -148,7 +151,7 @@ export function ElementPage({ refKey, tab, onTab }: { refKey: string; tab?: TabK
   if (detail.isPending) return <Loading className="px-4 py-6 text-muted md:px-7" />;
   if (!d) return <div className="px-4 py-6 md:px-7"><ErrorNote error={detail.error} /></div>;
   if (d.element.type === "page" && d.element.key) return <Navigate to="/documenti/$key" params={{ key: d.element.key }} replace />;
-  const tabs = tabsFor(t, d);
+  const tabs = tabsFor(t, d, tn);
   const active = tabs.find((x) => x.key === tab)?.key ?? defaultTab(d, tabs, me.data?.active_tenant?.member_id);
   return (
     <article className="flex min-w-0 flex-1 flex-col" aria-label={`${d.element.key} ${d.element.title}`}>
@@ -454,7 +457,7 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
     case "panoramica":
       return (
         <Suspense fallback={<Loading className="text-muted" />}>
-          <ProjectOverview refKey={key} onTab={onTab} />
+          {el.type === "program" ? <ProgramOverview refKey={key} /> : <ProjectOverview refKey={key} onTab={onTab} />}
         </Suspense>
       );
     case "wp":

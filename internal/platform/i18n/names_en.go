@@ -424,4 +424,16 @@ var namesEn = map[string]string{
 	"Avanzamento del progetto (%)": "Project progress (%)",
 	"Work package ancora aperti":   "Work packages still open",
 	"Milestone in ritardo":         "Late milestones",
+	// Progetti, passo 4: SAL, deliverable, referente del fornitore.
+	"SAL":                           "Progress claim",
+	"Contatto del fornitore":        "Supplier contact",
+	"Ciclo di vita del SAL":         "Progress claim lifecycle",
+	"Ciclo di vita del deliverable": "Deliverable lifecycle",
+	"Dichiarato":                    "Submitted",
+	"Ritirato":                      "Withdrawn",
+	"Da consegnare":                 "To deliver",
+	"Consegnato":                    "Delivered",
+	"Accettato":                     "Accepted",
+	"Respinto":                      "Rejected",
+	"Annullato":                     "Cancelled",
 }

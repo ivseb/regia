@@ -13,8 +13,8 @@ import (
 	"regia/internal/platform/db"
 )
 
-// types sono i tipi del modulo, tutti nello spazio PRJ. deliverable è solo un tipo per ora
-// (passo 4): niente processo, niente logica.
+// types sono i tipi del modulo, tutti nello spazio PRJ. «Work package» e «SAL» sono i nomi di
+// partenza (lessico del 2026-11-26), rinominabili in Configurazione → Tipi come gli altri.
 var types = []struct{ key, name, plural string }{
 	{TypeProgram, "Programma", "Programmi"},
 	{TypeProject, "Progetto", "Progetti"},
@@ -23,6 +23,7 @@ var types = []struct{ key, name, plural string }{
 	{TypeMilestone, "Milestone", "Milestone"},
 	{TypeDeliverable, "Deliverable", "Deliverable"},
 	{TypeChangeRequest, "Change request", "Change request"},
+	{TypeProgressClaim, "SAL", "SAL"},
 }
 
 // roles sono i ruoli per oggetto che il progetto usa; quelli che esistono già (demand,
@@ -34,6 +35,8 @@ var roles = []struct{ key, name string }{
 	{"pmo", "PMO"},
 	{"operations_manager", "Responsabile operations"},
 	{"team_lead", "Referente del team"},
+	{RoleSupplierContact, "Contatto del fornitore"},
+	{RoleProgramManager, "Program manager"},
 }
 
 // defaultProjectRoles: business owner, PM e sponsor obbligatori ed ereditati dalla richiesta;
