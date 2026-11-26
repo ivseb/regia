@@ -1,5 +1,5 @@
-// Progetti (replica/progetti.md, passi 1, 2 e 3): client delle API /projects, /plan-items,
-// /plan-phases, /plan-baselines e /change-requests. Il progetto è un elemento di tipo «project» dello spazio PRJ; il piano ha fasi,
+// Progetti (replica/progetti.md, passi 1-4): client delle API /projects, /plan-items,
+// /plan-phases, /plan-baselines, /change-requests, /progress-claims, /deliverables e /programs. Il progetto è un elemento di tipo «project» dello spazio PRJ; il piano ha fasi,
 // work package (agile, a cascata o fornitore), attività dei work package a cascata, milestone e
 // dipendenze fs/ss/ff con ritardo in giorni lavorativi. I numeri (avanzamento pesato, ritardi,
 // dipendenze bloccate, budget, scostamenti dalla baseline) li calcola il server con una sola
@@ -81,14 +81,34 @@ export type PlanItem = {
   deps: Dep[];
   /** 0..100. */
   progress: number;
-  progress_source: "epics" | "activities" | "declared" | "state" | "none";
+  progress_source: "epics" | "activities" | "claims" | "deliverables" | "declared" | "state" | "none";
   team_capacity: number;
   /** Baseline in vigore: la voce c'era? Date e scostamento della fine (giorni lavorativi, + = più tardi). */
   in_baseline: boolean;
   baseline_start: string | null;
   baseline_end: string | null;
   variance_days: number | null;
+  /** Fornitore (passo 4): il contatto del fornitore dichiara i SAL; SAL da accettare; deliverable non annullati e accettati. */
+  supplier_updates: boolean;
+  claims_pending: number;
+  deliverables: number;
+  deliverables_accepted: number;
+  /** Work package: altri progetti sulla stessa applicazione nello stesso periodo. */
+  conflicts?: Conflict[];
   /** L'attore non può leggere la voce: restano date, avanzamento e dipendenze. */
+  restricted?: boolean;
+};
+
+/** Un altro work package che tocca la stessa applicazione nello stesso periodo. project e
+ * work_package sono null se l'attore non li legge (restricted: «un altro progetto»). */
+export type Conflict = {
+  item_id: string;
+  application_id: string;
+  application: string;
+  project: Ref | null;
+  work_package: Ref | null;
+  start: string | null;
+  end: string | null;
   restricted?: boolean;
 };
 
@@ -130,8 +150,16 @@ export type Budget = {
 };
 
 /** Codici del semaforo: milestone_late, past_target, over_tolerance, budget_over_tolerance (rosso);
- * work_package_late, blocked, missing_roles (giallo). */
-export type Reason = "milestone_late" | "past_target" | "over_tolerance" | "budget_over_tolerance" | "work_package_late" | "blocked" | "missing_roles";
+ * work_package_late, blocked, conflicts, missing_roles (giallo). */
+export type Reason =
+  | "milestone_late"
+  | "past_target"
+  | "over_tolerance"
+  | "budget_over_tolerance"
+  | "work_package_late"
+  | "blocked"
+  | "conflicts"
+  | "missing_roles";
 
 export type Numbers = {
   progress: number;
@@ -164,6 +192,9 @@ export type Numbers = {
   next_milestone: ItemRef | null;
   late: ItemRef[];
   blocked: Blocked[];
+  /** SAL dichiarati dai fornitori e da accettare; conflitti con altri progetti sulle stesse applicazioni. */
+  claims_pending: number;
+  conflicts: Conflict[];
   /** Change request da inviare o in approvazione. */
   open_change_requests: number;
   risks: ItemRef[];
@@ -278,6 +309,140 @@ export type ChangeRequest = {
   can_submit: boolean;
 };
 
+// ---- Fornitori (passo 4): contratto, SAL e deliverable del work package in modo «fornitore».
+
+export type ClaimStatus = "submitted" | "accepted" | "rejected" | "withdrawn";
+
+/** SAL: percentuale complessiva raggiunta e/o importo del periodo. value è l'avanzamento che porta. */
+export type Claim = {
+  id: string;
+  key: string;
+  number: number;
+  period_end: string | null;
+  percent: number | null;
+  /** null per chi non vede gli importi. */
+  amount_cents: number | null;
+  status: ClaimStatus;
+  state: string;
+  note: string;
+  submitted_by: string | null;
+  submitted_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string;
+  value: number | null;
+};
+
+export type DeliverableStatus = "pending" | "delivered" | "accepted" | "rejected" | "cancelled";
+
+export type Deliverable = {
+  id: string;
+  key: string;
+  title: string;
+  status: DeliverableStatus;
+  state: string;
+  due: string | null;
+  milestone_id: string | null;
+  milestone: string | null;
+  delivered_by: string | null;
+  delivered_at: string | null;
+  delivery_note: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string;
+  restricted?: boolean;
+};
+
+export type SupplierView = {
+  item_id: string;
+  delivery_mode: DeliveryMode;
+  supplier_id: string | null;
+  supplier: string | null;
+  /** Il contatto del fornitore dichiara i SAL e consegna i deliverable (altrimenti solo il PM). */
+  supplier_updates: boolean;
+  contacts: { id: string; name: string }[];
+  /** amount_cents è null per chi non vede gli importi. */
+  contract: { ref: string | null; amount_cents: number | null; currency: string };
+  claims: Claim[];
+  deliverables: Deliverable[];
+  progress: number;
+  progress_source: PlanItem["progress_source"];
+  /** Somma degli importi dei SAL accettati (null per chi non vede gli importi). */
+  accepted_cents: number | null;
+  amounts_visible: boolean;
+  /** Contratto, contatto, accettazione, nuovi deliverable. */
+  can_edit: boolean;
+  /** Dichiarare un SAL, consegnare un deliverable. */
+  can_declare: boolean;
+};
+
+/** contact_id "" toglie il contatto; clear_amount toglie l'importo del contratto. */
+export type SupplierPatch = Partial<{
+  supplier_updates: boolean;
+  contract_ref: string;
+  contract_amount_cents: number;
+  clear_amount: boolean;
+  contract_currency: string;
+  contact_id: string;
+}>;
+
+export type NewClaim = { percent?: number; amount_cents?: number; period_end?: string; note?: string; accept?: boolean };
+export type Decision = { outcome: "accepted" | "rejected"; note?: string };
+
+// ---- Programmi (passo 4): progetti con un obiettivo comune, numeri aggregati e roadmap.
+
+export type RoadmapMilestone = {
+  id: string;
+  key: string;
+  title: string;
+  date: string | null;
+  baseline_date: string | null;
+  state_category: string;
+  contractual: boolean;
+  days_late: number;
+  restricted?: boolean;
+};
+
+export type ProgramProject = {
+  id: string;
+  key: string;
+  title: string;
+  state: string;
+  state_category: string;
+  project_manager: string | null;
+  progress: number;
+  signal: Signal;
+  reasons: Reason[];
+  start: string | null;
+  end: string | null;
+  baseline_start: string | null;
+  baseline_end: string | null;
+  variance_days: number | null;
+  work_packages: number;
+  late: number;
+  conflicts: number;
+  claims_pending: number;
+  milestones: RoadmapMilestone[];
+};
+
+/** Pagina del programma: numbers sono quelli di computeNumbers su tutte le voci dei progetti. */
+export type ProgramView = { program: Ref; state: string; numbers: Numbers; projects: ProgramProject[]; can_edit: boolean };
+
+export type ProgramSummary = {
+  id: string;
+  key: string;
+  title: string;
+  state: string;
+  state_category: string;
+  projects: number;
+  progress: number;
+  signal: Signal;
+  start: string | null;
+  end: string | null;
+  next_milestone: ItemRef | null;
+  late: number;
+};
+
 export type NewProject = { title: string; body_text?: string; template?: Template; start?: string; end?: string; program_id?: string; no_phases?: boolean };
 
 export type DepInput = { ref: string; kind?: DepKind; lag?: number };
@@ -324,12 +489,16 @@ function veil<T extends { title: string; restricted?: boolean }>(x: T): T {
 }
 const veilHead = (h: ProjectHead): ProjectHead => ({ ...h, requests: h.requests.map(veil) });
 const veilCR = (c: ChangeRequest): ChangeRequest => ({ ...c, deviations: c.deviations.map(veil) });
+const veilConflict = (c: Conflict): Conflict => (c.restricted ? { ...c, project: { id: "", key: "", title: tr("progetti.restricted") } } : c);
+const veilItem = (it: PlanItem): PlanItem => ({ ...veil(it), ...(it.conflicts ? { conflicts: it.conflicts.map(veilConflict) } : {}) });
+const veilSupplier = (v: SupplierView): SupplierView => ({ ...v, deliverables: v.deliverables.map(veil) });
 const veilNumbers = (n: Numbers): Numbers => ({
   ...n,
   late: n.late.map(veil),
   blocked: n.blocked.map((b) => ({ ...b, item: veil(b.item), waits_on: veil(b.waits_on) })),
   next_milestone: n.next_milestone && veil(n.next_milestone),
   over_tolerance: n.over_tolerance.map(veil),
+  conflicts: (n.conflicts ?? []).map(veilConflict),
 });
 
 export const projectsApi = {
@@ -339,7 +508,7 @@ export const projectsApi = {
     })),
   create: (p: NewProject) => call<Element>("POST", "/projects", p),
   plan: (ref: string) =>
-    call<ProjectPlan>("GET", `/projects/${q(ref)}/plan`).then((p) => ({ ...p, project: veilHead(p.project), items: p.items.map(veil) })),
+    call<ProjectPlan>("GET", `/projects/${q(ref)}/plan`).then((p) => ({ ...p, project: veilHead(p.project), items: p.items.map(veilItem) })),
   overview: (ref: string) =>
     call<Overview>("GET", `/projects/${q(ref)}/overview`).then((o) => ({ ...o, project: veilHead(o.project), numbers: veilNumbers(o.numbers) })),
   autoPlan: (ref: string, replan = false, from?: string) => call<{ changes: Change[] }>("POST", `/projects/${q(ref)}/plan/auto`, { replan, ...(from ? { from } : {}) }),
@@ -347,7 +516,7 @@ export const projectsApi = {
   createPhase: (ref: string, p: { name: string; gate_enabled?: boolean; ordinal?: number }) => call<Phase>("POST", `/projects/${q(ref)}/phases`, p),
   attachRequest: (ref: string, request: string) => call<Element>("POST", `/projects/${q(ref)}/requests`, { request }),
 
-  item: (id: string) => call<PlanItemView>("GET", `/plan-items/${q(id)}`),
+  item: (id: string) => call<PlanItemView>("GET", `/plan-items/${q(id)}`).then((it) => ({ ...it, ...veilItem(it) })),
   updateItem: (id: string, p: ItemPatch) => call<PlanItemView>("PATCH", `/plan-items/${q(id)}`, p),
   deleteItem: (id: string) => call<void>("DELETE", `/plan-items/${q(id)}`),
   schedule: (id: string, start: string, end: string, cascade = true) => call<{ changes: Change[] }>("PUT", `/plan-items/${q(id)}/schedule`, { start, end, cascade }),
@@ -373,6 +542,31 @@ export const projectsApi = {
   submitChangeRequest: (id: string, reason = "") => call<ChangeRequest>("POST", `/change-requests/${q(id)}/submit`, { reason }),
   withdrawChangeRequest: (id: string) => call<ChangeRequest>("POST", `/change-requests/${q(id)}/withdraw`, {}),
 
+  // Fornitori (passo 4).
+  supplier: (id: string) => call<SupplierView>("GET", `/plan-items/${q(id)}/supplier`).then(veilSupplier),
+  updateSupplier: (id: string, p: SupplierPatch) => call<SupplierView>("PUT", `/plan-items/${q(id)}/supplier`, p).then(veilSupplier),
+  createClaim: (id: string, c: NewClaim) => call<SupplierView>("POST", `/plan-items/${q(id)}/claims`, c).then(veilSupplier),
+  decideClaim: (claimId: string, d: Decision) => call<SupplierView>("POST", `/progress-claims/${q(claimId)}/decision`, d).then(veilSupplier),
+  createDeliverable: (id: string, d: { title: string; due?: string; milestone_id?: string }) =>
+    call<SupplierView>("POST", `/plan-items/${q(id)}/deliverables`, d).then(veilSupplier),
+  deliver: (deliverableId: string, note = "") => call<SupplierView>("POST", `/deliverables/${q(deliverableId)}/deliver`, { note }).then(veilSupplier),
+  decideDeliverable: (deliverableId: string, d: Decision) => call<SupplierView>("POST", `/deliverables/${q(deliverableId)}/decision`, d).then(veilSupplier),
+
+  // Programmi (passo 4).
+  programs: (closed = false) =>
+    call<{ items: ProgramSummary[] }>("GET", `/programs${closed ? "?closed=true" : ""}`).then((r) => ({
+      items: r.items.map((p) => ({ ...p, next_milestone: p.next_milestone && veil(p.next_milestone) })),
+    })),
+  createProgram: (p: { title: string; body_text?: string }) => call<Element>("POST", "/programs", p),
+  program: (ref: string) =>
+    call<ProgramView>("GET", `/programs/${q(ref)}`).then((v) => ({
+      ...v,
+      numbers: veilNumbers(v.numbers),
+      projects: v.projects.map((p) => ({ ...p, milestones: p.milestones.map(veil) })),
+    })),
+  /** Mette il progetto in un programma ("" lo toglie). */
+  setProgram: (ref: string, program: string) => call<{ program: Ref | null }>("PUT", `/projects/${q(ref)}/program`, { program }),
+
   settings: () => call<ProjectSettings>("GET", "/projects/settings"),
   saveSettings: (s: Partial<Omit<ProjectSettings, "available_roles" | "can_edit">>) => call<ProjectSettings>("PUT", "/projects/settings", s),
 
@@ -391,4 +585,7 @@ export const projectKeys = {
   baselines: (ref: string) => ["project-baselines", ref] as const,
   changeRequests: (ref: string) => ["project-change-requests", ref] as const,
   ofRequest: (ref: string) => ["request-project", ref] as const,
+  supplier: (id: string) => ["plan-item-supplier", id] as const,
+  programs: ["programs"] as const,
+  program: (ref: string) => ["program", ref] as const,
 };

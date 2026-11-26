@@ -1,13 +1,13 @@
-# Progetti: piano del PM, modi di consegna, Panoramica, baseline
+# Progetti: piano del PM, modi di consegna, Panoramica, baseline, fornitori, programmi
 
-Passi 1, 2 e 3 di `replica/progetti.md`. La richiesta dice perché e quanto, il progetto come, quando e chi, l'epic cosa fa un team. Le due viste si toccano nel work package.
+Passi 1, 2, 3 e 4 di `replica/progetti.md`. La richiesta dice perché e quanto, il progetto come, quando e chi, l'epic cosa fa un team. Le due viste si toccano nel work package.
 
 - Backend: `internal/modules/projects` (modulo `projects`), motore del Gantt in `internal/modules/planning/graph.go`, epic dei work package in `internal/modules/work/epic.go`.
 - API: `internal/api/projects.go`.
-- Migrazioni: `migrations/0077_progetti.sql`, `migrations/0078_progetti_baseline.sql` (passo 3).
-- Interfaccia: `web/src/projectsApi.ts`, `web/src/pages/progetti/`, schede in `web/src/pages/ElementPage.tsx`.
-- Testi: area `progetti` (`progetti.ts` schede, `progetti-pm.ts` Panoramica, tabelle ed elenco, `progetti-piano.ts` Gantt, `progetti-voci.ts` scheda della voce e impostazioni, `progetti-baseline.ts` baseline, tolleranze e change request) ed `errors-progetti.ts`.
-- Test: `internal/itest/progetti_test.go`, `internal/itest/progetti_baseline_test.go`, `internal/modules/projects/baseline_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts`.
+- Migrazioni: `migrations/0077_progetti.sql`, `migrations/0078_progetti_baseline.sql` (passo 3), `migrations/0079_progetti_fornitori.sql` (passo 4).
+- Interfaccia: `web/src/projectsApi.ts`, `web/src/pages/progetti/` (passo 4: `SupplierPanel.tsx`, `ProgramOverview.tsx`), schede in `web/src/pages/ElementPage.tsx`.
+- Testi: area `progetti` (`progetti.ts` schede, `progetti-pm.ts` Panoramica, tabelle ed elenco, `progetti-piano.ts` Gantt, `progetti-voci.ts` scheda della voce e impostazioni, `progetti-baseline.ts` baseline, tolleranze e change request, `progetti-fornitori.ts` SAL, deliverable e conflitti, `progetti-programmi.ts` programmi, `lavoro-progetti.ts` notifiche) ed `errors-progetti.ts`.
+- Test: `internal/itest/progetti_test.go`, `internal/itest/progetti_baseline_test.go`, `internal/itest/progetti_fornitori_test.go`, `internal/modules/projects/baseline_test.go`, `internal/modules/projects/supplier_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts` (passo 4: `progetti-fornitori.spec.ts`).
 
 ## Dati
 
@@ -16,12 +16,15 @@ Passi 1, 2 e 3 di `replica/progetti.md`. La richiesta dice perché e quanto, il 
 | `ext_project` | modello (`agile`, `waterfall`, `mixed`, `contract`), programma, tolleranze del progetto (facoltative: `null` = quelle del tenant) |
 | `project_requests` | richieste confluite: una richiesta sta in un solo progetto, un progetto ne raccoglie più d'una |
 | `plan_phases` | fasi del piano con `gate_enabled`, `gate_status` (`open`, `pending`, `approved`, `rejected`) e la richiesta di approvazione |
-| `ext_work_package` | progetto, fase, `delivery_mode` (`agile`, `waterfall`, `supplier`), applicazione, team, fornitore (`ict_provider`), stima, peso manuale, impatto d'origine, `supplier_updates` (passo 4) |
+| `ext_work_package` | progetto, fase, `delivery_mode` (`agile`, `waterfall`, `supplier`), applicazione, team, fornitore (`ict_provider`), stima, peso manuale, impatto d'origine; passo 4: `supplier_updates` (il contatto del fornitore dichiara da sé), contratto (`contract_ref`, `contract_amount_cents`, `contract_currency`) |
 | `ext_plan_activity` | attività di un work package a cascata, con stima e percentuale corrente |
 | `ext_milestone` | c'era dallo schema di partenza senza uso: aggiunti progetto, fase, work package, flag contrattuale; `actual_date` è il giorno in cui è raggiunta, `baseline_date` è la data nella baseline in vigore |
 | `ext_plan_progress` | avanzamento dichiarato storicizzato (voce, giorno, percentuale, nota, chi) |
 | `project_settings`, `project_roles` | impostazioni del tenant (con le tolleranze `tolerance_days`, `tolerance_budget_pct`) e ruoli del progetto sopra `stakeholder_roles` |
 | `plan_baselines`, `plan_baseline_items` | baseline immutabili: numero per progetto, inviluppo, budget aggregato, chi e quando, change request d'origine; voci con chiave, titolo, fase, date e stima |
+| `ext_progress_claim` | SAL (tipo `progress_claim`, figlio del work package): numero, data di riferimento, percentuale complessiva e/o importo del periodo, `status` (`submitted`, `accepted`, `rejected`, `withdrawn`), chi dichiara, chi decide e quando, nota della decisione |
+| `ext_deliverable` | deliverable (tipo `deliverable`, figlio del work package): scadenza in `elements.due_at`, milestone facoltativa, `status` (`pending`, `delivered`, `accepted`, `rejected`, `cancelled`), consegna e decisione |
+| `plan_conflicts` | conflitti già segnalati al team owner: una riga per coppia di work package (a < b) sulla stessa applicazione; sparisce quando il conflitto si risolve |
 | `ext_change_request` | change request: `status` (`draft`, `pending`, `approved`, `rejected`, `withdrawn`), `origin` (`tolerance`, `manual`), motivo, baseline di partenza e nuova, piano proposto (`proposal`), scostamenti (`deviations`, senza titoli), motivo del blocco |
 
 - **Date:** stanno in `elements.start_at` / `due_at`; la milestone ha inizio e fine uguali.
@@ -31,13 +34,13 @@ Passi 1, 2 e 3 di `replica/progetti.md`. La richiesta dice perché e quanto, il 
 ## Tipi e provisioning
 
 `projects.Provision` (dopo `work.Provision`) crea:
-- lo spazio `PRJ` con i tipi `program`, `project`, `work_package`, `plan_activity`, `milestone`, `deliverable` e `change_request`. `deliverable` è solo un tipo, senza processo;
+- lo spazio `PRJ` con i tipi `program`, `project`, `work_package`, `plan_activity`, `milestone`, `deliverable`, `change_request` e `progress_claim` («SAL»). «Work package» e «SAL» sono i nomi di partenza, rinominabili in Configurazione → Tipi; la `0079` dà a tutti i tipi dei progetti il nome inglese (`system_type_label_en`);
 - i processi di partenza (`starter/*.json`);
-- i ruoli per oggetto mancanti (`operations_manager` è nuovo);
+- i ruoli per oggetto mancanti (`operations_manager`; passo 4: `supplier_contact` «Contatto del fornitore», `program_manager`);
 - i ruoli del progetto di default: business owner, PM e sponsor obbligatori ed ereditati; PMO facoltativo ed ereditato; responsabile operations facoltativo;
 - le politiche di approvazione «Cancello di fase» e «Change request» del tipo `project`, che fanno decidere lo sponsor.
 
-Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`, `plan-items`, `plan-phases`, `plan-baselines`, `change-requests`). Il modello «Persona sola / home lab» lo accende.
+Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`, `plan-items`, `plan-phases`, `plan-baselines`, `change-requests`, `progress-claims`, `deliverables`, `programs`). Il modello «Persona sola / home lab» lo accende.
 
 **Tenant esistenti:** `regia tenant provision --slug X` crea i tipi e porta nei progetti le richieste già approvate (migrazione dei dati del passo 1). Ogni impatto diventa un work package agile con applicazione, team, stima, date, dipendenze fine→inizio e uno stato che segue quello dell'impatto. L'impatto resta in `ext_impact` e il work package lo cita (`impact_id`), quindi nessun dato si perde. Una richiesta già in un progetto non si tocca.
 
@@ -94,7 +97,7 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 - **A cascata:** attività con avanzamento dichiarato, `POST /plan-items/{id}/progress {percent, note, date?}`, storicizzato in `ext_plan_progress`. Lo storico si legge con `GET`.
   - L'avanzamento del work package è la media delle attività pesata sulle stime.
   - Le ore si registrano sull'attività (e sul work package) dal blocco «Ore lavorate» della colonna laterale (`WorkSections.tsx`), in `work_logs`. Registra l'assegnatario o chi ha `element.write`: lo spazio PRJ non ha un team.
-- **Fornitore:** per ora solo `delivery_mode = supplier`, il fornitore del catalogo (`supplier_id`, tipo `ict_provider`) e l'avanzamento dichiarato dal PM. SAL, deliverable e accesso esterno sono il passo 4 (`supplier_updates` è già nel dato).
+- **Fornitore (passo 4):** `delivery_mode = supplier`, il fornitore del catalogo (`supplier_id`, tipo `ict_provider`), contratto, contatto del fornitore, SAL e deliverable: vedi «Fornitori» sotto.
 
 **Import dal timesheet aziendale:** i profili CSV dei costi (`import_profiles`, target `cost_entries`) riconoscono l'elemento per chiave, quindi anche un'attività (`PRJ-12`); lo verifica il test.
 - Le ore come `work_logs` non hanno ancora un target di import: il vincolo di `import_profiles.target` prevede `work_logs`, ma `finance/importcsv.go` gestisce solo `cost_entries`.
@@ -105,14 +108,15 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 
 `projects.Numbers` (e `computeNumbers` sul piano già caricato) è l'unica funzione dei numeri. La usano la Panoramica (`GET /projects/{ref}/overview`), l'elenco (`GET /projects`) e i fatti del tipo `project` (`avanzamento`, `work_package_aperti`, `milestone_in_ritardo`).
 
-- **Avanzamento:** media dei work package non annullati, pesata sul peso manuale o, senza, sulla stima in giorni. Un work package senza stima pesa la media delle stime degli altri. Con `progress_method = equal` pesano tutti uguale. Una voce chiusa vale 100.
+- **Avanzamento:** work package del fornitore: ultimo SAL accettato (percentuale complessiva, oppure importi accettati fin lì sul valore del contratto, al massimo 100), poi i deliverable accettati sul totale, poi la percentuale dichiarata (`progress_source` `claims` | `deliverables` | `declared`). Progetto: media dei work package non annullati, pesata sul peso manuale o, senza, sulla stima in giorni. Un work package senza stima pesa la media delle stime degli altri. Con `progress_method = equal` pesano tutti uguale. Una voce chiusa vale 100.
 - **Date:** previsione (inviluppo), baseline in vigore, effettive (primo avvio, ultima chiusura).
 - **Baseline:** scostamento della fine in giorni lavorativi (`variance_days`) e in percentuale della durata di baseline (`variance_pct`); milestone oltre la tolleranza (`over_tolerance`), fine oltre la tolleranza (`end_over_tolerance`); scostamento del costo (forecast, altrimenti approvato) rispetto alla baseline (`budget_variance_pct`), solo a chi vede il budget.
 - **Milestone e ritardi:** prossima milestone; work package e milestone in ritardo, in giorni lavorativi.
 - **Dipendenze bloccate:** `waiting` se la voce doveva partire e il predecessore non è chiuso, `violated` se le date non rispettano la dipendenza.
+- **Fornitori e componenti condivisi:** SAL da accettare (`claims_pending`), conflitti con altri progetti (`conflicts`, con i limiti di visibilità del piano).
 - **Altro:** change request da inviare o in approvazione (figlie del progetto), rischi collegati al progetto o alle sue richieste, ruoli obbligatori mancanti, margine sulla scadenza normativa (o desiderata) delle richieste.
 - **Budget:** quello delle richieste confluite (`finance.RequestTotals`, solo aggregati), finché il passo 5 non lo sposta sul progetto.
-- **Semaforo:** rosso con una milestone in ritardo, la previsione oltre la scadenza o uno scostamento oltre le tolleranze (date o budget); giallo con work package in ritardo, dipendenze bloccate o ruoli mancanti.
+- **Semaforo:** rosso con una milestone in ritardo, la previsione oltre la scadenza o uno scostamento oltre le tolleranze (date o budget); giallo con work package in ritardo, dipendenze bloccate, conflitti con altri progetti o ruoli mancanti.
 
 ## Cancelli di fase
 
@@ -133,13 +137,49 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
   - Le fasi del processo di partenza (`change_request_standard.json`: Da inviare, In approvazione, Approvata, Respinta, Ritirata) le muove il modulo; a mano si può solo ritirare.
 - **Visibilità:** baseline e change request seguono quella del singolo elemento come il piano: le voci che l'attore non legge arrivano senza titolo, le change request che non legge non compaiono, il budget della baseline compare solo a chi vede quello del progetto.
 
-## Punti di aggancio per i passi 4-5
+## Fornitori (passo 4)
 
-- **Fornitori:** `supplier_updates` sul work package; SAL e deliverable (tipo `deliverable`) arriveranno al passo 4.
-- **Conflitti tra progetti:** `ext_work_package.application_id` è indicizzato per il carico del componente.
+- **Chi fa cosa** (decisione 3 del 2026-11-26: il fornitore entra come utente esterno oppure no, per work package):
+  - chi pianifica il progetto imposta contratto, contatto (`supplier_contact` sul work package) e `supplier_updates`, crea i deliverable, accetta o respinge SAL e consegne;
+  - con `supplier_updates` acceso il contatto dichiara i SAL e consegna i deliverable; spento, lo fa il PM, che può anche inserire e accettare insieme un SAL ricevuto fuori da Regia (`accept: true`).
+  - Il contatto del fornitore può essere un membro senza permessi sul tenant: legge il work package come stakeholder, e il ruolo passa ai SAL e ai deliverable del work package (`shareContacts`), quindi vede solo quelli. Aggiorna date e stima del suo work package come il referente del team (`canUpdateItem`).
+- **SAL:** percentuale complessiva (non scende sotto l'ultima accettata) e/o importo del periodo; uno solo da accettare alla volta. Respingere chiede il motivo. Il SAL accettato entra nello storico dell'avanzamento del work package (`ext_plan_progress`, nota «SAL n»). Il processo di partenza (`progress_claim_standard.json`: Dichiarato, Accettato, Respinto, Ritirato) lo muove il modulo; a mano si ritira solo un SAL dichiarato.
+- **Deliverable:** da consegnare → consegnato → accettato, oppure respinto (torna da consegnare, con il motivo). Processo `deliverable_standard.json`; a mano solo «Annulla».
+- **Importi** (contratto, SAL, totale accettato): solo a chi pianifica il progetto e al contatto del fornitore.
+- **Avvisi:** SAL dichiarato e deliverable consegnato arrivano ai PM del progetto (notifica `project`, eventi `claim_submitted`, `deliverable_delivered`).
+
+| API | cosa |
+| --- | --- |
+| `GET /plan-items/{id}/supplier` | contratto, contatti, SAL, deliverable, avanzamento, permessi (`can_edit`, `can_declare`, `amounts_visible`) |
+| `PUT /plan-items/{id}/supplier` | `supplier_updates`, `contract_ref`, `contract_amount_cents` (o `clear_amount`), `contract_currency`, `contact_id` ("" lo toglie) |
+| `POST /plan-items/{id}/claims` | nuovo SAL `{percent?, amount_cents?, period_end?, note?, accept?}` |
+| `POST /progress-claims/{id}/decision` | `{outcome: accepted \| rejected, note}` |
+| `POST /plan-items/{id}/deliverables` | nuovo deliverable `{title, due?, milestone_id?}` |
+| `POST /deliverables/{id}/deliver`, `POST /deliverables/{id}/decision` | consegna e decisione |
+
+## Componenti condivisi (passo 4)
+
+- **Conflitto:** due work package aperti con date, di progetti diversi e aperti, sulla stessa applicazione e con periodi sovrapposti (`conflictsSQL`). Il piano li porta sul work package (`conflicts`), la Panoramica nei numeri; l'altro progetto non leggibile diventa «un altro progetto».
+- **Avviso al team owner:** dopo ogni spostamento salvato, la creazione di un work package e il cambio di applicazione (`notifyConflicts`), il referente e i membri del team owner dell'applicazione (`ext_application.owner_team_id`) ricevono una notifica `project` (evento `conflict`) sull'applicazione, una volta per coppia (`plan_conflicts`). Il payload porta le chiavi dei progetti, non i titoli. Quando il conflitto si risolve la coppia si dimentica.
+
+## Programmi (passo 4)
+
+- Il programma è un elemento `program` dello spazio PRJ; i progetti lo citano in `ext_project.program_id`. Lo crea chi scrive gli elementi (ne diventa `program_manager`); un progetto entra o esce dal programma con `PUT /projects/{ref}/program {program}` (chi pianifica il progetto o governa il programma).
+- **Numeri:** `computeNumbers` sulle voci di tutti i progetti leggibili messe in un solo piano, con il metodo e le tolleranze del tenant; il semaforo è il peggiore tra quello aggregato e quelli dei progetti (che contano anche baseline e budget); il budget è la somma di quelli dei progetti nella stessa valuta.
+- **Roadmap:** per progetto date previste e di baseline, scostamento, milestone con data di baseline, contrattuale e ritardo.
+
+| API | cosa |
+| --- | --- |
+| `GET /programs`, `POST /programs` | elenco con i numeri, nuovo programma `{title, body_text?}` |
+| `GET /programs/{ref}` | numeri aggregati, progetti con numeri e milestone, `can_edit` |
+| `PUT /projects/{ref}/program` | mette il progetto nel programma (`""` lo toglie) |
+
+## Punti di aggancio per il passo 5
+
 - **Budget e status report:** restano sulla richiesta. `BudgetFunc` del servizio è il punto da spostare sul progetto.
-- **Roadmap e «In arrivo dai progetti»:** non ancora; i work package proposti sono quelli nella fase «Proposto».
+- **«In arrivo dai progetti»:** non ancora; i work package proposti sono quelli nella fase «Proposto».
+- **Carico del componente in Architettura:** i conflitti stanno nel piano e nella notifica; la scheda dell'applicazione non mostra ancora i progetti che la toccano (`conflictsOf` e l'indice su `ext_work_package.application_id` sono il punto di partenza).
 
 ## Nota sulla visibilità
 
-Il piano, la baseline e le change request applicano i limiti del singolo elemento (`visibility.go`): una voce non leggibile resta con date, avanzamento e dipendenze ma senza titolo, persone e collegamenti. I ruoli del §5 (fornitore esterno) arrivano al passo 4.
+Il piano, la baseline, le change request, i conflitti e il programma applicano i limiti del singolo elemento (`visibility.go`): una voce non leggibile resta con date, avanzamento e dipendenze ma senza titolo, persone e collegamenti. Il fornitore esterno vede il suo work package, i suoi SAL e i suoi deliverable perché ne è stakeholder.

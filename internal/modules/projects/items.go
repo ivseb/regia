@@ -69,6 +69,11 @@ func (s *Service) CreateItem(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 	if err := engine.AddActivity(ctx, tx, p.ID, actor.MemberID, "plan", "item", map[string]any{"item": el.Key, "kind": in.Kind}, nil); err != nil {
 		return nil, err
 	}
+	if in.Kind == TypeWorkPackage {
+		if err := s.notifyConflicts(ctx, tx, actor, p.ID); err != nil {
+			return nil, err
+		}
+	}
 	return s.ItemView(ctx, tx, actor, el.ID)
 }
 
@@ -464,6 +469,11 @@ func (s *Service) UpdateItem(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP, Payload: toMap(in)}); err != nil {
 		return nil, err
 	}
+	if el.TypeKey == TypeWorkPackage && in.ApplicationID != nil {
+		if err := s.notifyConflicts(ctx, tx, actor, projectID); err != nil {
+			return nil, err
+		}
+	}
 	return s.ItemView(ctx, tx, actor, el.ID)
 }
 
@@ -582,6 +592,10 @@ func (s *Service) saveChanges(ctx context.Context, tx pgx.Tx, actor engine.Actor
 	}
 	if len(changes) == 0 {
 		return nil
+	}
+	// Date nuove: conflitti con altri progetti sulle stesse applicazioni (passo 4).
+	if err := s.notifyConflicts(ctx, tx, actor, projectID); err != nil {
+		return err
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "plan.update", EntityType: TypeProject, EntityID: projectID,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"changes": changes}}); err != nil {

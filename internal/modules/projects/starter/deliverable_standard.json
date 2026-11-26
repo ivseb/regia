@@ -1,0 +1,21 @@
+{
+  "format": "regia.process/v1",
+  "key": "deliverable_standard",
+  "name": "Ciclo di vita del deliverable",
+  "description": "Pacchetto di partenza: il deliverable lo consegna il referente del fornitore (se il work package lo prevede) o il PM, e lo accetta o lo respinge il PM; un deliverable respinto torna da consegnare. Le fasi le muove il modulo dei progetti: a mano si può solo annullare.",
+  "type": "deliverable",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da consegnare", "category": "todo", "color": "#6B7280"},
+      {"name": "Consegnato", "category": "in_progress", "color": "#3550C8"},
+      {"name": "Accettato", "category": "done", "color": "#1F2937"},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Da consegnare",
+    "transitions": [
+      {"from": ["Da consegnare", "Consegnato"], "to": "Annullato", "label": "Annulla"}
+    ]
+  }
+}

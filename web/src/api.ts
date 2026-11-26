@@ -526,7 +526,9 @@ export type NotificationKind = "mention" | "comment" | "role" | "phase" | "appro
   // Budget gerarchico: avviso prima della chiusura del periodo.
   | "budget"
   // Timesheet: settimane da approvare, esito, riapertura.
-  | "timesheet";
+  | "timesheet"
+  // Progetti: conflitti sulle applicazioni, SAL e consegne dei fornitori da accettare.
+  | "project";
 export type Notification = {
   id: string;
   kind: NotificationKind;

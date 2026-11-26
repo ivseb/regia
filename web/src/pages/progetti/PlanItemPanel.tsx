@@ -10,6 +10,8 @@ import { Select, EntitySelect } from "../../select";
 import { ErrorNote, Loading, SectionTitle, date } from "../../ui";
 import { ProgressBar } from "../work-ui";
 import { useT } from "../../i18n/react";
+import { SupplierPanel } from "./SupplierPanel";
+import { useConflictText } from "./shared";
 import { projectKeys, projectsApi, type Dep, type DepKind, type DeliveryMode, type ItemPatch, type PlanItemView, type ProgressEntry } from "../../projectsApi";
 
 const MODES: DeliveryMode[] = ["agile", "waterfall", "supplier"];
@@ -17,6 +19,7 @@ const DEP_KINDS: DepKind[] = ["fs", "ss", "ff"];
 
 export function PlanItemPanel({ refKey }: { refKey: string }) {
   const t = useT();
+  const conflictText = useConflictText();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: projectKeys.item(refKey), queryFn: () => projectsApi.item(refKey) });
   const item = q.data;
@@ -123,6 +126,30 @@ export function PlanItemPanel({ refKey }: { refKey: string }) {
         )}
         {item.kind === "milestone" && <MilestoneRows item={item} busy={busy} onDate={(d) => run(() => projectsApi.schedule(item.id, d, d))} onContractual={(v) => patch({ contractual: v })} />}
       </section>
+
+      {wp && (item.conflicts?.length ?? 0) > 0 && (
+        <section className="flex flex-col gap-2 border-l-2 border-flag pl-3" aria-label={t("progetti.fornitori.conflict.itemTitle")} data-testid="wp-conflitti">
+          <h3 className="label m-0 text-flag">
+            <span aria-hidden="true">▲ </span>
+            {t("progetti.fornitori.conflict.itemTitle")}
+          </h3>
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {item.conflicts!.map((c) => (
+              <li key={c.item_id + c.application_id}>
+                {conflictText(c)}
+                {c.work_package && !c.restricted && (
+                  <>
+                    {" · "}
+                    <Link to="/e/$key" params={{ key: c.work_package.key }} className="font-mono text-[11.5px] text-accent no-underline hover:underline">{c.work_package.key}</Link>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {wp && item.delivery_mode === "supplier" && <SupplierPanel itemId={item.id} projectKey={item.project.key} />}
 
       {wp && item.delivery_mode === "agile" && (
         <section className="flex flex-col gap-3" aria-label={t("progetti.voci.epic.title")}>

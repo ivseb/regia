@@ -55,7 +55,13 @@ func (s *Service) limitPlan(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 			it.AssigneeID, it.Assignee = nil, nil
 			it.Impact = nil
 			it.Epics = []Ref{}
+			if it.Conflicts != nil {
+				it.Conflicts = []Conflict{}
+			}
 			continue
+		}
+		if err := limitConflicts(ctx, tx, r, it.Conflicts); err != nil {
+			return err
 		}
 		if it.Impact != nil {
 			if ok, err := r.can(ctx, tx, it.Impact.ID); err != nil {
