@@ -12,7 +12,7 @@ import { BulkBar, SelectBox, useSelection } from "./BulkBar";
 import { fmtPoints, workApi, type MyItem } from "../workApi";
 import { useT } from "../i18n/react";
 import type { Key } from "../i18n/core";
-import { useTypeNames } from "../typesApi";
+import { useTypeNames, useWorkTypes } from "../typesApi";
 import { useStateName } from "../stateLabels";
 import { TagChips } from "../tags";
 
@@ -22,11 +22,12 @@ const ORDER = ["in_progress", "todo", "done", "cancelled", ""];
 export function MyWork() {
   const t = useT();
   const tn = useTypeNames();
+  const workTypes = useWorkTypes();
   const stateName = useStateName();
   const mine = useQuery({ queryKey: ["work", "me"], queryFn: workApi.mine });
   const [logFor, setLogFor] = useState<MyItem | null>(null);
   const [showDone, setShowDone] = useState(false);
-  const workIds = useMemo(() => (mine.data?.items ?? []).filter((i) => ["epic", "story", "task", "bug"].includes(i.type)).map((i) => i.id), [mine.data]);
+  const workIds = useMemo(() => (mine.data?.items ?? []).filter((i) => workTypes.isWork(i.type)).map((i) => i.id), [mine.data, workTypes]);
   const selection = useSelection(workIds);
   const groups = useMemo(() => {
     const byCat = new Map<string, Map<string, MyItem[]>>();
@@ -66,7 +67,7 @@ export function MyWork() {
                   <ul className="m-0 flex list-none flex-col p-0">
                     {items.map((it) => (
                       <li key={it.id} className={`flex min-h-[44px] flex-wrap items-center gap-x-2.5 gap-y-0.5 border-b border-hair py-1.5 ${selection.sel.has(it.id) ? "bg-sel" : ""}`}>
-                        {["epic", "story", "task", "bug"].includes(it.type) ? (
+                        {workTypes.isWork(it.type) ? (
                           <SelectBox id={it.id} checked={selection.sel.has(it.id)} label={t("lavoro.mywork.select", { key: it.key })} onToggle={selection.toggle} />
                         ) : (
                           <span className="size-4 shrink-0" aria-hidden="true" />
@@ -92,7 +93,7 @@ export function MyWork() {
                           )}
                           {it.due && <span className="tabular">{t("lavoro.mywork.dueBy", { date: date(it.due) })}</span>}
                           <span>{tn.name(it.type, it.type_name)}</span>
-                          {["story", "task", "bug", "epic"].includes(it.type) && it.category !== "done" && (
+                          {workTypes.isWork(it.type) && it.category !== "done" && (
                             <button className="inline-flex min-h-6 min-w-6 items-center justify-center px-1 text-accent underline" onClick={() => setLogFor(it)}>
                               {t("lavoro.mywork.hours")}
                             </button>

@@ -125,7 +125,7 @@ func TestTipiConfigurabili(t *testing.T) {
 	for _, body := range []map[string]any{
 		{"name": "  "}, {"color": "#ff0000"}, {"icon": "Icona Strana!"},
 		{"labels": map[string]any{"English": map[string]any{"name": "x"}}},
-		{"archived": true}, // tipo di sistema
+		// un tipo di sistema senza elementi si archivia (vedi TestTipiLavoro)
 	} {
 		admin.do("PATCH", "/api/v1/types/business_request", body, http.StatusUnprocessableEntity)
 	}

@@ -23,6 +23,7 @@ export function useKindLabel(): (k: CreateKind) => string {
         case "document": return tn.name("page", tr("tastiera.kind.document"));
         case "risk": return tn.name("risk", tr("tastiera.kind.risk"));
         case "incident": return tn.name("incident", tr("tastiera.kind.incident"));
+        default: return tn.name(k, k); // un tipo del lavoro creato dall'editor
       }
     },
     [tn.name],
@@ -30,17 +31,20 @@ export function useKindLabel(): (k: CreateKind) => string {
 }
 
 /** Tipi di elemento che «+ Crea» sa creare, nell'ordine in cui compaiono. */
-export type CreateKind = "request" | "story" | "task" | "bug" | "epic" | "document" | "risk" | "incident";
+export type CreateKind = string;
 export const WORK_KINDS: CreateKind[] = ["story", "task", "bug", "epic"];
+const OTHER_KINDS = ["request", "document", "risk", "incident"];
+/** Un tipo creabile del lavoro (di sistema o creato dall'editor): tutto ciò che non è richiesta, documento, rischio o incidente. */
+export const isWorkKind = (k: CreateKind | undefined) => !!k && !OTHER_KINDS.includes(k);
 
 /** I tipi che la persona può creare: permessi, moduli accesi e profilo di menu (il revisore non crea). */
-export function createKinds(me: Me | undefined | null): CreateKind[] {
+export function createKinds(me: Me | undefined | null, workKinds: CreateKind[] = WORK_KINDS): CreateKind[] {
   const perms = me?.active_tenant?.permissions ?? [];
   if (!me?.active_tenant || isAuditorProfile(me)) return [];
   const has = (...ps: string[]) => perms.includes("*") || ps.some((p) => perms.includes(p));
   const out: CreateKind[] = [];
   if (has("element.write") && pathVisible(me, "/richieste/nuova")) out.push("request");
-  if (has("element.write") && moduleOn(me, "work")) out.push(...WORK_KINDS);
+  if (has("element.write") && moduleOn(me, "work")) out.push(...workKinds);
   if (moduleOn(me, "knowledge")) out.push("document");
   if (moduleOn(me, "grc") && has("risk.admin")) out.push("risk");
   if (moduleOn(me, "grc") && has("element.write", "incident.manage")) out.push("incident");

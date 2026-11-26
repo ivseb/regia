@@ -44,7 +44,7 @@ func (s *Service) Spaces(ctx context.Context, tx pgx.Tx, actor engine.Actor) ([]
 	rows, err := tx.Query(ctx, `
 		select s.id, s.key, s.name, t.id, t.name, t.lead_id, m.display_name,
 		       (select count(*) from elements e join element_types et on et.tenant_id = e.tenant_id and et.id = e.type_id
-		         where e.space_id = s.id and e.deleted_at is null and e.resolved_at is null and et.key = any($1))::int,
+		         where e.space_id = s.id and e.deleted_at is null and e.resolved_at is null and et.module = 'work' and et.key not in ('sprint', 'epic'))::int,
 		       sp.key, sp.title
 		from teams t
 		join spaces s on s.tenant_id = t.tenant_id and s.id = t.delivery_space_id
@@ -56,7 +56,7 @@ func (s *Service) Spaces(ctx context.Context, tx pgx.Tx, actor engine.Actor) ([]
 			join options o on o.tenant_id = e.tenant_id and o.id = e.state_id and o.category = 'in_progress'
 			where e.space_id = s.id and e.deleted_at is null order by e.start_at nulls last limit 1) sp on true
 		where not t.archived and not s.archived
-		order by t.name`, itemTypes)
+		order by t.name`)
 	if err != nil {
 		return nil, nil, err
 	}

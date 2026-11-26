@@ -137,11 +137,23 @@ func (s *Service) Settings(ctx context.Context, tx pgx.Tx, spaceID string) (*Boa
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-	if len(st.Types) == 0 {
-		st.Types = slices.Clone(itemTypes)
+	// Solo tipi del lavoro non archiviati: un tipo archiviato sparisce dalla board.
+	current, err := workItemTypes(ctx, tx, true)
+	if err != nil {
+		return nil, err
 	}
-	if !slices.Contains(swimlanes, st.Swimlane) {
+	if len(st.Types) == 0 {
+		if st.Types, err = workItemTypes(ctx, tx, false); err != nil {
+			return nil, err
+		}
+	} else {
+		st.Types = slices.DeleteFunc(st.Types, func(t string) bool { return !slices.Contains(current, t) })
+	}
+	if !slices.Contains(swimlanes, st.Swimlane) || (st.Swimlane == "epic" && !slices.Contains(current, TypeEpic)) {
 		st.Swimlane = "none"
+	}
+	if typeArchived(ctx, tx, TypeSprint) {
+		st.NoSprint = true // senza il tipo sprint la board è un flusso continuo
 	}
 	if st.DoneDays <= 0 {
 		st.DoneDays = 14
@@ -173,7 +185,7 @@ func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Acto
 	if ok, err := canManageSpace(ctx, tx, actor, sp.ID); err != nil || !ok {
 		return nil, firstErr(err, engine.ErrForbidden)
 	}
-	if err := validateSettings(&in, true); err != nil {
+	if err := validateSettings(ctx, tx, &in, true); err != nil {
 		return nil, err
 	}
 	if err := s.storeSettings(ctx, tx, sp.ID, sp.Key, sp.Name, in); err != nil {
@@ -189,12 +201,16 @@ func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Acto
 
 // validateSettings controlla la configurazione (nomi, WIP, swimlane, tipi). requirePhases: ogni
 // colonna di una board personalizzata deve avere almeno una fase (la bozza può essere incompleta).
-func validateSettings(in *BoardSettings, requirePhases bool) error {
+func validateSettings(ctx context.Context, tx pgx.Tx, in *BoardSettings, requirePhases bool) error {
 	if !slices.Contains(swimlanes, in.Swimlane) {
 		return engine.InvalidCode("validation.work.swimlane_invalid", "swimlane", "swimlane: none, assignee, epic o priority")
 	}
+	allowed, err := workItemTypes(ctx, tx, true)
+	if err != nil {
+		return err
+	}
 	for _, t := range in.Types {
-		if !slices.Contains([]string{TypeStory, TypeTask, TypeBug, TypeEpic}, t) {
+		if !slices.Contains(allowed, t) {
 			return engine.InvalidValue("types", "tipo %q non ammesso sulla board", t)
 		}
 	}
@@ -313,11 +329,13 @@ type Board struct {
 	Members    map[string]string `json:"members"`
 	Epics      map[string]Ref    `json:"epics"`
 	Priorities []Option          `json:"priorities"`
-	Sprints    []SprintRef       `json:"sprints"`
-	Sprint     *SprintRef        `json:"sprint"` // sprint mostrato (nil = tutto lo spazio)
-	CanManage  bool              `json:"can_manage"`
-	CanWork    bool              `json:"can_work"`
-	Truncated  bool              `json:"truncated"`
+	// CreateTypes: i tipi della board che «Nuovo elemento» propone, nell'ordine della board.
+	CreateTypes []CreateType `json:"create_types"`
+	Sprints     []SprintRef  `json:"sprints"`
+	Sprint      *SprintRef   `json:"sprint"` // sprint mostrato (nil = tutto lo spazio)
+	CanManage   bool         `json:"can_manage"`
+	CanWork     bool         `json:"can_work"`
+	Truncated   bool         `json:"truncated"`
 	// Paged: la board legge tutto lo spazio (nessuno sprint) ed è paginata per colonna: Cards ha le
 	// prime PageSize card di ogni colonna (nell'ordine della board) e Columns[].Count è il totale esatto.
 	// Le successive si chiedono con col e after (BoardQuery).
@@ -362,10 +380,14 @@ func (s *Service) GetBoard(ctx context.Context, tx pgx.Tx, actor engine.Actor, s
 	if err != nil {
 		return nil, err
 	}
-	if bq.Swimlane != "" && slices.Contains(swimlanes, bq.Swimlane) {
+	if bq.Swimlane != "" && slices.Contains(swimlanes, bq.Swimlane) && (bq.Swimlane != "epic" || !typeArchived(ctx, tx, TypeEpic)) {
 		st.Swimlane = bq.Swimlane
 	}
-	out := &Board{Space: Ref{Key: sp.Key, Title: sp.Name}, Team: sp.Team, Settings: st, Lanes: []Lane{}, Cards: []Card{},
+	createTypes, err := createTypesOf(ctx, tx, st.Types)
+	if err != nil {
+		return nil, err
+	}
+	out := &Board{CreateTypes: createTypes, Space: Ref{Key: sp.Key, Title: sp.Name}, Team: sp.Team, Settings: st, Lanes: []Lane{}, Cards: []Card{},
 		Members: map[string]string{}, Epics: map[string]Ref{}, Priorities: []Option{}}
 	if out.CanManage, err = canManageSpace(ctx, tx, actor, sp.ID); err != nil {
 		return nil, err

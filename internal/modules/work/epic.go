@@ -401,7 +401,14 @@ func (s *Service) DeliveryOf(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 			return nil, err
 		}
 		out.Progress = &p
-	case TypeStory, TypeTask, TypeBug:
+	case TypeSprint:
+		out.Kind = "sprint"
+	default:
+		if ok, err := matchesTypes(ctx, tx, el.TypeID, el.TypeKey, []string{anyItem}); err != nil {
+			return nil, err
+		} else if !ok {
+			break
+		}
 		out.Kind = "item"
 		var sp Ref
 		err := tx.QueryRow(ctx, `select ss.key || '-' || e.number, e.title, coalesce(o.name, '') from relations r
@@ -415,8 +422,6 @@ func (s *Service) DeliveryOf(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
-	case TypeSprint:
-		out.Kind = "sprint"
 	}
 	if out.Kind != "none" && out.Kind != "request" && out.Kind != "impact" {
 		out.Space = &Ref{Key: el.SpaceKey}

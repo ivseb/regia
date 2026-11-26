@@ -396,6 +396,8 @@ type Backlog struct {
 	CanManage  bool              `json:"can_manage"`
 	CanWork    bool              `json:"can_work"`
 	Truncated  bool              `json:"truncated"`
+	// CreateTypes: i tipi che «Nuovo elemento» propone (quelli della board dello spazio).
+	CreateTypes []CreateType `json:"create_types"`
 	// Solo con la paginazione (BacklogPage.Limit > 0): totale del backlog senza sprint (calcolato
 	// con Offset = 0) e se dopo la pagina ce ne sono altri. Gli elementi degli sprint sono sempre tutti.
 	BacklogTotal int  `json:"backlog_total,omitempty"`
@@ -442,7 +444,18 @@ func (s *Service) GetBacklogPage(ctx context.Context, tx pgx.Tx, actor engine.Ac
 		out.Sprints = append(out.Sprints, v)
 		sprintIDs = append(sprintIDs, x.ID)
 	}
-	tids, err := typeIDs(ctx, tx, itemTypes)
+	itemKeys, err := workItemTypes(ctx, tx, false)
+	if err != nil {
+		return nil, err
+	}
+	bst, err := s.Settings(ctx, tx, sp.ID)
+	if err != nil {
+		return nil, err
+	}
+	if out.CreateTypes, err = createTypesOf(ctx, tx, bst.Types); err != nil {
+		return nil, err
+	}
+	tids, err := typeIDs(ctx, tx, itemKeys)
 	if err != nil {
 		return nil, err
 	}

@@ -13,9 +13,10 @@ import { Dialog } from "./pages/work-ui";
 import { Select } from "./select";
 import { ErrorNote } from "./ui";
 import { useT } from "./i18n/react";
-import { tr } from "./i18n/core";
+import { getLang, tr } from "./i18n/core";
 import type { Key } from "./i18n/core";
-import { createKinds, GO_KEYS, SHORTCUT, useKindLabel, WORK_KINDS, type CreateKind, type ItemAction } from "./shortcuts";
+import { createKinds, GO_KEYS, isWorkKind, SHORTCUT, useKindLabel, type CreateKind, type ItemAction } from "./shortcuts";
+import { useWorkTypes } from "./typesApi";
 
 // ---------------------------------------------------------------------
 // Pannello «?»
@@ -117,13 +118,14 @@ export function CreateDialog({ kind, onClose, notify }: { kind?: CreateKind; onC
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const me = useQuery({ queryKey: ["me"], queryFn: api.me }).data;
-  const base = useMemo(() => createKinds(me), [me]);
-  const spacesWork = useQuery({ queryKey: ["work", "spaces"], queryFn: workApi.spaces, enabled: base.some((k) => WORK_KINDS.includes(k)), staleTime: 60_000 });
+  const workTypes = useWorkTypes();
+  const base = useMemo(() => createKinds(me, workTypes.creatable), [me, workTypes.creatable]);
+  const spacesWork = useQuery({ queryKey: ["work", "spaces"], queryFn: workApi.spaces, enabled: base.some(isWorkKind), staleTime: 60_000 });
   const spacesDoc = useQuery({ queryKey: ["kb", "spaces"], queryFn: kb.spaces, enabled: base.includes("document"), staleTime: 60_000 });
   const workSpaces = spacesWork.data?.items ?? [];
   const docSpaces = (spacesDoc.data?.items ?? []).filter((s) => s.rights.write);
   // Senza uno spazio in cui scrivere il tipo non si offre (una volta noto).
-  const kinds = base.filter((k) => (WORK_KINDS.includes(k) ? !spacesWork.isSuccess || workSpaces.length > 0 : k === "document" ? !spacesDoc.isSuccess || docSpaces.length > 0 : true));
+  const kinds = base.filter((k) => (isWorkKind(k) ? !spacesWork.isSuccess || workSpaces.length > 0 : k === "document" ? !spacesDoc.isSuccess || docSpaces.length > 0 : true));
   const [chosen, setChosen] = useState<CreateKind | undefined>(kind);
   const current: CreateKind | undefined = chosen && kinds.includes(chosen) ? chosen : (defaultKind(path, kinds) ?? kinds[0]);
   const [title, setTitle] = useState("");
@@ -135,7 +137,7 @@ export function CreateDialog({ kind, onClose, notify }: { kind?: CreateKind; onC
     titleRef.current?.focus();
   }, [current]);
 
-  const isWork = !!current && WORK_KINDS.includes(current);
+  const isWork = isWorkKind(current);
   const spaceList = isWork ? workSpaces.map((s) => ({ key: s.key, name: `${s.key} · ${s.name}` })) : current === "document" ? docSpaces.map((s) => ({ key: s.key, name: s.name })) : [];
   const spaceKey = spaceList.some((s) => s.key === space) ? space : (spaceList[0]?.key ?? "");
   const hasDescription = current === "request" || current === "risk" || current === "incident";
@@ -151,13 +153,6 @@ export function CreateDialog({ kind, onClose, notify }: { kind?: CreateKind; onC
           const el = await api.createRequest({ title: name, description: text });
           return { key: el.key };
         }
-        case "story":
-        case "task":
-        case "bug":
-        case "epic": {
-          const el: Element = await workApi.createItem(spaceKey, { type: current, title: name });
-          return { key: el.key };
-        }
         case "document": {
           const p = await kb.createPage(spaceKey, { title: name });
           return { key: p.page.key, document: true };
@@ -171,7 +166,9 @@ export function CreateDialog({ kind, onClose, notify }: { kind?: CreateKind; onC
           return { key: r.key };
         }
       }
-      throw new Error("kind");
+      if (!isWorkKind(current)) throw new Error("kind");
+      const el: Element = await workApi.createItem(spaceKey, { type: current!, title: name });
+      return { key: el.key };
     },
     onSuccess: (r) => {
       qc.invalidateQueries();
@@ -269,12 +266,14 @@ export async function copyLink(key: string): Promise<boolean> {
   }
 }
 
-/** «Assegna a me»: vale per gli elementi di lavoro (epic, story, task, bug). */
+/** «Assegna a me»: vale per gli elementi di lavoro (i tipi del modulo work, sprint escluso). */
 export async function assignToMe(key: string, ctx: Pick<ItemContext, "me" | "qc" | "notify">): Promise<boolean> {
   const memberId = ctx.me?.active_tenant?.member_id;
   const detail = await ctx.qc.fetchQuery({ queryKey: ["element", key], queryFn: () => api.element(key), staleTime: 30_000 });
   const mine = detail.element.assignee_id === memberId;
-  if (!memberId || !["epic", "story", "task", "bug"].includes(detail.element.type)) {
+  const names = ctx.qc.getQueryData<{ items: { key: string; module: string }[] }>(["type-names", getLang()])?.items;
+  const isWork = names ? names.some((n) => n.key === detail.element.type && n.module === "work" && n.key !== "sprint") : ["epic", "story", "task", "bug"].includes(detail.element.type);
+  if (!memberId || !isWork) {
     ctx.notify(tr("tastiera.assignNo", { key }));
     return false;
   }

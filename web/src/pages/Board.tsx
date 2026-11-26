@@ -20,7 +20,7 @@ import { BulkBar, SelectBox, useSelection } from "./BulkBar";
 import { Dialog, MineChip, PriorityDot, ReadOnlyBanner, SpacePicker, TimeLogForm, useSpaces } from "./work-ui";
 import { Avatar } from "../moduleIcon";
 import { phaseTint, typeTint } from "../tinte";
-import { TYPE_MARK, fmtMinutes, fmtPoints, lastSprint, rememberSprint, workApi, type Board as BoardData, type BoardSettings, type Card, type MoveInput, type Swimlane } from "../workApi";
+import { TYPE_MARK, fmtMinutes, fmtPoints, lastSprint, rememberSprint, workApi, type Board as BoardData, type BoardSettings, type Card, type CreateType, type MoveInput, type Swimlane } from "../workApi";
 import { useTypeNames } from "../typesApi";
 import { useT } from "../i18n/react";
 import { useStateName } from "../stateLabels";
@@ -251,7 +251,7 @@ export function Board({ search, onSearch }: { search: BoardSearch; onSearch: (s:
         <label className="flex items-center gap-2">
           <span className="label text-muted">{t("lavoro.board.swimlane")}</span>
           <Select className="field w-auto py-1.5" value={swimlane} onChange={(e) => onSearch({ ...search, spazio: current, corsie: e.target.value as Swimlane })}>
-            {SWIMLANES.map(([v, l]) => (
+            {SWIMLANES.filter(([v]) => v !== "epic" || b?.settings.types.includes("epic") || swimlane === "epic").map(([v, l]) => (
               <option key={v} value={v}>
                 {v === "epic" ? tn.name("epic", t(l)) : t(l)}
               </option>
@@ -1001,19 +1001,24 @@ function SettingsDialog({ spaceKey, b, onClose }: { spaceKey: string; b: BoardDa
   );
 }
 
-const NEW_TYPES: [string, string][] = [
-  ["story", "Story"],
-  ["task", "Task"],
-  ["bug", "Bug"],
-  ["epic", "Epic"],
+// Ripiego se il server non manda i tipi creabili (versione vecchia): i quattro di sempre.
+const LEGACY_TYPES: CreateType[] = [
+  { key: "story", name: "Story", parents: ["epic"], points: true },
+  { key: "task", name: "Task", parents: ["story", "bug"], points: false },
+  { key: "bug", name: "Bug", parents: ["epic", "story"], points: true },
+  { key: "epic", name: "Epic", parents: [], points: false },
 ];
 
-export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { spaceKey: string; b: Pick<BoardData, "epics" | "sprint">; onClose: () => void; onCreated: (key: string) => void; sprint?: string; sprints?: { key: string; title: string }[] }) {
+export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { spaceKey: string; b: Pick<BoardData, "epics" | "sprint" | "create_types">; onClose: () => void; onCreated: (key: string) => void; sprint?: string; sprints?: { key: string; title: string }[] }) {
   const t = useT();
   const qc = useQueryClient();
   const me = useMe().data?.active_tenant?.member_id ?? "";
   const tn = useTypeNames();
-  const [type, setType] = useState("story");
+  // I tipi proposti sono quelli della board (epic solo se la board lo mostra); il primo è quello di partenza.
+  const types = b.create_types?.length ? b.create_types : LEGACY_TYPES;
+  const [picked, setType] = useState("");
+  const cur = types.find((c) => c.key === picked) ?? types[0];
+  const type = cur?.key ?? "story";
   const [title, setTitle] = useState("");
   const [parent, setParent] = useState("");
   const [points, setPoints] = useState("");
@@ -1030,7 +1035,7 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
         parent: parent || undefined,
         assignee_id: mine ? me : undefined,
         sprint: sprints ? (type !== "epic" && sprintPick ? sprintPick : undefined) : inSprint && target && type !== "epic" ? target : undefined,
-        fields: points && (type === "story" || type === "bug") ? { punti: Number(points.replace(",", ".")) } : undefined,
+        fields: points && cur?.points ? { punti: Number(points.replace(",", ".")) } : undefined,
       }),
     onSuccess: (el) => {
       qc.invalidateQueries({ queryKey: ["work"] });
@@ -1049,7 +1054,7 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
         }}
       >
         <div role="radiogroup" aria-label={t("lavoro.board.type")} className="flex self-start border border-hair text-[12.5px]">
-          {NEW_TYPES.map(([k, l]) => [k, tn.name(k, l)] as const).map(([k, l]) => (
+          {types.map((c) => [c.key, tn.name(c.key, c.name)] as const).map(([k, l]) => (
             <button type="button" key={k} role="radio" aria-checked={type === k} className={`px-3 py-1 ${type === k ? "bg-fg text-bg" : "text-muted"}`} onClick={() => setType(k)}>
               {l}
             </button>
@@ -1059,7 +1064,7 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
           <span className="label">{t("lavoro.board.titleLabel")}</span>
           <input className="field" required maxLength={500} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
-        {(type === "story" || type === "bug") && epics.length > 0 && (
+        {cur?.parents.includes("epic") && epics.length > 0 && (
           <label className="flex flex-col gap-1">
             {/* i18n-ok: nome del tipo, riserva se la configurazione non è ancora arrivata */}
             <span className="label text-muted">{tn.name("epic", "Epic")}</span>
@@ -1073,13 +1078,13 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
             </Select>
           </label>
         )}
-        {type === "task" && (
+        {cur && cur.parents.length > 0 && !cur.parents.includes("epic") && (
           <label className="flex flex-col gap-1">
             <span className="label text-muted">{t("lavoro.board.storyKey")}</span>
             <input className="field font-mono" placeholder={`${spaceKey}-12`} value={parent} onChange={(e) => setParent(e.target.value.toUpperCase())} />
           </label>
         )}
-        {(type === "story" || type === "bug") && (
+        {cur?.points && (
           <label className="flex flex-col gap-1">
             <span className="label text-muted">{t("lavoro.board.pointsLabel")}</span>
             <input className="field w-24 font-mono" inputMode="decimal" value={points} onChange={(e) => setPoints(e.target.value)} />

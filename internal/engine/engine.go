@@ -97,6 +97,7 @@ type TransitionEvent struct {
 type Hooks struct {
 	Guards          map[string]GuardFunc
 	Facts           map[string][]FactsFunc // per chiave del tipo; più moduli possono contribuire
+	ModuleFacts     map[string][]FactsFunc // per modulo: valgono per i tipi del modulo senza fatti propri (anche creati dopo)
 	AfterTransition []func(ctx context.Context, tx pgx.Tx, ev TransitionEvent) error
 	Actions         map[string]actionDef // azioni delle regole registrate dai moduli
 }
@@ -146,7 +147,7 @@ type Service struct {
 }
 
 func New() *Service {
-	return &Service{hooks: Hooks{Guards: map[string]GuardFunc{}, Facts: map[string][]FactsFunc{}, Actions: map[string]actionDef{}}}
+	return &Service{hooks: Hooks{Guards: map[string]GuardFunc{}, Facts: map[string][]FactsFunc{}, ModuleFacts: map[string][]FactsFunc{}, Actions: map[string]actionDef{}}}
 }
 
 // Guard registra un controllo usabile nel campo "requires" delle transizioni.

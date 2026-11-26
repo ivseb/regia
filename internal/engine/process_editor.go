@@ -73,6 +73,7 @@ var assignRole = ActionSchema{
 type editorRegistry struct {
 	mu       sync.RWMutex
 	facts    map[string][]FactInfo // per chiave del tipo
+	modFacts map[string][]FactInfo // per modulo, per i tipi senza fatti propri
 	actions  []ActionSchema
 	starters []Bundle
 }
@@ -96,6 +97,27 @@ func (s *Service) DescribeFacts(typeKey string, facts ...FactInfo) {
 			f.Kind = "text"
 		}
 		r.facts[typeKey] = append(r.facts[typeKey], f)
+	}
+}
+
+// DescribeFactsModule descrive i fatti di FactsModule: valgono per i tipi del modulo che non
+// hanno una descrizione propria (DescribeFacts).
+func (s *Service) DescribeFactsModule(module string, facts ...FactInfo) {
+	r := &s.editor
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.modFacts == nil {
+		r.modFacts = map[string][]FactInfo{}
+	}
+	for _, f := range facts {
+		f.Key = strings.ToLower(f.Key)
+		if f.Source == "" {
+			f.Source = "modulo"
+		}
+		if f.Kind == "" {
+			f.Kind = "text"
+		}
+		r.modFacts[module] = append(r.modFacts[module], f)
 	}
 }
 
@@ -287,6 +309,9 @@ func (s *Service) availableFactsIt(ctx context.Context, tx pgx.Tx, actor Actor, 
 
 	s.editor.mu.RLock()
 	described := slices.Clone(s.editor.facts[t.Key])
+	if len(described) == 0 {
+		described = slices.Clone(s.editor.modFacts[t.Module])
+	}
 	s.editor.mu.RUnlock()
 	for _, f := range described {
 		add(f)

@@ -340,7 +340,7 @@ func (s *Service) PreviewBoard(ctx context.Context, tx pgx.Tx, actor engine.Acto
 		if len(st.Types) == 0 {
 			st.Types = pub.Types
 		}
-		if err := validateSettings(st, false); err != nil {
+		if err := validateSettings(ctx, tx, st, false); err != nil {
 			return nil, err
 		}
 	default:
@@ -359,10 +359,13 @@ func (s *Service) SaveDraft(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 		return nil, firstErr(err, engine.ErrForbidden)
 	}
 	if len(in.Types) == 0 {
-		in.Types = slices.Clone(itemTypes)
+		var err error
+		if in.Types, err = workItemTypes(ctx, tx, false); err != nil {
+			return nil, err
+		}
 	}
 	in.Custom = true
-	if err := validateSettings(&in, false); err != nil {
+	if err := validateSettings(ctx, tx, &in, false); err != nil {
 		return nil, err
 	}
 	raw, _ := json.Marshal(in)

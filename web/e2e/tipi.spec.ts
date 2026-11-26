@@ -17,7 +17,7 @@ test("tipi: rinomina con anteprima, il nome nuovo compare in ⌘K", async ({ pag
     await expect(page.getByRole("region", { name: "Architettura" })).toContainText("di sistema");
     await page.getByRole("region", { name: "Architettura" }).getByRole("button", { name: /capability/ }).click();
     const scheda = page.getByRole("complementary", { name: "Scheda del tipo" });
-    await expect(scheda.getByRole("button", { name: "Archivia il tipo" })).toHaveCount(0); // tipo di sistema
+    await expect(scheda.getByRole("button", { name: "Archivia il tipo" })).toBeDisabled(); // tipo di sistema con elementi
 
     await scheda.getByLabel("Nome", { exact: true }).fill(newName);
     await scheda.getByLabel("Nome al plurale").fill(`${newName} (plurale)`);

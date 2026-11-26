@@ -191,7 +191,7 @@ func auditType(ctx context.Context, tx pgx.Tx, actor Actor, action, id string, p
 }
 
 // UpdateType modifica i testi e l'aspetto di un tipo. Chiave e modulo non cambiano mai; un tipo
-// di sistema si rinomina ma non si archivia.
+// di sistema si archivia solo se non ha elementi.
 func (s *Service) UpdateType(ctx context.Context, tx pgx.Tx, actor Actor, key string, in TypeUpdate) (*TypeConfig, error) {
 	if err := requireTypesAdmin(actor); err != nil {
 		return nil, err
@@ -281,10 +281,17 @@ func (s *Service) UpdateType(ctx context.Context, tx pgx.Tx, actor Actor, key st
 		}
 	}
 	if in.Archived != nil {
-		if system {
-			return nil, invalid("archived", "un tipo di sistema non si archivia: si può rinominare")
-		}
 		if *in.Archived {
+			// Un tipo di sistema si archivia solo se non ha elementi; uno creato dall'azienda sempre.
+			// Si può sempre ripristinare.
+			var n int
+			if err := tx.QueryRow(ctx, "select count(*)::int from elements where type_id = $1 and deleted_at is null", id).Scan(&n); err != nil {
+				return nil, err
+			}
+			if system && n > 0 {
+				return nil, InvalidParams("validation.type.archive_in_use", "archived", map[string]any{"count": n},
+					"il tipo ha %d elementi: non si archivia finché ce ne sono", n)
+			}
 			if _, err := tx.Exec(ctx, "update element_types set archived_at = coalesce(archived_at, now()), updated_at = now() where id = $1", id); err != nil {
 				return nil, err
 			}
@@ -364,6 +371,26 @@ func (s *Service) CreateType(ctx context.Context, tx pgx.Tx, actor Actor, in Typ
 		return nil, err
 	}
 	copied := map[string]any{"type": in.Key, "module": in.Module}
+	if in.Module == "work" {
+		// Il tipo del lavoro nasce ammesso negli spazi dei team e arriva sulle board già pubblicate
+		// con un elenco esplicito di tipi (quelle senza elenco usano i tipi correnti).
+		if _, err := tx.Exec(ctx, `insert into space_types (tenant_id, space_id, type_id)
+			select app_tenant(), t.delivery_space_id, $1 from teams t where t.delivery_space_id is not null
+			on conflict do nothing`, id); err != nil {
+			return nil, err
+		}
+		for _, tbl := range []string{"views", "board_drafts"} {
+			where := "system_key like 'board:%'"
+			if tbl == "board_drafts" {
+				where = "true"
+			}
+			if _, err := tx.Exec(ctx, `update `+tbl+` set settings = jsonb_set(settings, '{types}', (settings->'types') || to_jsonb($1::text))
+				where `+where+` and jsonb_typeof(settings->'types') = 'array' and jsonb_array_length(settings->'types') > 0
+				and not (settings->'types') ? $1::text`, in.Key); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if src != nil {
 		copied["from"] = src.Key
 		if _, err := tx.Exec(ctx, `insert into type_fields (tenant_id, id, type_id, field_id, space_id, required, default_value, ordinal, is_private, show_in_list, condition)
@@ -372,7 +399,7 @@ func (s *Service) CreateType(ctx context.Context, tx pgx.Tx, actor Actor, in Typ
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx, `insert into space_types (tenant_id, space_id, type_id)
-			select app_tenant(), space_id, $1 from space_types where type_id = $2`, id, src.ID); err != nil {
+			select app_tenant(), space_id, $1 from space_types where type_id = $2 on conflict do nothing`, id, src.ID); err != nil {
 			return nil, err
 		}
 		if err := s.copyPhases(ctx, tx, actor, in.Key, in.Name, src); err != nil {

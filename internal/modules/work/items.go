@@ -25,15 +25,7 @@ type ItemInput struct {
 	Top        bool           `json:"top"` // in cima al backlog invece che in fondo
 }
 
-// parentTypes: gerarchia epic > story > task. Il bug sta sotto un epic o una story, o da solo.
-var parentTypes = map[string][]string{
-	TypeEpic:  {},
-	TypeStory: {TypeEpic},
-	TypeTask:  {TypeStory, TypeBug},
-	TypeBug:   {TypeEpic, TypeStory},
-}
-
-// CreateItem crea epic, story, task o bug nello spazio, in fondo (o in cima) all'ordine.
+// CreateItem crea un elemento di lavoro (epic, story, task, bug o un tipo del modulo work) nello spazio, in fondo (o in cima) all'ordine.
 func (s *Service) CreateItem(ctx context.Context, tx pgx.Tx, actor engine.Actor, spaceKey string, in ItemInput) (*engine.Element, error) {
 	sp, err := loadSpace(ctx, tx, spaceKey)
 	if err != nil {
@@ -42,10 +34,14 @@ func (s *Service) CreateItem(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 	if ok, err := canWork(ctx, tx, actor, sp.ID); err != nil || !ok {
 		return nil, firstErr(err, engine.ErrForbidden)
 	}
-	allowed, ok := parentTypes[in.Type]
-	if !ok {
-		return nil, engine.InvalidValue("type", "tipo non ammesso: epic, story, task o bug")
+	kinds, err := workItemTypes(ctx, tx, true)
+	if err != nil {
+		return nil, err
 	}
+	if !slices.Contains(kinds, in.Type) {
+		return nil, engine.InvalidParams("validation.work.item_type_invalid", "type", map[string]any{"types": strings.Join(kinds, ", ")}, "tipo non ammesso: %s", strings.Join(kinds, ", "))
+	}
+	allowed := parentTypesOf(in.Type)
 	parentID := ""
 	if strings.TrimSpace(in.ParentID) != "" {
 		p, err := s.eng.Get(ctx, tx, actor, strings.TrimSpace(in.ParentID))
@@ -97,10 +93,13 @@ func (s *Service) workItem(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 		return nil, err
 	}
 	if len(types) == 0 {
-		types = []string{TypeEpic, TypeStory, TypeTask, TypeBug}
+		types = []string{anyWork}
 	}
-	if !slices.Contains(types, el.TypeKey) {
-		return nil, engine.InvalidParams("validation.work.element_type_only", "element", map[string]any{"types": strings.Join(types, ", ")}, "operazione possibile solo su %s", strings.Join(types, ", "))
+	if ok, err := matchesTypes(ctx, tx, el.TypeID, el.TypeKey, types); err != nil {
+		return nil, err
+	} else if !ok {
+		names := expandTypes(ctx, tx, types)
+		return nil, engine.InvalidParams("validation.work.element_type_only", "element", map[string]any{"types": names}, "operazione possibile solo su %s", names)
 	}
 	if ok, err := canWork(ctx, tx, actor, el.SpaceID); err != nil || !ok {
 		return nil, firstErr(err, engine.ErrForbidden)
@@ -110,7 +109,7 @@ func (s *Service) workItem(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 
 // assignable: gli elementi a cui si può dare un responsabile persona. Oltre al lavoro dei team, le richieste
 // («Prendi in carico», ondata 2).
-var assignable = []string{TypeEpic, TypeStory, TypeTask, TypeBug, RequestType}
+var assignable = []string{anyWork, RequestType}
 
 // SetAssignee cambia l'assegnatario (vuoto = nessuno). Version 0 = nessun controllo.
 func (s *Service) SetAssignee(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref, memberID string, version int) (*engine.Element, error) {
@@ -158,7 +157,7 @@ func (s *Service) setParent(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 		if err != nil {
 			return engine.NotFound("lane", "", "epic inesistente")
 		}
-		if !slices.Contains(parentTypes[el.TypeKey], p.TypeKey) || p.SpaceID != el.SpaceID {
+		if !slices.Contains(parentTypesOf(el.TypeKey), p.TypeKey) || p.SpaceID != el.SpaceID {
 			return engine.InvalidParams("validation.work.lane_parent", "lane", map[string]any{"type": el.TypeKey, "parent_type": p.TypeKey, "parent": p.Key}, "un elemento %s non può stare sotto %s %s", el.TypeKey, p.TypeKey, p.Key)
 		}
 	}
@@ -172,7 +171,7 @@ func (s *Service) setParent(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 // PlanInSprint pianifica l'elemento in uno sprint dello stesso spazio (vuoto = backlog) e,
 // se indicati, lo mette tra after e before.
 func (s *Service) PlanInSprint(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref, sprint, after, before string) (*engine.Element, error) {
-	el, err := s.workItem(ctx, tx, actor, ref, TypeStory, TypeTask, TypeBug)
+	el, err := s.workItem(ctx, tx, actor, ref, anyItem)
 	if err != nil {
 		return nil, err
 	}
