@@ -79,7 +79,7 @@ func TestAvvioModelloERipristino(t *testing.T) {
 
 	// Modelli: il primo è disponibile, gli altri sono in arrivo.
 	ms := list(adm.do("GET", "/api/v1/avvio/modelli", nil, http.StatusOK)["items"])
-	if len(ms) != 5 || obj(ms[0])["key"] != "banca_assicurazione" || obj(ms[0])["available"] != true || obj(ms[1])["available"] != false {
+	if len(ms) != 6 || obj(ms[0])["key"] != "banca_assicurazione" || obj(ms[0])["available"] != true || obj(ms[1])["key"] != "persona_sola" || obj(ms[2])["available"] != false {
 		t.Fatalf("modelli: %v", ms)
 	}
 	adm.do("GET", "/api/v1/avvio/modelli/software_house", nil, http.StatusUnprocessableEntity)
