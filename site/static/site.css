@@ -120,6 +120,8 @@ code { background: var(--code-bg); padding: 0.1em 0.35em; }
 pre {
   background: var(--code-bg); border: 1px solid var(--hair); border-left: 3px solid var(--accent);
   margin: 0 0 1.2em; padding: 14px 16px; overflow-x: auto; line-height: 1.5; font-size: 14.5px;
+  /* Le righe lunghe vanno a capo: niente testo nascosto dietro lo scorrimento orizzontale. */
+  white-space: pre-wrap; overflow-wrap: anywhere;
 }
 pre code { background: none; padding: 0; font-size: inherit; }
 ul, ol { margin: 0 0 1em; padding-left: 1.3em; }
@@ -230,7 +232,7 @@ main { display: block; }
 .win-bar { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; background: #ececf1; border-bottom: 1px solid #d4d4d8; }
 .win-bar i { width: 10px; height: 10px; display: block; }
 .win-bar i:nth-child(1) { background: #f0532d; } .win-bar i:nth-child(2) { background: #f2a900; } .win-bar i:nth-child(3) { background: #1f9d55; }
-.win-bar span { flex: 1; text-align: center; font-family: var(--mono); font-size: 12px; color: #52525b; margin-right: 46px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-bar span { flex: 1; text-align: center; font-family: var(--mono); font-size: 12px; color: #52525b; margin-right: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .win[class*="scuro"], .w-back { border-color: #2a2a35; }
 .w-back .win-bar { background: #1a1b26; border-bottom-color: #2a2a35; }
 .w-back .win-bar span { color: #a1a1aa; }
@@ -480,7 +482,7 @@ main { display: block; }
 table { border-collapse: collapse; width: 100%; font-size: 15px; }
 th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--hair); }
 th { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--rule); white-space: nowrap; }
-td code { white-space: nowrap; }
+td code { overflow-wrap: anywhere; }
 .source-link { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--hair); font-size: 15px; color: var(--muted); }
 .notice { border: 2px solid var(--rule); padding: 14px 18px; margin: 20px 0 28px; max-width: 74ch; }
 .notice strong { display: block; margin-bottom: 4px; }
