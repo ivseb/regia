@@ -25,7 +25,7 @@ import {
   type TodoWeek,
 } from "../dafareApi";
 import { Describe } from "./Notifications";
-import { tempoApi, isoDay, mondayOf, totalText, weekLabel } from "../tempoApi";
+import { tempoApi, addDays, dayName, isoDay, mondayOf, parseDay, totalText, weekLabel } from "../tempoApi";
 import { fmtMinutes, workApi, type MyItem } from "../workApi";
 import { useTypeNames } from "../typesApi";
 
@@ -489,10 +489,11 @@ function ImpactCard({ i }: { i: TodoImpact }) {
 function TimeAndReports({ weeks, reports }: { weeks: TodoWeek[]; reports: TodoReport[] }) {
   const t = useT();
   const refresh = useRefreshTodo();
-  const approve = useMutation({ mutationFn: (w: TodoWeek) => tempoApi.decide(w.member_id!, w.week, true), onSuccess: refresh });
+  const [note, setNote] = useState("");
   const submit = useMutation({ mutationFn: (w: TodoWeek) => tempoApi.submit(w.week), onSuccess: refresh });
   return (
     <Section module="work" id={SECTION_ID.time} title={t("dafare.sec.time")} count={weeks.length + reports.length} hint={t("dafare.hint.time")}>
+      <li className="list-none" role="status">{note && <span className="text-ok">{note}</span>}</li>
       {weeks.map((w) => (
         <Card key={`${w.kind}-${w.member_id ?? "me"}-${w.week}`} label={weekLabel(w.week)}>
           <div className="flex flex-col gap-0.5">
@@ -500,19 +501,13 @@ function TimeAndReports({ weeks, reports }: { weeks: TodoWeek[]; reports: TodoRe
               {w.kind === "submit" ? t("dafare.time.submit", { week: weekLabel(w.week), time: totalText(w.minutes) }) : t("dafare.time.approve", { member: w.member ?? "", week: weekLabel(w.week), time: totalText(w.minutes) })}
             </span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {w.kind === "submit" ? (
-              <>
-                <button className="btn btn-primary" disabled={submit.isPending} onClick={() => submit.mutate(w)}>{t("dafare.time.sendButton")}</button>
-                <Link to="/tempo" search={{ settimana: w.week }} className="btn no-underline">{t("dafare.time.open")}</Link>
-              </>
-            ) : (
-              <>
-                <button className="btn btn-primary" disabled={approve.isPending} onClick={() => approve.mutate(w)}>{t("dafare.time.approveButton")}</button>
-                <Link to="/tempo" search={{ settimana: w.week, persona: w.member_id }} className="btn no-underline">{t("dafare.time.review")}</Link>
-              </>
-            )}
-          </div>
+          {w.kind === "submit" && (
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-primary" disabled={submit.isPending} onClick={() => submit.mutate(w)}>{t("dafare.time.sendButton")}</button>
+              <Link to="/tempo" search={{ settimana: w.week }} className="btn no-underline">{t("dafare.time.open")}</Link>
+            </div>
+          )}
+          {w.kind === "approve" && <DecideWeek week={w} onDone={setNote} />}
         </Card>
       ))}
       {reports.map((r) => (
@@ -532,8 +527,75 @@ function TimeAndReports({ weeks, reports }: { weeks: TodoWeek[]; reports: TodoRe
           <Link to="/e/$key" params={{ key: r.key }} search={{ scheda: "stato" }} className="btn self-start no-underline">{r.draft ? t("dafare.report.continue") : t("dafare.report.write")}</Link>
         </Card>
       ))}
-      <li className="list-none"><ErrorNote error={approve.error ?? submit.error} /></li>
+      <li className="list-none"><ErrorNote error={submit.error} /></li>
     </Section>
+  );
+}
+
+/** Decisione sul timesheet di un'altra persona, in linea: approva, oppure respingi con il motivo. */
+function DecideWeek({ week: w, onDone }: { week: TodoWeek; onDone: (msg: string) => void }) {
+  const t = useT();
+  const refresh = useRefreshTodo();
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [missing, setMissing] = useState(false);
+  const member = w.member ?? "";
+  const decide = useMutation({
+    mutationFn: (approve: boolean) => tempoApi.decide(w.member_id!, w.week, approve, approve ? undefined : reason.trim()),
+    onSuccess: (_, approve) => {
+      onDone(t(approve ? "dafare.ts.approved" : "dafare.ts.rejected", { member }));
+      refresh();
+    },
+  });
+  const submitReject = (e: FormEvent) => {
+    e.preventDefault();
+    if (!reason.trim()) return setMissing(true);
+    decide.mutate(false);
+  };
+  const days = w.days ?? [];
+  const id = `ts-${w.member_id}-${w.week}`;
+  return (
+    <>
+      {days.some((m) => m > 0) && (
+        <details className="text-[14px]">
+          <summary className="touch-44 inline-flex cursor-pointer items-center text-accent">{t("dafare.ts.detail")}</summary>
+          <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 tabular">
+            {days.map((m, i) => (m > 0 ? <li key={i}><span className="text-muted">{dayName(parseDay(addDays(w.week, i)))}</span> {totalText(m)}</li> : null))}
+          </ul>
+        </details>
+      )}
+      {rejecting ? (
+        <form onSubmit={submitReject} noValidate className="flex max-w-xl flex-col gap-2">
+          <label htmlFor={`${id}-motivo`} className="text-[14px] font-semibold">{t("dafare.ts.reason")}</label>
+          <textarea
+            id={`${id}-motivo`}
+            autoFocus
+            rows={3}
+            className="field"
+            aria-required="true"
+            aria-invalid={missing || undefined}
+            aria-describedby={`${id}-aiuto`}
+            value={reason}
+            onChange={(e) => { setReason(e.target.value); setMissing(false); }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setRejecting(false); setMissing(false); } }}
+          />
+          <p id={`${id}-aiuto`} className={`m-0 text-[12.5px] ${missing ? "text-danger" : "text-muted"}`}>{missing ? t("dafare.ts.reasonRequired") : t("dafare.ts.reasonHint")}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="btn btn-primary" disabled={decide.isPending}>{t("dafare.ts.confirm")}</button>
+            <button type="button" className="btn" onClick={() => { setRejecting(false); setMissing(false); }}>{t("dafare.ts.cancel")}</button>
+            {/* Mentre si scrive il motivo il timesheet resta a portata di mano. */}
+            <Link to="/tempo" search={{ settimana: w.week, persona: w.member_id }} className="btn no-underline">{t("dafare.ts.open")}</Link>
+          </div>
+        </form>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-primary" disabled={decide.isPending} onClick={() => decide.mutate(true)}>{t("dafare.ts.approve")}</button>
+          <button className="btn" onClick={() => setRejecting(true)}>{t("dafare.ts.reject")}</button>
+          <Link to="/tempo" search={{ settimana: w.week, persona: w.member_id }} className="btn no-underline">{t("dafare.ts.open")}</Link>
+        </div>
+      )}
+      <ErrorNote error={decide.error} />
+    </>
   );
 }
 

@@ -119,6 +119,8 @@ type todoWeek struct {
 	// Solo per approve: chi ha inviato la settimana.
 	MemberID string `json:"member_id,omitempty"`
 	Member   string `json:"member,omitempty"`
+	// Solo per approve: minuti per giorno (lunedì…domenica), per il dettaglio in linea.
+	Days []int `json:"days,omitempty"`
 }
 
 type todoReport struct {
@@ -615,7 +617,27 @@ func (s *Server) timeWeeks(ctx context.Context, tx pgx.Tx, actor engine.Actor) (
 		return nil, err
 	}
 	for _, pw := range pend {
-		out = append(out, todoWeek{Kind: "approve", Week: pw.Week, Minutes: pw.Minutes, MemberID: pw.MemberID, Member: pw.Member})
+		days := make([]int, 7)
+		rows, err := tx.Query(ctx, `select work_date - $2::date, sum(minutes)::int from work_logs
+			where member_id = $1::uuid and work_date >= $2::date and work_date < $2::date + 7 group by 1`, pw.MemberID, pw.Week)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var d, m int
+			if err := rows.Scan(&d, &m); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			if d >= 0 && d < 7 {
+				days[d] = m
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		out = append(out, todoWeek{Kind: "approve", Week: pw.Week, Minutes: pw.Minutes, MemberID: pw.MemberID, Member: pw.Member, Days: days})
 	}
 	return out, nil
 }

@@ -182,6 +182,19 @@ func TestDaFare(t *testing.T) {
 	if len(aw) != 1 || aw[0].(map[string]any)["kind"] != "approve" || aw[0].(map[string]any)["member_id"] != dmU.member {
 		t.Fatalf("settimana da approvare: %v", aw)
 	}
+	// Il dettaglio per giorno somma alle ore totali, per la decisione in linea.
+	giorni, _ := aw[0].(map[string]any)["days"].([]any)
+	somma := 0.0
+	for _, g := range giorni {
+		somma += g.(float64)
+	}
+	if len(giorni) != 7 || somma != 240 {
+		t.Fatalf("ore per giorno della settimana da approvare: %v", giorni)
+	}
+	// Chi ha inviato non vede la propria settimana tra quelle da approvare.
+	if n := count(dmU, "time"); n != 0 {
+		t.Fatalf("la propria settimana compare tra le decisioni: %d", n)
+	}
 
 	// Un elemento che non esiste non si silenzia.
 	spo.do("PUT", "/api/v1/me/silenced/NOPE-1", nil, http.StatusNotFound)

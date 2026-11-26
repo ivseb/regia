@@ -54,3 +54,10 @@ tipi. Testi: lato server in `notify.timesheet.*`, lato client `lavoro.notificati
 - `go test ./internal/itest -run TestTimesheetApprovazioni` (invio, inbox, decisione da inbox e da timesheet,
   motivo, auto-approvazione, delega, richiamo, cambio delle regole, notifiche); `go test ./internal/engine/notify/...`.
 - `web/e2e/lacune-timesheet.spec.ts` (anche a 375 px).
+
+## Decisione in linea da «Da fare»
+
+La sezione «Tempo» di «Da fare» permette di approvare o respingere (motivo obbligatorio, campo in linea) la
+settimana di un'altra persona senza aprire il timesheet: passa dalla stessa `POST /work/timesheet/decide`, quindi
+`DecideWeek` e `approval.Decide` restano l'unica logica. L'elemento `time` di `GET /todo` porta anche le ore per
+giorno (`days`) per il dettaglio richiudibile. La propria settimana non compare mai tra quelle da decidere.
