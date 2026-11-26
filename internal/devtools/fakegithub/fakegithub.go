@@ -139,7 +139,7 @@ func New() *Server {
 	}
 	return &Server{
 		AppID: "4242", AppName: "Regia (finto)", InstallationID: "777", Key: key, TokenTTL: time.Hour,
-		PATs:        map[string]bool{}, PATLogins: map[string]string{},
+		PATs: map[string]bool{}, PATLogins: map[string]string{},
 		Permissions: map[string]string{"contents": "read", "metadata": "read", "deployments": "read", "checks": "read"},
 		Limit:       5000, ResetEvery: time.Hour,
 		Now:    time.Now,
