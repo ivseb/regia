@@ -14,6 +14,7 @@ import { ScorecardConfig } from "./ScorecardConfig";
 import { Punteggio } from "../faseChip";
 import { phaseTint } from "../tinte";
 import { crumbs } from "../crumbs";
+import { PortfolioTabs } from "./portafoglio-ui";
 
 // Graduatoria del portafoglio (demand.md §6, D04): prima gli obblighi normativi, poi il
 // punteggio della scorecard. Il budget disponibile traccia la linea di taglio sulla somma
@@ -94,6 +95,7 @@ export function Ranking({ view, unit, period }: { view: "graduatoria" | "scoreca
           ) : undefined
         }
       />
+      <PortfolioTabs />
       <div role="tablist" aria-label={t("budget.rank.view")} className="flex gap-6 border-b border-hair px-4 pt-1 md:px-7">
         <Link
           to="/graduatoria"
@@ -112,9 +114,6 @@ export function Ranking({ view, unit, period }: { view: "graduatoria" | "scoreca
           className={view === "scorecard" ? "border-b-2 border-fg pb-2.5 font-semibold text-fg no-underline" : "pb-2.5 text-muted no-underline hover:text-fg"}
         >
           {t("budget.rank.tab.scorecard")}{rk.data?.scorecard ? <span className="ml-1 font-mono text-[11.5px] font-normal tabular">v{rk.data.scorecard.version}</span> : null}
-        </Link>
-        <Link to="/cabina" role="tab" aria-selected="false" className="pb-2.5 text-muted no-underline hover:text-fg">
-          {t("lavoro.cabina.tab")}
         </Link>
       </div>
       {view === "scorecard" ? (

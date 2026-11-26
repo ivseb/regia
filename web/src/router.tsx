@@ -15,6 +15,7 @@ import { ElementPage, TAB_KEYS, type TabKey } from "./pages/ElementPage";
 import { lazy, Suspense } from "react";
 import { validateListSearch, type ListSearch } from "./views/ElementList";
 import { Lists } from "./pages/Lists";
+import { ListsIndex } from "./pages/ListsIndex";
 import { NotFound } from "./pages/NotFound";
 import { Loading } from "./ui";
 import { api } from "./api";
@@ -820,6 +821,8 @@ export const importRoute = createRoute({
 
 // Liste con filtri visuali, viste salvate e tabella generica: impatti, applicazioni, asset,
 // rischi, incidenti, controlli, documenti (piano, passo 16; pages/Lists.tsx).
+// Indice degli elenchi (menu snello): la voce «Elenchi» del menu porta qui.
+const listsIndexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/elenco", component: ListsIndex }); // i18n-ok: codice TypeScript letto come testo
 export const listRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/elenco/$lista",
@@ -843,6 +846,7 @@ export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
     listRoute,
+    listsIndexRoute,
     requestsRoute,
     newRequestRoute,
     inboxRoute,

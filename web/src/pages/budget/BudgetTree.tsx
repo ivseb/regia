@@ -15,6 +15,7 @@ import { NodeBudgets } from "./BudgetSource";
 import { AddChild, Distribute, History, NodeDetails, TransferForm } from "./NodePanels";
 import { ClosePeriod, UndoClose } from "./ClosePeriod";
 import { Field, NodeBar, PeriodStatusLabel, defaultPeriod, fromInput, mny, toInput, useCurrency } from "./budget-ui";
+import { FinanceTabs } from "../portafoglio-ui";
 
 type Tab = "history" | "distribute" | "transfer" | "add" | "details" | "budgets";
 type Edit = { id: string; cents: number | null };
@@ -40,6 +41,7 @@ export function BudgetTreePage({ period }: { period?: string }) {
   return (
     <>
       <PageHeader path={t("budget.tree.path")} title={t("budget.tree.title")} />
+      <FinanceTabs />
       <div className="flex flex-col gap-6 px-4 pb-10 md:px-7">
         <ErrorNote error={periods.error} />
         {periods.isPending && <Loading />}

@@ -2,7 +2,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageHeader } from "../../shell";
+import { PageHeader, useMe } from "../../shell";
 import { EmptyState } from "../../emptyState";
 import { ErrorNote, Loading, date } from "../../ui";
 import { projectKeys, projectsApi, type ProjectSummary, type Template } from "../../projectsApi";
@@ -24,15 +24,20 @@ export function ProjectsPage() {
   const q = useQuery({ queryKey: [...projectKeys.list, closed], queryFn: () => projectsApi.list(closed) });
   const none = t("progetti.common.none");
   const items = q.data?.items ?? [];
+  // «Nuovo progetto» sta qui e in ⌘K (non più nel menu): solo per chi può scrivere.
+  const perms = useMe().data?.active_tenant?.permissions ?? [];
+  const canWrite = perms.includes("*") || perms.includes("element.write");
   return (
     <>
       <PageHeader
         path={t("progetti.list.path")}
         title={t("progetti.list.title")}
         actions={
-          <Link to="/progetti/nuovo" className="btn btn-primary no-underline">
-            {t("progetti.list.new")}
-          </Link>
+          canWrite && (
+            <Link to="/progetti/nuovo" className="btn btn-primary no-underline">
+              {t("progetti.list.new")}
+            </Link>
+          )
         }
       />
       <div className="flex flex-col gap-4 px-4 py-5 md:px-7">

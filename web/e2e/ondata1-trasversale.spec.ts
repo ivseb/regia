@@ -22,10 +22,14 @@ test("un modulo spento sparisce da menu, ⌘K e pagine, e le sue API rispondono 
     await page.getByRole("button", { name: "Salva le modifiche" }).click();
     await expect(page.getByRole("button", { name: "Salva le modifiche" })).toBeDisabled();
 
-    // Menu: spariscono la voce e l'elenco dei documenti; il resto resta.
+    // Menu: sparisce la voce dei documenti; il resto resta.
     await expect(nav.getByRole("link", { name: "Documenti", exact: true })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: "Elenco documenti" })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Architettura", exact: true })).toBeVisible();
+    // Indice degli elenchi: sparisce l'elenco dei documenti, gli altri restano.
+    await nav.getByRole("link", { name: "Elenchi", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Elenchi", level: 1 })).toBeVisible();
+    await expect(page.locator('a[href="/elenco/rischi"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/elenco/documenti"]')).toHaveCount(0);
 
     // ⌘K: la pagina non si trova più, le altre sì.
     await page.keyboard.press("ControlOrMeta+k");
@@ -121,13 +125,18 @@ test("menu e titoli: «Governance» e «Architettura» uguali nel menu e nelle p
   await login(page, "dm");
   await page.goto("/architettura/mappa");
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
-  await expect(nav.getByText("Governance", { exact: true }).first()).toBeVisible();
+  // «Governance» è una scheda del «Portafoglio» (menu snello), con lo stesso nome nella scheda e nella pagina.
+  await expect(nav.getByRole("link", { name: "Portafoglio", exact: true })).toBeVisible();
   await expect(nav.getByText("Governo", { exact: true })).toHaveCount(0);
   await expect(nav.getByRole("link", { name: "Mappa dell'architettura" })).toHaveCount(0);
   await expect(nav.getByRole("link", { name: "Architettura", exact: true })).toBeVisible();
   // Anche dentro una scheda della mappa la voce resta quella attiva.
   await expect(nav.getByRole("link", { name: "Architettura", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Architettura", level: 1 })).toBeVisible();
+  await page.goto("/governance");
+  await expect(page.getByRole("navigation", { name: "Portafoglio" }).getByRole("link", { name: "Governance", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Portafoglio", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveTitle("Governance · Regia");
   await page.goto("/richieste/nuova");
   await expect(page.getByRole("heading", { name: "Nuova richiesta", level: 1 })).toBeVisible();
 });

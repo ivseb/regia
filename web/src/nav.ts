@@ -7,8 +7,11 @@ import { LISTS } from "./views/lists";
 import { newLabel } from "./typesApi";
 import type { IconKey, UiModule } from "./moduleIcon";
 
-/** `hot`: il numero chiede un'azione (pillola piena nel colore del modulo). */
-export type NavItem = { to?: string; label: string; count?: number; countLabel?: string; match?: string; more?: boolean; soon?: boolean; hot?: boolean };
+/**
+ * `hot`: il numero chiede un'azione (pillola piena nel colore del modulo). `also`: altri percorsi (e i
+ * loro sottopercorsi) in cui la voce è attiva, per le voci che riuniscono più pagine (Portafoglio, Elenchi).
+ */
+export type NavItem = { to?: string; label: string; count?: number; countLabel?: string; match?: string; more?: boolean; soon?: boolean; hot?: boolean; also?: string[] };
 /** Ogni sezione ha un modulo (colore, replica/mockup/interfaccia-colori.html) e un'icona; senza icona quella del modulo. */
 export type NavSection = { label: string; module: UiModule; icon?: IconKey; items: NavItem[] };
 
@@ -26,7 +29,8 @@ export type NavCounts = {
 export type NavNames = { plural: (key: string, fallback: string) => string; create: (key: string, fallback: string) => string };
 const DEFAULT_NAMES: NavNames = { plural: (_k, f) => f, create: (_k, f) => newLabel(f) };
 
-export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES): NavSection[] {
+/** Tutte le pagine del menu completo, sezione per sezione, con i permessi e i moduli accesi. */
+function allSections(me: Me, c: NavCounts, names: NavNames): NavSection[] {
   const perms = me.active_tenant?.permissions ?? [];
   const has = (...ps: string[]) => perms.includes("*") || ps.some((p) => perms.includes(p));
 
@@ -171,3 +175,82 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
     .map((s) => ({ ...s, items: s.items.filter((it) => !it.to || pathVisible(me, it.to)) }))
     .filter((s) => s.items.length > 0);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Menu snello: le pagine restano tutte (allSections, navPages), il menu ne mostra una ventina.
+// Le azioni («Nuova richiesta», «Nuovo progetto», il portale) stanno nelle testate delle pagine e
+// in ⌘K; le pagine sorelle diventano una voce sola con le schede; Elenchi e Configurazione sono indici.
+
+const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
+
+/** Pagine che escono dal menu: si raggiungono dalle testate delle pagine e da ⌘K. */
+const MENU_OUT = new Set(["/richieste/nuova", "/portale", "/progetti/nuovo"]);
+const PORTFOLIO = ["/graduatoria", "/cabina", "/governance"];
+const FINANCE = ["/finanza", "/budget"];
+const CONFIG = ["/configurazione", "/processi"];
+
+/**
+ * Un gruppo di pagine che nel menu diventa una voce sola. `make` riceve le pagine raggiungibili del
+ * gruppo e restituisce le voci da mostrare: con una sola pagina resta la sua voce (il revisore, che vede
+ * solo «Governance» o solo «Registro di audit», non riceve un indice fuori dal suo profilo).
+ */
+type Group = { of: (to: string) => boolean; make: (members: NavItem[]) => NavItem[] };
+const single = (m: NavItem[], hub: () => NavItem): NavItem[] => (m.length === 1 ? m : [hub()]);
+const GROUPS: Group[] = [
+  { of: (to) => PORTFOLIO.includes(to), make: (m) => single(m, () => ({ to: m[0].to, label: tr("shell.menu.portfolio"), also: PORTFOLIO })) },
+  { of: (to) => FINANCE.includes(to), make: (m) => single(m, () => ({ to: m[0].to, label: tr("shell.menu.financeBudget"), also: FINANCE })) },
+  { of: (to) => to.startsWith("/elenco/"), make: () => [{ to: "/elenco", label: tr("shell.nav.section.lists"), also: ["/elenco"] }] },
+  // L'indice /configurazione c'è solo se il profilo di menu lo mostra; senza, le voci restano com'erano.
+  { of: (to) => CONFIG.some((b) => under(to, b)), make: (m) => (m.some((x) => x.to === "/configurazione") ? [{ to: "/configurazione", label: tr("shell.nav.section.config"), also: CONFIG }] : m) },
+];
+
+/** Una sezione del menu snello: le azioni escono, ogni gruppo prende il posto del suo primo membro. */
+function compact(items: NavItem[]): NavItem[] {
+  const out: NavItem[] = [];
+  const done = new Set<Group>();
+  for (const it of items) {
+    if (!it.to) {
+      out.push(it);
+      continue;
+    }
+    if (MENU_OUT.has(it.to)) continue;
+    const g = GROUPS.find((x) => x.of(it.to!));
+    if (!g) {
+      out.push(it);
+      continue;
+    }
+    if (done.has(g)) continue;
+    done.add(g);
+    out.push(...g.make(items.filter((x) => x.to && g.of(x.to))));
+  }
+  return out;
+}
+
+/** Le sezioni della barra laterale. */
+export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES): NavSection[] {
+  return allSections(me, c, names)
+    .map((s) => ({ ...s, items: compact(s.items) }))
+    .filter((s) => s.items.length > 0);
+}
+
+/**
+ * Tutte le pagine raggiungibili dal menu, anche quelle dentro un indice o una scheda: servono a
+ * «g» + lettera e all'elenco di «?» (`allowed` in shell.tsx), a ⌘K e al titolo della scheda del browser.
+ */
+export function navPages(me: Me, c: NavCounts = {}, names: NavNames = DEFAULT_NAMES): NavItem[] {
+  const items = allSections(me, c, names).flatMap((s) => s.items);
+  if (items.some((it) => it.to?.startsWith("/elenco/"))) items.push({ to: "/elenco", label: tr("shell.nav.section.lists") });
+  return items;
+}
+
+/** La voce è attiva sul percorso: la pagina stessa, i sottopercorsi dove previsto, le pagine riunite. */
+export function navItemActive(it: NavItem, path: string, prefix: ReadonlySet<string> = new Set()): boolean {
+  if (!it.to) return false;
+  if (it.also?.some((b) => under(path, b))) return true;
+  if (it.match) return under(path, it.match);
+  if (prefix.has(it.to)) return under(path, it.to);
+  return path === it.to;
+}
+
+/** Chiave stabile di una sezione (per ricordare quali sono chiuse): modulo e icona la distinguono. */
+export const sectionKey = (s: NavSection) => (s.icon ? `${s.module}-${s.icon}` : s.module);

@@ -39,8 +39,8 @@ test("il revisore (sola lettura) non vede le voci per creare e registrare", asyn
   await expect(nav.getByRole("link", { name: "Richieste", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("link", { name: "Nuova richiesta" })).toHaveCount(0);
   await expect(nav.getByRole("link", { name: "Timesheet" })).toHaveCount(0);
-  // Le voci doppie hanno nomi distinti: gli elenchi filtrati dicono «Elenco …».
-  await expect(nav.getByRole("link", { name: "Elenco documenti" })).toBeVisible();
+  // Gli elenchi filtrati stanno dietro una voce sola, «Elenchi»: «Documenti» resta una voce unica.
+  await expect(nav.getByRole("link", { name: "Elenchi", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Documenti", exact: true })).toHaveCount(1);
 });
 

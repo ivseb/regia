@@ -10,7 +10,7 @@ import { api, collab, orgApi, type Element, type TransitionView } from "./api";
 import { searchEntities } from "./entities";
 import { ErrorNote, titleParts } from "./ui";
 import { MODULE_TYPES, moduleOn, pathVisible, type ModuleKey } from "./modules";
-import { buildNav } from "./nav";
+import { navPages } from "./nav";
 import { createKinds, useCurrentKey, useKindLabel, type CreateKind, type PaletteStart } from "./shortcuts";
 import { tr } from "./i18n/core";
 import { useTypeNames, useWorkTypes } from "./typesApi";
@@ -235,9 +235,13 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     onClose();
   };
 
+  // Tutte le pagine del menu, anche quelle che nel menu sono una voce sola (navPages): la configurazione
+  // e l'indice degli elenchi (c'è se almeno un elenco è raggiungibile).
+  const allPages = useMemo(() => (me?.active_tenant ? navPages(me, {}, tn) : []), [me, tn.byKey]);
+  const hasLists = allPages.some((it) => it.to === "/elenco");
   const navConfig = useMemo(
-    () => (me?.active_tenant ? buildNav(me, {}, tn).flatMap((s) => s.items).filter((it) => it.to && (it.to.startsWith("/configurazione") || it.to === "/processi")) : []),
-    [me, tn.byKey],
+    () => allPages.filter((it) => it.to && (it.to.startsWith("/configurazione") || it.to === "/processi")),
+    [allPages],
   );
 
   const items = useMemo<Item[]>(() => {
@@ -283,6 +287,12 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     const newReq = tn.create("business_request", "Richiesta");
     if (canCreate && match(newReq.toLowerCase(), t("palette.kw.new"))) {
       out.push({ id: "new", group: t("palette.group.actions"), label: newReq, detail: t("palette.act.opensForm"), run: () => go("/richieste/nuova") });
+    }
+    // «Nuovo progetto»: fuori dal menu, resta qui e nella testata dei progetti.
+    const canNewProject = canWrite && perms.some((p) => p === "*" || p === "element.read") && pathVisible(me, "/progetti/nuovo");
+    const newProject = tn.create("project", "Progetto");
+    if (canNewProject && match(newProject.toLowerCase(), t("palette.kw.new"))) {
+      out.push({ id: "new-project", group: t("palette.group.actions"), label: newProject, detail: t("shell.menu.newProject"), run: () => go("/progetti/nuovo") });
     }
     // Comandi: «+ Crea» per ogni tipo permesso e l'elenco delle scorciatoie.
     const cmd = t("tastiera.group.commands");
@@ -401,6 +411,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     if (has("finance.read")) pages.push([t("palette.page.finance"), "/finanza"]);
     if (has("element.read")) pages.push([tr("budget.nav.treePalette"), "/budget"]);
     if (has("portal.submit", "element.write")) pages.push([t("palette.page.portal"), "/portale"]);
+    if (hasLists) pages.push([t("shell.menu.lists.title"), "/elenco"]);
     for (const [label, to, search] of pages) {
       if (match(label) && pathVisible(me, to)) out.push({ id: `p-${label}`, group: t("palette.group.pages"), label, detail: to, run: () => go(to, search) });
     }
@@ -413,7 +424,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     }
     return out;
     // go, move, follow, assign e openElement dipendono solo da valori già elencati.
-  }, [text, detail.data, watch.data, found.data, vulns.data, people.data, units.data, current, recent, perms.join(","), me, tn.byKey, workTypes, navConfig, only]);
+  }, [text, detail.data, watch.data, found.data, vulns.data, people.data, units.data, current, recent, perms.join(","), me, tn.byKey, workTypes, navConfig, hasLists, only]);
 
   const enabled = items.filter((i) => !i.disabled);
   const cur = enabled.length ? enabled[Math.min(active, enabled.length - 1)] : undefined;

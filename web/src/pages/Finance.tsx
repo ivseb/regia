@@ -23,6 +23,7 @@ import { BudgetSettingsForm } from "./budget/BudgetSettingsForm";
 import { BudgetSource, type SourceLine } from "./budget/BudgetSource";
 import { METHOD_KEYS, SOURCE_KEYS, SCurve, centsToInput, kindLabel, methodLabel, money, parseMoney, pct, ratio, sourceLabel, statusLabel } from "./finance-ui";
 import { crumbs } from "../crumbs";
+import { FinanceTabs } from "./portafoglio-ui";
 
 // Pagina Finanza (demand.md §9-10, schermate D08 e D09): esercizi, budget e trasferimenti;
 // voci di costo con filtri; import CSV in due tempi; tariffe e ore; earned value; struttura.
@@ -38,6 +39,7 @@ export function Finance({ tab, richiesta }: { tab: FinTab; richiesta?: string })
   return (
     <>
       <PageHeader path={crumbs("demand", "finance")} title={t("budget.fin.budgetECosti")} />
+      <FinanceTabs />
       <div role="tablist" aria-label={t("budget.fin.sezione")} className="flex gap-5 overflow-x-auto border-b border-hair px-4 pt-1 md:px-7">
         {TABS.map((k) => (
           <Link
