@@ -12,9 +12,9 @@ import (
 	"regia/internal/platform/auth"
 )
 
-// Progetti (replica/progetti.md, passi 1 e 2; docs/sviluppo/progetti.md): progetto da
+// Progetti (replica/progetti.md, passi 1, 2 e 3; docs/sviluppo/progetti.md): progetto da
 // richiesta o da zero, piano con fasi, work package, attività, milestone e dipendenze,
-// modi di consegna, avanzamento e Panoramica del PM.
+// modi di consegna, avanzamento, Panoramica del PM, baseline e change request.
 
 func (s *Server) projectsInit() {
 	if s.eng == nil {
@@ -83,6 +83,16 @@ func (s *Server) projectRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH "+ph+"/{id}", inTenant(s.updatePhase))
 	mux.HandleFunc("DELETE "+ph+"/{id}", inTenant(s.deletePhase))
 	mux.HandleFunc("POST "+ph+"/{id}/gate", inTenant(s.requestGate))
+	// Passo 3: baseline e change request.
+	bl, cr := "/api/v1/plan-baselines", "/api/v1/change-requests"
+	mux.HandleFunc("GET "+b+"/{ref}/baselines", inTenant(s.projectBaselines))
+	mux.HandleFunc("POST "+b+"/{ref}/baselines", inTenant(s.createBaseline))
+	mux.HandleFunc("GET "+bl+"/{id}", inTenant(s.planBaseline))
+	mux.HandleFunc("GET "+b+"/{ref}/change-requests", inTenant(s.projectChangeRequests))
+	mux.HandleFunc("POST "+b+"/{ref}/change-requests", inTenant(s.createChangeRequest))
+	mux.HandleFunc("GET "+cr+"/{id}", inTenant(s.changeRequest))
+	mux.HandleFunc("POST "+cr+"/{id}/submit", inTenant(s.submitChangeRequest))
+	mux.HandleFunc("POST "+cr+"/{id}/withdraw", inTenant(s.withdrawChangeRequest))
 	mux.HandleFunc("GET "+b+"/{ref}/plan", inTenant(s.projectPlan))
 	mux.HandleFunc("GET "+b+"/{ref}/overview", inTenant(s.projectOverview))
 	mux.HandleFunc("POST "+b+"/{ref}/plan/auto", inTenant(s.projectAutoPlan))
@@ -305,5 +315,72 @@ func (s *Server) projectFromRequest(w http.ResponseWriter, r *http.Request, p *a
 			return nil, err
 		}
 		return map[string]any{"project": el, "created": created}, nil
+	})
+}
+
+func (s *Server) projectBaselines(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		items, err := s.proj.Baselines(r.Context(), tx, actorOf(r, p), r.PathValue("ref"))
+		return map[string]any{"items": items}, err
+	})
+}
+
+// createBaseline fissa la prima baseline del piano (le altre nascono dalle change request).
+func (s *Server) createBaseline(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in struct {
+		Note string `json:"note"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*projects.Baseline, error) {
+		return s.proj.CreateBaseline(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), in.Note)
+	})
+}
+
+func (s *Server) planBaseline(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.Baseline, error) {
+		return s.proj.GetBaseline(r.Context(), tx, actorOf(r, p), r.PathValue("id"))
+	})
+}
+
+func (s *Server) projectChangeRequests(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		items, err := s.proj.ChangeRequests(r.Context(), tx, actorOf(r, p), r.PathValue("ref"))
+		return map[string]any{"items": items}, err
+	})
+}
+
+func (s *Server) createChangeRequest(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.ChangeRequestInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*projects.ChangeRequest, error) {
+		return s.proj.CreateChangeRequest(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), in)
+	})
+}
+
+func (s *Server) changeRequest(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.ChangeRequest, error) {
+		return s.proj.ChangeRequest(r.Context(), tx, actorOf(r, p), r.PathValue("id"))
+	})
+}
+
+func (s *Server) submitChangeRequest(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.ChangeRequest, error) {
+		return s.proj.SubmitChangeRequest(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in.Reason)
+	})
+}
+
+func (s *Server) withdrawChangeRequest(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.ChangeRequest, error) {
+		return s.proj.WithdrawChangeRequest(r.Context(), tx, actorOf(r, p), r.PathValue("id"))
 	})
 }

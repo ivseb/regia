@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 
 	"github.com/jackc/pgx/v5"
@@ -18,7 +19,11 @@ type Settings struct {
 	AutoFromRequest bool   `json:"auto_from_request"`
 	ProgramsEnabled bool   `json:"programs_enabled"`
 	ProgressMethod  string `json:"progress_method"` // weighted_estimate | equal
-	Roles           []Role `json:"roles"`
+	// Tolleranze oltre cui una modifica del piano apre una change request: giorni lavorativi
+	// su una milestone o sulla fine del progetto, percentuale sul budget.
+	ToleranceDays      int     `json:"tolerance_days"`
+	ToleranceBudgetPct float64 `json:"tolerance_budget_pct"`
+	Roles              []Role  `json:"roles"`
 	// AvailableRoles: i ruoli per oggetto del tenant che si possono aggiungere al progetto.
 	AvailableRoles []RoleRef `json:"available_roles"`
 	CanEdit        bool      `json:"can_edit"`
@@ -39,9 +44,10 @@ type RoleRef struct {
 
 // GetSettings legge le impostazioni (i predefiniti se il tenant non le ha ancora salvate).
 func GetSettings(ctx context.Context, tx pgx.Tx) (*Settings, error) {
-	st := &Settings{DefaultTemplate: "mixed", AutoFromRequest: true, ProgressMethod: "weighted_estimate"}
-	err := tx.QueryRow(ctx, `select default_template, auto_from_request, programs_enabled, progress_method from project_settings`).
-		Scan(&st.DefaultTemplate, &st.AutoFromRequest, &st.ProgramsEnabled, &st.ProgressMethod)
+	st := &Settings{DefaultTemplate: "mixed", AutoFromRequest: true, ProgressMethod: "weighted_estimate", ToleranceDays: 10, ToleranceBudgetPct: 5}
+	err := tx.QueryRow(ctx, `select default_template, auto_from_request, programs_enabled, progress_method, tolerance_days, tolerance_budget_pct::float8
+		from project_settings`).
+		Scan(&st.DefaultTemplate, &st.AutoFromRequest, &st.ProgramsEnabled, &st.ProgressMethod, &st.ToleranceDays, &st.ToleranceBudgetPct)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
@@ -76,11 +82,13 @@ func (s *Service) SettingsFor(ctx context.Context, tx pgx.Tx, actor engine.Actor
 
 // SettingsInput sostituisce le impostazioni; Roles, se indicato, sostituisce i ruoli del progetto.
 type SettingsInput struct {
-	DefaultTemplate *string `json:"default_template"`
-	AutoFromRequest *bool   `json:"auto_from_request"`
-	ProgramsEnabled *bool   `json:"programs_enabled"`
-	ProgressMethod  *string `json:"progress_method"`
-	Roles           []Role  `json:"roles"`
+	DefaultTemplate    *string  `json:"default_template"`
+	AutoFromRequest    *bool    `json:"auto_from_request"`
+	ProgramsEnabled    *bool    `json:"programs_enabled"`
+	ProgressMethod     *string  `json:"progress_method"`
+	ToleranceDays      *int     `json:"tolerance_days"`
+	ToleranceBudgetPct *float64 `json:"tolerance_budget_pct"`
+	Roles              []Role   `json:"roles"`
 }
 
 func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Actor, in SettingsInput) (*Settings, error) {
@@ -93,15 +101,26 @@ func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Acto
 	if in.ProgressMethod != nil && *in.ProgressMethod != "weighted_estimate" && *in.ProgressMethod != "equal" {
 		return nil, engine.InvalidValue("progress_method", "metodo di avanzamento non ammesso (weighted_estimate, equal)")
 	}
-	if _, err := tx.Exec(ctx, `insert into project_settings (tenant_id, default_template, auto_from_request, programs_enabled, progress_method, updated_by)
-		values (app_tenant(), coalesce($1, 'mixed'), coalesce($2, true), coalesce($3, false), coalesce($4, 'weighted_estimate'), $5)
+	if in.ToleranceDays != nil && (*in.ToleranceDays < 0 || *in.ToleranceDays > 365) {
+		return nil, engine.InvalidCode("validation.projects.tolerance_days", "tolerance_days", "la tolleranza va da 0 a 365 giorni lavorativi")
+	}
+	if in.ToleranceBudgetPct != nil && (math.IsNaN(*in.ToleranceBudgetPct) || *in.ToleranceBudgetPct < 0 || *in.ToleranceBudgetPct > 100) {
+		return nil, engine.InvalidCode("validation.projects.tolerance_budget", "tolerance_budget_pct", "la tolleranza sul budget va da 0 a 100%%")
+	}
+	if _, err := tx.Exec(ctx, `insert into project_settings (tenant_id, default_template, auto_from_request, programs_enabled, progress_method,
+		tolerance_days, tolerance_budget_pct, updated_by)
+		values (app_tenant(), coalesce($1, 'mixed'), coalesce($2, true), coalesce($3, false), coalesce($4, 'weighted_estimate'),
+		  coalesce($6, 10), coalesce($7, 5), $5)
 		on conflict (tenant_id) do update set
 		  default_template = coalesce($1, project_settings.default_template),
 		  auto_from_request = coalesce($2, project_settings.auto_from_request),
 		  programs_enabled = coalesce($3, project_settings.programs_enabled),
 		  progress_method = coalesce($4, project_settings.progress_method),
+		  tolerance_days = coalesce($6, project_settings.tolerance_days),
+		  tolerance_budget_pct = coalesce($7, project_settings.tolerance_budget_pct),
 		  updated_by = $5, updated_at = now()`,
-		in.DefaultTemplate, in.AutoFromRequest, in.ProgramsEnabled, in.ProgressMethod, nullable(actor.MemberID)); err != nil {
+		in.DefaultTemplate, in.AutoFromRequest, in.ProgramsEnabled, in.ProgressMethod, nullable(actor.MemberID),
+		in.ToleranceDays, in.ToleranceBudgetPct); err != nil {
 		return nil, err
 	}
 	if in.Roles != nil {

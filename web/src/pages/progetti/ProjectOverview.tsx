@@ -54,6 +54,21 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
             </Block>
             <Block title={t("progetti.overview.changes")}>
               {n.open_change_requests === 0 ? <None text={t("progetti.overview.changesNone")} /> : <p className="m-0 font-semibold">{t("progetti.overview.changesCount", { count: n.open_change_requests })}</p>}
+              {n.over_tolerance.length > 0 && (
+                <ul className="m-0 list-none p-0" aria-label={t("progetti.baseline.overTolerance")}>
+                  {n.over_tolerance.map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center justify-between gap-x-3 border-b border-hair py-1">
+                      <ItemLink itemKey={i.key} title={i.title} />
+                      <span className="tabular text-[12.5px] font-semibold text-danger">{t("progetti.baseline.shift", { sign: "+", count: i.days_late })}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(n.open_change_requests > 0 || n.over_tolerance.length > 0 || n.end_over_tolerance) && (
+                <button type="button" className="btn btn-quiet self-start px-0 underline" onClick={() => onTab("piano")}>
+                  {t("progetti.baseline.openPlan")}
+                </button>
+              )}
             </Block>
             <Block title={t("progetti.overview.risks")}>
               {n.risks.length === 0 ? <None text={t("progetti.overview.risksNone")} /> : <ul className="m-0 list-none p-0">{n.risks.map((r) => <li key={r.id} className="border-b border-hair py-1"><ItemLink itemKey={r.key} title={r.title} /></li>)}</ul>}
@@ -165,7 +180,20 @@ function Head({ data }: { data: Overview }) {
         </Stat>
         <Stat label={t("progetti.overview.baseline")}>
           {n.baseline_end ? (
-            <span className="tabular">{date(n.baseline_end)}</span>
+            <>
+              {n.variance_days != null && (
+                <span className={`tabular text-[18px] font-semibold ${n.end_over_tolerance ? "text-danger" : ""}`}>
+                  {t("progetti.baseline.variance", { sign: n.variance_days > 0 ? "+" : n.variance_days < 0 ? "−" : "", count: Math.abs(n.variance_days) })}
+                  {n.variance_pct != null && n.variance_pct !== 0 && <span className="ml-2 text-[13px] font-normal text-muted">{t("progetti.baseline.variancePct", { pct: n.variance_pct > 0 ? `+${n.variance_pct}` : `${n.variance_pct}` })}</span>}
+                </span>
+              )}
+              <span className="tabular text-[12.5px] text-muted">{t("progetti.baseline.endOf", { number: n.baseline ?? 0, date: date(n.baseline_end) })}</span>
+              {n.budget_variance_pct != null && (
+                <span className={`tabular text-[12.5px] ${n.budget_over_tolerance ? "font-semibold text-danger" : "text-muted"}`}>
+                  {t("progetti.baseline.budgetVariance", { pct: n.budget_variance_pct > 0 ? `+${n.budget_variance_pct}` : `${n.budget_variance_pct}` })}
+                </span>
+              )}
+            </>
           ) : (
             <span className="text-muted">{t("progetti.overview.baselineNone")}</span>
           )}

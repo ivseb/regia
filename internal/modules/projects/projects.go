@@ -10,7 +10,13 @@
 //
 // Nasce da una richiesta approvata (che diventa direttamente il progetto, con gli impatti come
 // work package agili) oppure da zero. I numeri del progetto (avanzamento pesato sulle stime,
-// date, milestone, ritardi, dipendenze bloccate, budget) li calcola una sola funzione: Numbers.
+// date, milestone, ritardi, dipendenze bloccate, budget, scostamenti dalla baseline) li calcola
+// una sola funzione: Numbers.
+//
+// Passo 3: la baseline è una fotografia immutabile del piano (plan_baselines). La prima la fissa
+// il PM; quando una modifica porta una milestone o la fine del progetto oltre le tolleranze del
+// tenant, nasce una change request (ext_change_request) che passa dal motore delle approvazioni
+// e, approvata, diventa la nuova baseline.
 package projects
 
 import (
@@ -45,6 +51,10 @@ const (
 	SubjectPhaseGate = "phase_gate"
 	// GatePolicyStage: la politica di approvazione dei cancelli (approval_policies.stage).
 	GatePolicyStage = "Cancello di fase"
+	// SubjectChangeRequest: approvazione di una change request (passo 3).
+	SubjectChangeRequest = "change_request"
+	// CRPolicyStage: la politica di approvazione delle change request.
+	CRPolicyStage = "Change request"
 
 	// Modi di consegna di un work package.
 	ModeAgile     = "agile"
@@ -65,7 +75,7 @@ var planRoles = []string{"project_manager", "pmo"}
 var starters embed.FS
 
 var processFiles = []string{"program_standard.json", "project_standard.json", "work_package_standard.json",
-	"plan_activity_standard.json", "milestone_standard.json"}
+	"plan_activity_standard.json", "milestone_standard.json", "change_request_standard.json"}
 
 // BudgetFunc restituisce il budget delle richieste confluite nel progetto (il budget resta
 // sulla richiesta fino al passo 5): la imposta il server con il modulo finance.
@@ -102,6 +112,7 @@ func Register(eng *engine.Service, ap *approval.Service) *Service {
 	}
 	if ap != nil {
 		ap.OnClose(SubjectPhaseGate, s.gateClosed)
+		ap.OnClose(SubjectChangeRequest, s.changeRequestClosed)
 	}
 	return s
 }
@@ -249,6 +260,13 @@ func (s *Service) afterTransition(ctx context.Context, tx pgx.Tx, ev engine.Tran
 	switch el.TypeKey {
 	case RequestType:
 		return s.requestMoved(ctx, tx, ev)
+	case TypeChangeRequest:
+		// «Ritira» dal processo: la change request da inviare non serve più.
+		if el.StateCategory == "cancelled" {
+			_, err := tx.Exec(ctx, "update ext_change_request set status = 'withdrawn', decided_at = now() where element_id = $1 and status = 'draft'", el.ID)
+			return err
+		}
+		return nil
 	case TypeWorkPackage, TypeActivity, TypeMilestone:
 		if el.TypeKey == TypeMilestone {
 			if _, err := tx.Exec(ctx, `update ext_milestone set actual_date = case when $2 then coalesce(actual_date, current_date) end

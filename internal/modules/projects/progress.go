@@ -185,13 +185,25 @@ func computePhases(p *Plan) {
 // Numbers sono i numeri del progetto, uguali ovunque (Panoramica, elenco, fatti, status report).
 type Numbers struct {
 	Progress float64 `json:"progress"`
-	// Date di previsione (inviluppo delle voci) ed effettive; la baseline arriva al passo 3.
+	// Date di previsione (inviluppo delle voci), di baseline ed effettive.
 	Start         *string `json:"start"`
 	End           *string `json:"end"`
 	BaselineStart *string `json:"baseline_start"`
 	BaselineEnd   *string `json:"baseline_end"`
-	ActualStart   *string `json:"actual_start"`
-	ActualEnd     *string `json:"actual_end"`
+	// Baseline in vigore (numero) e scostamento della fine prevista da quella di baseline, in
+	// giorni lavorativi e in percentuale della durata di baseline.
+	Baseline     *int     `json:"baseline"`
+	VarianceDays *int     `json:"variance_days"`
+	VariancePct  *float64 `json:"variance_pct"`
+	// Oltre le tolleranze: milestone (DaysLate è lo scostamento), fine del progetto e budget.
+	Tolerance        Tolerance `json:"tolerance"`
+	OverTolerance    []ItemRef `json:"over_tolerance"`
+	EndOverTolerance bool      `json:"end_over_tolerance"`
+	// BudgetVariancePct: costo previsto (o approvato) rispetto alla baseline, solo a chi vede il budget.
+	BudgetVariancePct   *float64 `json:"budget_variance_pct"`
+	BudgetOverTolerance bool     `json:"budget_over_tolerance"`
+	ActualStart         *string  `json:"actual_start"`
+	ActualEnd           *string  `json:"actual_end"`
 	// Target e margine in giorni lavorativi (negativo = oltre la scadenza).
 	Target     *string `json:"target"`
 	TargetKind string  `json:"target_kind"`
@@ -205,7 +217,7 @@ type Numbers struct {
 	NextMilestone    *ItemRef   `json:"next_milestone"`
 	Late             []ItemRef  `json:"late"`
 	Blocked          []Blocked  `json:"blocked"`
-	// Change request aperte (passo 3) e rischi collegati al progetto o alle sue richieste.
+	// Change request aperte e rischi collegati al progetto o alle sue richieste.
 	OpenChangeRequests int       `json:"open_change_requests"`
 	Risks              []ItemRef `json:"risks"`
 	MissingRoles       []RoleRef `json:"missing_roles"`
@@ -272,7 +284,8 @@ func parse(s *string) *time.Time {
 
 // computeNumbers calcola i numeri del piano già caricato: è l'unica funzione che li calcola.
 func computeNumbers(p *Plan, now time.Time) Numbers {
-	n := Numbers{Late: []ItemRef{}, Blocked: []Blocked{}, Risks: []ItemRef{}, MissingRoles: []RoleRef{}, ByMode: []ModeStat{}, Reasons: []string{}}
+	n := Numbers{Late: []ItemRef{}, Blocked: []Blocked{}, Risks: []ItemRef{}, MissingRoles: []RoleRef{}, ByMode: []ModeStat{}, Reasons: []string{},
+		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance}
 	wps, ws := wpWeights(p)
 	vs := make([]float64, len(wps))
 	byMode := map[string]*struct {
@@ -398,6 +411,34 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 		}
 		n.MarginDays = &m
 	}
+	// Baseline: scostamento della fine e milestone oltre la tolleranza.
+	if b := p.Baseline; b != nil {
+		num := b.Number
+		n.Baseline, n.BaselineStart, n.BaselineEnd = &num, b.Start, b.End
+		if be, e := parse(b.End), parse(n.End); be != nil && e != nil {
+			d := shift(*be, *e)
+			n.VarianceDays = &d
+			if bs := parse(b.Start); bs != nil {
+				if dur := calendar.Workdays(*bs, *be); dur > 0 {
+					pct := round1(float64(d) * 100 / float64(dur))
+					n.VariancePct = &pct
+				}
+			}
+			n.EndOverTolerance = d > p.Tolerance.Days
+		}
+		for i := range p.Items {
+			it := &p.Items[i]
+			if it.Kind != TypeMilestone || it.VarianceDays == nil || it.StateCategory == "done" || it.StateCategory == "cancelled" {
+				continue
+			}
+			if *it.VarianceDays > p.Tolerance.Days {
+				r := ref(it)
+				r.DaysLate = *it.VarianceDays
+				n.OverTolerance = append(n.OverTolerance, r)
+			}
+		}
+		sort.SliceStable(n.OverTolerance, func(i, j int) bool { return n.OverTolerance[i].DaysLate > n.OverTolerance[j].DaysLate })
+	}
 	// Semaforo.
 	switch {
 	case len(p.Items) == 0:
@@ -415,6 +456,9 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 		}
 		if n.MarginDays != nil && *n.MarginDays < 0 {
 			n.Reasons = append(n.Reasons, "past_target")
+		}
+		if len(n.OverTolerance) > 0 || n.EndOverTolerance {
+			n.Reasons = append(n.Reasons, "over_tolerance")
 		}
 		if len(n.Reasons) > 0 {
 			n.Signal = "red"
@@ -512,5 +556,37 @@ func (s *Service) numbersOf(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 			return nil, err
 		}
 	}
+	if p.Baseline != nil && n.Budget != nil {
+		if pct := budgetVariance(p.Baseline.budget, n.Budget); pct != nil {
+			n.BudgetVariancePct = pct
+			if *pct > p.Tolerance.BudgetPct {
+				n.BudgetOverTolerance = true
+				n.Reasons = append(n.Reasons, "budget_over_tolerance")
+				n.Signal = "red"
+			}
+		}
+	}
 	return &n, nil
+}
+
+// cost è il costo di riferimento: il forecast, altrimenti l'approvato.
+func cost(b *Budget) *int64 {
+	if b == nil {
+		return nil
+	}
+	if b.ForecastCents != nil {
+		return b.ForecastCents
+	}
+	return b.ApprovedCents
+}
+
+// budgetVariance: di quanto il costo previsto supera (o resta sotto) quello della baseline, in
+// percentuale; nil se uno dei due manca, la valuta è diversa o la baseline è a zero.
+func budgetVariance(base, cur *Budget) *float64 {
+	b, c := cost(base), cost(cur)
+	if b == nil || c == nil || *b <= 0 || base.Currency != cur.Currency {
+		return nil
+	}
+	pct := round1(float64(*c-*b) * 100 / float64(*b))
+	return &pct
 }

@@ -91,6 +91,12 @@ type Item struct {
 	Progress      float64        `json:"progress"`        // 0..100
 	ProgressFrom  string         `json:"progress_source"` // epics | activities | declared | state | none
 	Capacity      float64        `json:"team_capacity"`
+	// Baseline in vigore (passo 3): date della voce nella baseline e scostamento della fine in
+	// giorni lavorativi (positivo = più tardi). InBaseline è falso per le voci nate dopo.
+	InBaseline    bool    `json:"in_baseline"`
+	BaselineStart *string `json:"baseline_start"`
+	BaselineEnd   *string `json:"baseline_end"`
+	VarianceDays  *int    `json:"variance_days"`
 	// Restricted: l'attore non può leggere la voce; restano date, avanzamento e dipendenze.
 	Restricted   bool           `json:"restricted,omitempty"`
 	declared     *float64       // ultima percentuale dichiarata (work package senza epic)
@@ -105,6 +111,27 @@ type Plan struct {
 	CanEdit bool    `json:"can_edit"`
 	// Method: metodo di avanzamento del tenant (weighted_estimate | equal).
 	Method string `json:"progress_method"`
+	// Baseline in vigore (nil se il piano non ne ha) e tolleranze del progetto.
+	Baseline  *BaselineHead `json:"baseline"`
+	Tolerance Tolerance     `json:"tolerance"`
+}
+
+// BaselineHead è la baseline in vigore, senza le voci.
+type BaselineHead struct {
+	ID        string  `json:"id"`
+	Number    int     `json:"number"`
+	Start     *string `json:"start"`
+	End       *string `json:"end"`
+	CreatedAt string  `json:"created_at"`
+	CreatedBy *string `json:"created_by"`
+	// Budget della baseline: lo vede solo chi vede il budget del progetto (numbersOf).
+	budget *Budget
+}
+
+// Tolerance sono le tolleranze del progetto: quelle del tenant, se il progetto non ne ha di sue.
+type Tolerance struct {
+	Days      int     `json:"days"`
+	BudgetPct float64 `json:"budget_pct"`
 }
 
 func dateStr(t *time.Time) *string {
@@ -211,11 +238,26 @@ func (s *Service) loadPlan(ctx context.Context, tx pgx.Tx, el *engine.Element) (
 	h := &p.Project
 	h.ID, h.Key, h.Title, h.State, h.StateCategory = el.ID, el.Key, el.Title, el.State, el.StateCategory
 	h.Start, h.End = dateStr(el.StartAt), dateStr(el.DueAt)
+	st, err := GetSettings(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	p.Method = st.ProgressMethod
+	p.Tolerance = Tolerance{Days: st.ToleranceDays, BudgetPct: st.ToleranceBudgetPct}
 	var programID, programKey, programTitle *string
-	err := tx.QueryRow(ctx, `select x.template, x.program_id::text, ps.key || '-' || pg.number, pg.title from ext_project x
+	var tolDays *int
+	var tolBudget *float64
+	err = tx.QueryRow(ctx, `select x.template, x.program_id::text, ps.key || '-' || pg.number, pg.title,
+		x.tolerance_days, x.tolerance_budget_pct::float8 from ext_project x
 		left join elements pg on pg.tenant_id = x.tenant_id and pg.id = x.program_id and pg.deleted_at is null
 		left join spaces ps on ps.tenant_id = pg.tenant_id and ps.id = pg.space_id
-		where x.element_id = $1`, el.ID).Scan(&h.Template, &programID, &programKey, &programTitle)
+		where x.element_id = $1`, el.ID).Scan(&h.Template, &programID, &programKey, &programTitle, &tolDays, &tolBudget)
+	if tolDays != nil {
+		p.Tolerance.Days = *tolDays
+	}
+	if tolBudget != nil {
+		p.Tolerance.BudgetPct = *tolBudget
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		h.Template = "mixed"
 	} else if err != nil {
@@ -323,12 +365,11 @@ func (s *Service) loadPlan(ctx context.Context, tx pgx.Tx, el *engine.Element) (
 			return nil, err
 		}
 	}
-	st, err := GetSettings(ctx, tx)
-	if err != nil {
+	if err := loadBaseline(ctx, tx, p); err != nil {
 		return nil, err
 	}
-	p.Method = st.ProgressMethod
 	computeItemProgress(p)
+	computeItemVariance(p)
 	computePhases(p)
 	return p, nil
 }
