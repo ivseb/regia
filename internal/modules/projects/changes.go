@@ -221,9 +221,10 @@ func (s *Service) submit(ctx context.Context, tx pgx.Tx, actor engine.Actor, pro
 		if code == "" {
 			code = "validation"
 		}
-		params := ve.Params
-		if code == "validation" {
-			params = map[string]any{"detail": ve.Msg}
+		// Il messaggio del server resta nei parametri: è il testo da mostrare in italiano.
+		params := map[string]any{"detail": ve.Msg}
+		for k, v := range ve.Params {
+			params[k] = v
 		}
 		return block(code, params)
 	}

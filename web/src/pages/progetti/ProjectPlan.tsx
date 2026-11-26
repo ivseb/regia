@@ -2,6 +2,8 @@
 // Si parte dal Gantt della richiesta (pages/Plan.tsx): trascinando una barra la si sposta, dai bordi
 // la si allunga; chi dipende da lei slitta a cascata già durante il trascinamento, con le regole del
 // server (plan-logic.ts). Sul telefono c'è l'elenco per fase: il Gantt si guarda e non si modifica.
+// Con una baseline, sotto ogni barra c'è in trasparenza la sua posizione nella baseline in vigore;
+// sotto il Gantt, baseline e change request (ProjectBaseline.tsx).
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +15,7 @@ import { EntitySelect } from "../../select";
 import { ErrorNote, Loading } from "../../ui";
 import { useT } from "../../i18n/react";
 import { Markers, NonWorkdays, PX_PER_DAY, TimeHeader, ZoomSwitch, useNarrow, type Zoom } from "../timeline";
+import { BaselinePanel } from "./ProjectBaseline";
 import { H, cascadeFrom, criticalPath, envelope, itemsByPhase, proposedDuration, rowHeight, violated, type Row, type Span } from "./plan-logic";
 
 const LABEL = 320;
@@ -70,10 +73,13 @@ function PlanView({ plan, refKey }: { plan: ProjectPlan; refKey: string }) {
   const [zoom, setZoom] = useState<Zoom>("settimane");
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [showBaseline, setShowBaseline] = useState(true);
 
   const invalidate = async () => {
     await qc.invalidateQueries({ queryKey: projectKeys.plan(refKey) });
     qc.invalidateQueries({ queryKey: projectKeys.overview(refKey) });
+    // Uno spostamento oltre le tolleranze apre una change request.
+    qc.invalidateQueries({ queryKey: projectKeys.changeRequests(refKey) });
   };
   /** Esegue un'azione sul server, poi ricarica il piano; l'errore si mostra sotto il Gantt. */
   const run = async (fn: () => Promise<unknown>) => {
@@ -95,6 +101,12 @@ function PlanView({ plan, refKey }: { plan: ProjectPlan; refKey: string }) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {!narrow && <ZoomSwitch value={zoom} options={["giorni", "settimane", "mesi"]} onChange={setZoom} />}
+        {!narrow && plan.baseline && (
+          <label className="flex items-center gap-1.5 text-[13px]">
+            <input type="checkbox" className="size-5 accent-[var(--accent)]" checked={showBaseline} onChange={(e) => setShowBaseline(e.target.checked)} />
+            {t("progetti.baseline.show", { number: plan.baseline.number })}
+          </label>
+        )}
         {plan.can_edit && undated > 0 && !narrow && (
           <button className="btn btn-primary ml-auto" disabled={busy} onClick={() => run(() => projectsApi.autoPlan(refKey))}>
             {t("progetti.piano.autoPlan", { count: undated })}
@@ -105,8 +117,9 @@ function PlanView({ plan, refKey }: { plan: ProjectPlan; refKey: string }) {
       {narrow ? (
         <PhoneList plan={plan} />
       ) : (
-        <Gantt plan={plan} refKey={refKey} zoom={zoom} canEdit={canEdit} busy={busy} run={run} />
+        <Gantt plan={plan} refKey={refKey} zoom={zoom} canEdit={canEdit} busy={busy} run={run} showBaseline={showBaseline && plan.baseline != null} />
       )}
+      <BaselinePanel plan={plan} refKey={refKey} />
     </div>
   );
 }
@@ -158,6 +171,12 @@ function PhoneList({ plan }: { plan: ProjectPlan }) {
                     <span>{it.key}</span>
                     {it.delivery_mode && <span>{t(`progetti.piano.mode.${it.delivery_mode}`)}</span>}
                     <span>{dateRange(it, t)}</span>
+                    {plan.baseline && it.in_baseline && (
+                      <span>
+                        {t("progetti.baseline.phone", { dates: dateRange({ start: it.baseline_start, end: it.baseline_end }, t) })}
+                        {it.variance_days ? ` ${t("progetti.baseline.shift", { sign: it.variance_days > 0 ? "+" : "−", count: Math.abs(it.variance_days) })}` : ""}
+                      </span>
+                    )}
                   </span>
                 </Link>
               </li>
@@ -179,6 +198,7 @@ function Gantt({
   canEdit,
   busy,
   run,
+  showBaseline,
 }: {
   plan: ProjectPlan;
   refKey: string;
@@ -186,6 +206,7 @@ function Gantt({
   canEdit: boolean;
   busy: boolean;
   run: (fn: () => Promise<unknown>) => Promise<void>;
+  showBaseline: boolean;
 }) {
   const t = useT();
   const nav = useNavigate();
@@ -274,11 +295,12 @@ function Gantt({
     const pts = [cal.today()];
     for (const s of base.values()) pts.push(s.s, s.e);
     for (const s of ghost.values()) pts.push(s.e);
+    if (showBaseline) for (const i of items) for (const d of [i.baseline_start, i.baseline_end]) if (d) pts.push(cal.parse(d));
     if (plan.project.target) pts.push(cal.parse(plan.project.target));
     const f = cal.monday(cal.addDays(Math.min(...pts), -7));
     const to = cal.addDays(Math.max(...pts), zoom === "mesi" ? 60 : 28);
     return { from: f, days: cal.diffDays(f, to) };
-  }, [base, ghost, plan.project.target, zoom]);
+  }, [base, ghost, plan.project.target, zoom, showBaseline, items]);
   const width = days * px;
   const xOf = (d: number) => cal.diffDays(from, d) * px;
 
@@ -346,6 +368,7 @@ function Gantt({
     <>
       <p className="m-0 text-[12.5px] text-muted">
         {canEdit ? t("progetti.piano.helpEdit") : t("progetti.piano.helpReadOnly")} {t("progetti.piano.helpCritical")}
+        {showBaseline && plan.baseline && ` ${t("progetti.baseline.help", { number: plan.baseline.number })}`}
       </p>
       <div ref={scroller} className="overflow-x-auto border border-hair" style={{ touchAction: "pan-x pan-y" }}>
         <div style={{ width: LABEL + width }}>
@@ -376,6 +399,8 @@ function Gantt({
                 <div key={rowKey(r, i)} className={`absolute left-0 border-b border-hair/60 ${r.k === "phase" ? "bg-hair/25" : ""}`} style={{ top: tops[i], height: rowHeight(r), width }} />
               ))}
               <Markers from={from} px={px} height={height} markers={markers} />
+              {showBaseline &&
+                rows.map((r) => (r.k === "item" && r.it.in_baseline ? <BaselineMark key={"b" + r.it.id} it={r.it} y={yOf.get(r.it.id)!} depth={r.depth} xOf={xOf} px={px} /> : null))}
               <Arrows items={items} spans={spans} yOf={yOf} xOf={xOf} px={px} width={width} height={height} crit={crit} />
               {rows.map((r, i) => {
                 if (r.k === "phase") return <PhaseBar key={rowKey(r, i)} phase={r.phase} y={tops[i] + H.phase / 2} span={envelope(phaseItems.get(r.id) ?? [], spans)} xOf={xOf} px={px} />;
@@ -753,6 +778,39 @@ function Bar({
         </span>
       )}
     </div>
+  );
+}
+
+/** La voce nella baseline in vigore, in trasparenza: una striscia sotto la barra, un rombo vuoto per la milestone. */
+function BaselineMark({ it, y, depth, xOf, px }: { it: PlanItem; y: number; depth: 0 | 1; xOf: (d: number) => number; px: number }) {
+  const t = useT();
+  if (!it.baseline_start && !it.baseline_end) return null;
+  const s = cal.parse(it.baseline_start ?? it.baseline_end!);
+  const e = cal.parse(it.baseline_end ?? it.baseline_start!);
+  const v = it.variance_days ?? 0;
+  const title = t("progetti.baseline.markTitle", {
+    from: cal.shortYear(s),
+    to: cal.shortYear(e),
+    shift: v === 0 ? t("progetti.baseline.onBaseline") : t("progetti.baseline.shift", { sign: v > 0 ? "+" : "−", count: Math.abs(v) }),
+  });
+  if (it.kind === "milestone") {
+    return (
+      <span
+        aria-hidden="true"
+        title={title}
+        className="pointer-events-none absolute z-[9] block h-3.5 w-3.5 rotate-45 border border-dashed border-muted bg-hair/40"
+        style={{ left: xOf(s) + px / 2 - 7, top: y - 7 }}
+      />
+    );
+  }
+  const h = depth === 1 ? 16 : 22;
+  return (
+    <span
+      aria-hidden="true"
+      title={title}
+      className="pointer-events-none absolute z-[9] block border border-muted bg-muted/25"
+      style={{ left: xOf(s), width: Math.max((cal.diffDays(s, e) + 1) * px, 6), top: y + h / 2 + 2, height: 5 }}
+    />
   );
 }
 

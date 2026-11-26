@@ -1,8 +1,10 @@
-// Progetti (replica/progetti.md, passi 1 e 2): client delle API /projects, /plan-items e
-// /plan-phases. Il progetto è un elemento di tipo «project» dello spazio PRJ; il piano ha fasi,
+// Progetti (replica/progetti.md, passi 1, 2 e 3): client delle API /projects, /plan-items,
+// /plan-phases, /plan-baselines e /change-requests. Il progetto è un elemento di tipo «project» dello spazio PRJ; il piano ha fasi,
 // work package (agile, a cascata o fornitore), attività dei work package a cascata, milestone e
 // dipendenze fs/ss/ff con ritardo in giorni lavorativi. I numeri (avanzamento pesato, ritardi,
-// dipendenze bloccate, budget) li calcola il server con una sola funzione: qui si mostrano.
+// dipendenze bloccate, budget, scostamenti dalla baseline) li calcola il server con una sola
+// funzione: qui si mostrano. La baseline è immutabile: la prima la fissa il PM, le altre nascono
+// da una change request approvata.
 import { call, type Element } from "./api";
 import { tr } from "./i18n/core";
 
@@ -81,9 +83,17 @@ export type PlanItem = {
   progress: number;
   progress_source: "epics" | "activities" | "declared" | "state" | "none";
   team_capacity: number;
+  /** Baseline in vigore: la voce c'era? Date e scostamento della fine (giorni lavorativi, + = più tardi). */
+  in_baseline: boolean;
+  baseline_start: string | null;
+  baseline_end: string | null;
+  variance_days: number | null;
   /** L'attore non può leggere la voce: restano date, avanzamento e dipendenze. */
   restricted?: boolean;
 };
+
+export type BaselineHead = { id: string; number: number; start: string | null; end: string | null; created_at: string; created_by: string | null };
+export type Tolerance = { days: number; budget_pct: number };
 
 export type ProjectPlan = {
   project: ProjectHead;
@@ -91,6 +101,9 @@ export type ProjectPlan = {
   items: PlanItem[];
   can_edit: boolean;
   progress_method: "weighted_estimate" | "equal";
+  /** Baseline in vigore (null se non è ancora fissata) e tolleranze del progetto. */
+  baseline: BaselineHead | null;
+  tolerance: Tolerance;
 };
 
 export type ItemRef = {
@@ -116,16 +129,27 @@ export type Budget = {
   forecast_cents: number | null;
 };
 
-/** Codici del semaforo: milestone_late, past_target (rosso); work_package_late, blocked, missing_roles (giallo). */
-export type Reason = "milestone_late" | "past_target" | "work_package_late" | "blocked" | "missing_roles";
+/** Codici del semaforo: milestone_late, past_target, over_tolerance, budget_over_tolerance (rosso);
+ * work_package_late, blocked, missing_roles (giallo). */
+export type Reason = "milestone_late" | "past_target" | "over_tolerance" | "budget_over_tolerance" | "work_package_late" | "blocked" | "missing_roles";
 
 export type Numbers = {
   progress: number;
   start: string | null;
   end: string | null;
-  /** Baseline: arriva con il passo 3 (sempre null per ora). */
   baseline_start: string | null;
   baseline_end: string | null;
+  /** Numero della baseline in vigore; scostamento della fine in giorni lavorativi e in % della durata. */
+  baseline: number | null;
+  variance_days: number | null;
+  variance_pct: number | null;
+  tolerance: Tolerance;
+  /** Milestone oltre la tolleranza (days_late è lo scostamento dalla baseline). */
+  over_tolerance: ItemRef[];
+  end_over_tolerance: boolean;
+  /** Costo previsto rispetto alla baseline (%), solo a chi vede il budget. */
+  budget_variance_pct: number | null;
+  budget_over_tolerance: boolean;
   actual_start: string | null;
   actual_end: string | null;
   target: string | null;
@@ -140,7 +164,7 @@ export type Numbers = {
   next_milestone: ItemRef | null;
   late: ItemRef[];
   blocked: Blocked[];
-  /** Change request aperte (passo 3: per ora sempre 0). */
+  /** Change request da inviare o in approvazione. */
   open_change_requests: number;
   risks: ItemRef[];
   missing_roles: { key: string; name: string }[];
@@ -188,9 +212,70 @@ export type ProjectSettings = {
   auto_from_request: boolean;
   programs_enabled: boolean;
   progress_method: "weighted_estimate" | "equal";
+  /** Oltre queste tolleranze una modifica del piano apre una change request. */
+  tolerance_days: number;
+  tolerance_budget_pct: number;
   roles: ProjectRole[];
   available_roles: { key: string; name: string }[];
   can_edit: boolean;
+};
+
+export type BaselineItem = {
+  id: string;
+  kind: ItemKind;
+  key: string;
+  title: string;
+  phase_id: string | null;
+  phase: string | null;
+  start: string | null;
+  end: string | null;
+  estimate_effort_days: number | null;
+  restricted?: boolean;
+};
+
+export type Baseline = BaselineHead & {
+  note: string;
+  change_request: Ref | null;
+  budget: Budget | null;
+  items?: BaselineItem[];
+  current: boolean;
+};
+
+export type CRStatus = "draft" | "pending" | "approved" | "rejected" | "withdrawn";
+
+export type Deviation = {
+  id: string;
+  kind: "milestone" | "project";
+  key: string;
+  title: string;
+  baseline_end: string | null;
+  end: string | null;
+  days: number;
+  restricted?: boolean;
+};
+
+export type ChangeRequest = {
+  id: string;
+  key: string;
+  title: string;
+  state: string;
+  state_category: string;
+  status: CRStatus;
+  origin: "tolerance" | "manual";
+  reason: string;
+  baseline: number | null;
+  new_baseline: number | null;
+  new_baseline_id: string | null;
+  approval_request_id: string | null;
+  /** Perché l'approvazione non è partita: codice di errore (errors.<code>) e parametri. */
+  blocked: { code: string; params?: Record<string, unknown> } | null;
+  deviations: Deviation[];
+  budget_pct: number | null;
+  tolerance: Tolerance;
+  created_at: string;
+  created_by: string | null;
+  decided_at: string | null;
+  can_submit: boolean;
 };
 
 export type NewProject = { title: string; body_text?: string; template?: Template; start?: string; end?: string; program_id?: string; no_phases?: boolean };
@@ -238,11 +323,13 @@ function veil<T extends { title: string; restricted?: boolean }>(x: T): T {
   return x.restricted ? { ...x, title: tr("progetti.restricted") } : x;
 }
 const veilHead = (h: ProjectHead): ProjectHead => ({ ...h, requests: h.requests.map(veil) });
+const veilCR = (c: ChangeRequest): ChangeRequest => ({ ...c, deviations: c.deviations.map(veil) });
 const veilNumbers = (n: Numbers): Numbers => ({
   ...n,
   late: n.late.map(veil),
   blocked: n.blocked.map((b) => ({ ...b, item: veil(b.item), waits_on: veil(b.waits_on) })),
   next_milestone: n.next_milestone && veil(n.next_milestone),
+  over_tolerance: n.over_tolerance.map(veil),
 });
 
 export const projectsApi = {
@@ -276,6 +363,16 @@ export const projectsApi = {
   /** Chiede l'approvazione del cancello della fase (motore delle approvazioni). */
   requestGate: (id: string) => call<Phase>("POST", `/plan-phases/${q(id)}/gate`),
 
+  baselines: (ref: string) => call<{ items: Baseline[] }>("GET", `/projects/${q(ref)}/baselines`),
+  baseline: (id: string) => call<Baseline>("GET", `/plan-baselines/${q(id)}`).then((b) => ({ ...b, items: b.items?.map(veil) })),
+  /** Fissa la prima baseline (le altre nascono dalle change request approvate). */
+  createBaseline: (ref: string, note = "") => call<Baseline>("POST", `/projects/${q(ref)}/baselines`, { note }),
+  changeRequests: (ref: string) =>
+    call<{ items: ChangeRequest[] }>("GET", `/projects/${q(ref)}/change-requests`).then((r) => ({ items: r.items.map(veilCR) })),
+  createChangeRequest: (ref: string, c: { title?: string; reason: string }) => call<ChangeRequest>("POST", `/projects/${q(ref)}/change-requests`, c),
+  submitChangeRequest: (id: string, reason = "") => call<ChangeRequest>("POST", `/change-requests/${q(id)}/submit`, { reason }),
+  withdrawChangeRequest: (id: string) => call<ChangeRequest>("POST", `/change-requests/${q(id)}/withdraw`, {}),
+
   settings: () => call<ProjectSettings>("GET", "/projects/settings"),
   saveSettings: (s: Partial<Omit<ProjectSettings, "available_roles" | "can_edit">>) => call<ProjectSettings>("PUT", "/projects/settings", s),
 
@@ -291,5 +388,7 @@ export const projectKeys = {
   plan: (ref: string) => ["project-plan", ref] as const,
   overview: (ref: string) => ["project-overview", ref] as const,
   item: (id: string) => ["plan-item", id] as const,
+  baselines: (ref: string) => ["project-baselines", ref] as const,
+  changeRequests: (ref: string) => ["project-change-requests", ref] as const,
   ofRequest: (ref: string) => ["request-project", ref] as const,
 };

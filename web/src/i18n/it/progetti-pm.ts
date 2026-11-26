@@ -33,6 +33,8 @@ export default {
   "progetti.overview.reason.work_package_late": "Ci sono work package in ritardo",
   "progetti.overview.reason.blocked": "Ci sono dipendenze bloccate",
   "progetti.overview.reason.missing_roles": "Mancano ruoli obbligatori",
+  "progetti.overview.reason.over_tolerance": "Lo scostamento dalla baseline supera le tolleranze",
+  "progetti.overview.reason.budget_over_tolerance": "Il budget previsto supera la tolleranza sulla baseline",
   "progetti.overview.progress": "Avanzamento",
   "progetti.overview.progressSub": "{done} di {total} work package completati",
   "progetti.overview.nextMilestone": "Prossima milestone",

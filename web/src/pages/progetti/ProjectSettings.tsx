@@ -1,6 +1,7 @@
 // Configurazione → Progetti (replica/progetti.md, §8): modello predefinito, richiesta che diventa
-// progetto, metodo di avanzamento, programmi e ruoli del progetto (obbligatori, ereditati dalla
-// richiesta, nell'ordine in cui compaiono). Modifica chi amministra l'organizzazione.
+// progetto, metodo di avanzamento, programmi, tolleranze oltre cui una modifica del piano apre una
+// change request e ruoli del progetto (obbligatori, ereditati dalla richiesta, nell'ordine in cui
+// compaiono). Modifica chi amministra l'organizzazione.
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Select } from "../../select";
@@ -34,7 +35,7 @@ function SettingsForm() {
   const save = useMutation({
     mutationFn: () => projectsApi.saveSettings({
       default_template: s!.default_template, auto_from_request: s!.auto_from_request, programs_enabled: s!.programs_enabled,
-      progress_method: s!.progress_method, roles: s!.roles,
+      progress_method: s!.progress_method, tolerance_days: s!.tolerance_days, tolerance_budget_pct: s!.tolerance_budget_pct, roles: s!.roles,
     }),
     onSuccess: (x) => {
       qc.setQueryData(["project-settings"], x);
@@ -68,6 +69,22 @@ function SettingsForm() {
         </label>
       </div>
       <Switch label={t("progetti.voci.settings.autoFromRequest")} help={t("progetti.voci.settings.autoFromRequestHelp")} disabled={ro} on={s.auto_from_request} onChange={(v) => setS({ ...s, auto_from_request: v })} />
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="p-0"><SectionTitle>{t("progetti.baseline.settings.title")}</SectionTitle></legend>
+        <p className="m-0 text-[12px] text-muted">{t("progetti.baseline.settings.help")}</p>
+        <div className="flex flex-wrap gap-6">
+          <label className="flex flex-col gap-1">
+            <span className="label">{t("progetti.baseline.settings.days")}</span>
+            <input type="number" min={0} max={365} step={1} className="field w-32" disabled={ro} value={s.tolerance_days}
+              onChange={(e) => setS({ ...s, tolerance_days: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="label">{t("progetti.baseline.settings.budget")}</span>
+            <input type="number" min={0} max={100} step={0.5} className="field w-32" disabled={ro} value={s.tolerance_budget_pct}
+              onChange={(e) => setS({ ...s, tolerance_budget_pct: Math.max(0, Number(e.target.value) || 0) })} />
+          </label>
+        </div>
+      </fieldset>
       <Switch label={t("progetti.voci.settings.programs")} help={t("progetti.voci.settings.programsHelp")} disabled={ro} on={s.programs_enabled} onChange={(v) => setS({ ...s, programs_enabled: v })} />
 
       <div className="flex flex-col gap-2">

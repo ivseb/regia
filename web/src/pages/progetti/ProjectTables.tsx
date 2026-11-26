@@ -1,5 +1,5 @@
-// Schede «Work package» e «Milestone» del progetto, come tabelle (sul telefono, schede). La baseline arriva
-// con il passo 3: per ora è «—».
+// Schede «Work package» e «Milestone» del progetto, come tabelle (sul telefono, schede), con le date
+// della baseline in vigore e lo scostamento calcolato dal server.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { projectKeys, projectsApi, type DeliveryMode, type PlanItem, type ProjectPlan } from "../../projectsApi";
@@ -13,9 +13,24 @@ function usePlan(refKey: string) {
   return useQuery({ queryKey: projectKeys.plan(refKey), queryFn: () => projectsApi.plan(refKey) });
 }
 
-function range(i: PlanItem, none: string): string {
-  if (i.start && i.end) return `${date(i.start)} – ${date(i.end)}`;
+function range(i: { start: string | null; end: string | null }, none: string): string {
+  if (i.start && i.end && i.start !== i.end) return `${date(i.start)} – ${date(i.end)}`;
   return i.end || i.start ? date(i.end ?? i.start) : none;
+}
+
+/** Date della baseline con lo scostamento della fine («+3 g»); «nuova» se la voce è nata dopo. */
+function BaselineCell({ i, hasBaseline }: { i: PlanItem; hasBaseline: boolean }) {
+  const t = useT();
+  const none = t("progetti.common.none");
+  if (!hasBaseline) return <span className="text-muted">{none}</span>;
+  if (!i.in_baseline) return <span className="text-muted">{t("progetti.baseline.newItem")}</span>;
+  const v = i.variance_days;
+  return (
+    <span className="tabular whitespace-nowrap">
+      {range({ start: i.baseline_start, end: i.baseline_end }, none)}
+      {v != null && v !== 0 && <span className={`ml-2 font-semibold ${v > 0 ? "text-danger" : "text-muted"}`}>{t("progetti.baseline.shift", { sign: v > 0 ? "+" : "−", count: Math.abs(v) })}</span>}
+    </span>
+  );
 }
 
 const th = "label border-b-2 border-rule px-2 py-2 text-left font-semibold text-muted";
@@ -82,7 +97,7 @@ export function WorkPackagesTab({ refKey }: { refKey: string }) {
                     </div>
                   </td>
                   <td className={`${td} tabular whitespace-nowrap`}>{range(i, none)}</td>
-                  <td className={`${td} text-muted`}>{none}</td>
+                  <td className={td}><BaselineCell i={i} hasBaseline={plan.baseline != null} /></td>
                   <td className={td}>{i.state}</td>
                 </tr>
               ))}
@@ -104,7 +119,7 @@ export function WorkPackagesTab({ refKey }: { refKey: string }) {
                   <span className="tabular w-9 shrink-0 text-right text-[12.5px]">{Math.round(i.progress)}%</span>
                 </div>
                 <span className="tabular text-[12.5px]">
-                  {t("progetti.tables.planned")}: {range(i, none)} · {t("progetti.tables.baseline")}: {none}
+                  {t("progetti.tables.planned")}: {range(i, none)} · {t("progetti.tables.baseline")}: <BaselineCell i={i} hasBaseline={plan.baseline != null} />
                 </span>
               </li>
             ))}
@@ -155,7 +170,7 @@ export function MilestonesTab({ refKey }: { refKey: string }) {
               <td className={`${td} font-semibold`}>{i.title}</td>
               <td className={td}>{ph(i)}</td>
               <td className={`${td} tabular whitespace-nowrap`}>{i.end || i.start ? date(i.end ?? i.start) : none}</td>
-              <td className={`${td} text-muted`}>{none}</td>
+              <td className={td}><BaselineCell i={i} hasBaseline={q.data.baseline != null} /></td>
               <td className={td}>{i.state}</td>
               <td className={td}>{delay(i)}</td>
             </tr>
@@ -174,6 +189,11 @@ export function MilestonesTab({ refKey }: { refKey: string }) {
             <span className="tabular text-[12.5px]">
               {i.end || i.start ? date(i.end ?? i.start) : none} · {delay(i)}
             </span>
+            {q.data.baseline && (
+              <span className="text-[12.5px]">
+                {t("progetti.tables.baseline")}: <BaselineCell i={i} hasBaseline />
+              </span>
+            )}
           </li>
         ))}
       </ul>

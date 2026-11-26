@@ -33,6 +33,8 @@ export default {
   "progetti.overview.reason.work_package_late": "Some work packages are late",
   "progetti.overview.reason.blocked": "Some dependencies are blocked",
   "progetti.overview.reason.missing_roles": "Required roles are missing",
+  "progetti.overview.reason.over_tolerance": "The deviation from the baseline exceeds the tolerances",
+  "progetti.overview.reason.budget_over_tolerance": "The forecast budget exceeds the tolerance on the baseline",
   "progetti.overview.progress": "Progress",
   "progetti.overview.progressSub": "{done} of {total} work packages done",
   "progetti.overview.nextMilestone": "Next milestone",
