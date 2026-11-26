@@ -18,6 +18,7 @@ import (
 	"regia/internal/engine/approval"
 	"regia/internal/modules/architecture"
 	"regia/internal/modules/demand"
+	"regia/internal/modules/finance"
 	"regia/internal/modules/projects"
 	"regia/internal/modules/work"
 	"regia/internal/platform/auth"
@@ -34,7 +35,7 @@ func TestProjects(t *testing.T) {
 	d := needDB(t)
 	ctx := context.Background()
 	slug := strings.ReplaceAll("prj-"+time.Now().Format("150405.000"), ".", "")
-	prov := []tenant.Provisioner{demand.Provision, architecture.Provision, work.Provision, projects.Provision}
+	prov := []tenant.Provisioner{demand.Provision, architecture.Provision, finance.Provision, work.Provision, projects.Provision}
 	ten, err := tenant.Create(ctx, d, tenant.CreateInput{Slug: slug, Name: "Progetti", AdminEmail: "admin@" + slug + ".test",
 		AdminPassword: testPassword, Provision: prov})
 	if err != nil {
@@ -235,6 +236,14 @@ func TestProjects(t *testing.T) {
 	dv := admin.do("GET", "/api/v1/plan-items/"+design["id"].(string), nil, http.StatusOK)
 	if dv["progress"] != 62.5 || dv["progress_source"] != "activities" {
 		t.Fatalf("avanzamento a cascata: %v %v", dv["progress"], dv["progress_source"])
+	}
+	// Ore dal timesheet aziendale: un profilo CSV dei costi riconosce l'attività per chiave (prova senza salvare).
+	csvRun := admin.do("POST", "/api/v1/finance/imports", map[string]any{"file_name": "timesheet.csv",
+		"csv": "attivita;data;importo\n" + req1["key"].(string) + ";2027-01-05;350,00\n",
+		"mapping": map[string]any{"columns": map[string]string{"attivita": "element", "data": "entry_date", "importo": "amount"},
+			"defaults": map[string]string{"category": "PERS"}, "delimiter": ";"}}, http.StatusCreated)
+	if csvRun["rows_ok"] != 1.0 || csvRun["rows_error"] != 0.0 {
+		t.Fatalf("import CSV sull'attività: %v", csvRun)
 	}
 	// Fornitore: avanzamento dichiarato dal PM.
 	admin.do("POST", "/api/v1/plan-items/"+idp["id"].(string)+"/progress", map[string]any{"percent": 25}, http.StatusOK)
