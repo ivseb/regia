@@ -13,7 +13,7 @@ import { FavoriteViews } from "./views/FavoriteViews";
 import { buildNav, type NavItem, type NavSection } from "./nav";
 import { Avatar, ModuleChip, uiModuleOfPath } from "./moduleIcon";
 import { useTypeNames } from "./typesApi";
-import { moduleOfPath, moduleOn, pathOn, type ModuleKey } from "./modules";
+import { moduleOfPath, moduleOn, pathAfterSwitch, pathOn, type ModuleKey } from "./modules";
 import { useT } from "./i18n/react";
 import { Logo, SourceLink } from "./brand";
 import { AvvioStrip } from "./pages/AvvioStrip";
@@ -92,6 +92,9 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
       // Si azzerano i dati dell'organizzazione precedente; i componenti restano collegati e ricaricano.
       qc.setQueryData(["me"], m);
       qc.resetQueries({ predicate: (q) => q.queryKey[0] !== "me" });
+      // Pilota «Home lab», difetto 8: se nella nuova organizzazione la pagina non vale, si va all'inizio.
+      const next = pathAfterSwitch(m, path);
+      if (next !== path) navigate({ to: next as never });
     },
   });
   const logout = useMutation({

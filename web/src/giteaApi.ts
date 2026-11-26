@@ -88,11 +88,11 @@ export const giteaApi = {
   remove: (id: string) => call<void>("DELETE", `${G}/integrations/${q(id)}`),
   test: (id: string) => call<GTTestResult>("POST", `${G}/integrations/${q(id)}/test`),
   webhookSecret: (id: string) => call<{ secret: string }>("POST", `${G}/integrations/${q(id)}/webhook-secret`),
-  repos: (id: string) => call<{ items: GTRepo[] }>("GET", `${G}/integrations/${q(id)}/repos`),
+  repos: (id: string) => call<{ items: GTRepo[] }>("GET", `${G}/integrations/${q(id)}/repositories`),
   discover: (id: string) => call<{ found: number; new: number; missing: number; suggested: number }>("POST", `${G}/integrations/${q(id)}/discover`),
   mapRepo: (id: string, repo: string, body: { status: "confirmed" | "ignored" | "none"; application_id?: string; service_name?: string }) =>
-    call<GTRepo>("PUT", `${G}/integrations/${q(id)}/repos/${q(repo)}`, body),
-  accept: (id: string, ids: string[]) => call<{ confirmed: number }>("POST", `${G}/integrations/${q(id)}/repos/accept`, { ids }),
+    call<GTRepo>("PUT", `${G}/integrations/${q(id)}/repositories/${q(repo)}`, body),
+  accept: (id: string, ids: string[]) => call<{ confirmed: number }>("POST", `${G}/integrations/${q(id)}/repositories/accept`, { ids }),
   sync: (id: string, full = false) => call<{ run_id: string }>("POST", `${G}/integrations/${q(id)}/sync${full ? "?full=true" : ""}`),
   runs: (id: string) => call<{ items: GTRun[] }>("GET", `${G}/integrations/${q(id)}/runs`),
   preview: (id: string, body: { repository: string; definition?: unknown; profile_id?: string; tag?: string }) =>

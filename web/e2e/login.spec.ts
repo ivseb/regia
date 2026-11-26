@@ -37,9 +37,14 @@ test("accesso con password e cambio di organizzazione", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Richieste", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "DEM-1", exact: true })).toBeVisible();
 
-  // Nell'altra organizzazione non ci sono le richieste del demo.
+  // Nell'altra organizzazione non ci sono le richieste del demo. Dalla scheda di DEM-1, che
+  // nell'altra non esiste, il cambio porta alla pagina iniziale (pilota «Home lab», difetto 8).
+  await page.getByRole("link", { name: "DEM-1", exact: true }).click();
+  await expect(page).toHaveURL(/DEM-1/);
   await scegli(org, "Altro Cliente");
   await expect(org).toContainText("Altro Cliente");
+  await expect(page).not.toHaveURL(/DEM-1/);
+  await page.goto("/richieste");
   await expect(page.getByRole("link", { name: "DEM-1", exact: true })).toHaveCount(0);
   const me = await call(page.request, "GET", "/api/v1/me");
   expect(me.tenants.find((t: { tenant_id: string }) => t.tenant_id === me.active_tenant.tenant_id).slug).toBe("altro");

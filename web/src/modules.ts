@@ -64,6 +64,17 @@ export function pathOn(me: Me | undefined | null, path: string): boolean {
   return !m || moduleOn(me, m);
 }
 
+/**
+ * Pagina in cui restare dopo il cambio di organizzazione: la stessa se il suo modulo è acceso
+ * anche nella nuova e non riguarda un elemento preciso (le chiavi, come WEB-12, sono dell'altra
+ * organizzazione); altrimenti la pagina iniziale, che porta alla prima pagina valida.
+ */
+export function pathAfterSwitch(me: Me | undefined | null, path: string): string {
+  if (!pathOn(me, path)) return "/";
+  if (path.startsWith("/e/") || /\/[A-Za-z][A-Za-z0-9]*-\d+(\/|$)/.test(path)) return "/";
+  return path;
+}
+
 /** Pagine del profilo di menu del revisore: i moduli di controllo, in sola lettura. */
 const AUDITOR_PATHS = [
   "/governance", "/conformita", "/audit-spazio", "/rischi", "/crisi", "/devsecops", "/architettura", "/documenti", "/elenco",

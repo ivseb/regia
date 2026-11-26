@@ -42,10 +42,13 @@ func (s *Server) giteaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE "+b+"/integrations/{id}", adminSession(s.gtDelete))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/test", adminSession(s.gtTest))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/webhook-secret", adminSession(s.gtWebhookSecret))
-	mux.HandleFunc("GET "+b+"/integrations/{id}/repos", adminOnly(s.gtRepos))
+	// «repositories» come nel connettore GitHub; «repos» resta come alias per i client già scritti.
+	for _, seg := range []string{"repositories", "repos"} {
+		mux.HandleFunc("GET "+b+"/integrations/{id}/"+seg, adminOnly(s.gtRepos))
+		mux.HandleFunc("PUT "+b+"/integrations/{id}/"+seg+"/{repo}", adminSession(s.gtMapRepo))
+		mux.HandleFunc("POST "+b+"/integrations/{id}/"+seg+"/accept", adminSession(s.gtAccept))
+	}
 	mux.HandleFunc("POST "+b+"/integrations/{id}/discover", adminOnly(s.gtDiscover))
-	mux.HandleFunc("PUT "+b+"/integrations/{id}/repos/{repo}", adminSession(s.gtMapRepo))
-	mux.HandleFunc("POST "+b+"/integrations/{id}/repos/accept", adminSession(s.gtAccept))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/sync", adminOnly(s.gtSync))
 	mux.HandleFunc("GET "+b+"/integrations/{id}/runs", adminOnly(s.gtRuns))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/preview", adminOnly(s.gtPreview))
