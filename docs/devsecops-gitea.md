@@ -78,6 +78,8 @@ Il job controlla ogni minuto le integrazioni dovute e le esegue una alla volta (
 
 Il preset **«Gitea Actions con SBOM e scansioni»** (Profili → crea dal preset) legge gli allegati `sbom.cdx.json` (CycloneDX) e `vulnerabilities.json` (grype o trivy), con tag `v*` e ambiente `prod`. Un workflow di rilascio di Gitea Actions che crea la release e carica quei due file basta. Gli allegati si nominano con i modelli `*` e `?`, come per gli altri connettori; la scheda **Profili** permette di provare il profilo su un repository senza salvare nulla (anteprima).
 
+Se un repository pubblica più tag per versione (chart e applicazione), alla scoperta Regia chiede quale è il rilascio vero e salva la risposta come filtro dei tag del repository nel profilo, creandolo se manca: vedi «Più tag per versione» in `devsecops-github.md`.
+
 ## 6. Permessi, audit e limiti
 
 - Lettura delle integrazioni, scoperta, sincronizzazione e anteprima: `tenant.admin` (anche con un token API); modifiche della configurazione solo con una sessione.

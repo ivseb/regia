@@ -679,7 +679,7 @@ func (s *Service) syncRepo(ctx context.Context, cl *ghapi.Client, in *syncInput,
 		var todo []ghapi.Release
 		seenRun := 0
 		err := cl.Releases(ctx, r.FullName, 5, func(rel ghapi.Release) (bool, error) {
-			if rel.Draft || !def.AcceptsTag(rel.TagName, rel.Prerelease) {
+			if rel.Draft || !def.AcceptsRepoTag(r.FullName, rel.TagName, rel.Prerelease) {
 				return false, nil
 			}
 			id := strconv.FormatInt(rel.ID, 10)

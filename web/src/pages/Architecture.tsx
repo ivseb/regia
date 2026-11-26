@@ -7,6 +7,7 @@ import { PageHeader, useMe } from "../shell";
 import { CatalogId } from "../catalogId";
 import { CRITICALITY, Criticality, ErrorNote, SectionTitle, Loading } from "../ui";
 import { workApi } from "../workApi";
+import { proposeKey } from "../boardKey";
 import { EaTabLinks } from "./ea/tabs";
 import { useTypeNames } from "../typesApi";
 import { tr } from "../i18n/core";
@@ -434,12 +435,17 @@ function Teams({ canWrite }: { canWrite: boolean }) {
   const teams = useQuery({ queryKey: ["teams"], queryFn: api.teams });
   const [name, setName] = useState("");
   const [lead, setLead] = useState("");
+  // Board del team (pilota home lab, difetto 7): chiave vuota = quella proposta dal nome.
+  const [boardKey, setBoardKey] = useState("");
+  const [boardModel, setBoardModel] = useState("");
   const [delivery, setDelivery] = useState<string | null>(null); // team con il riquadro delle metriche aperto
   const create = useMutation({
-    mutationFn: () => api.createTeam(name, lead || undefined),
+    mutationFn: () => api.createTeam(name, lead || undefined, { board_key: boardKey.trim().toUpperCase(), board_model: boardModel }),
     onSuccess: () => {
       setName("");
       setLead("");
+      setBoardKey("");
+      setBoardModel("");
       qc.invalidateQueries({ queryKey: ["teams"] });
       qc.invalidateQueries({ queryKey: ["work", "spaces"] }); // il team nuovo ha già il suo spazio
     },
@@ -468,7 +474,22 @@ function Teams({ canWrite }: { canWrite: boolean }) {
             <span className="label">{tr("governance.riskdetail.referente")}</span>
             <EntitySelect kind="member" noneLabel="—" className="field" value={lead} onChange={(v) => setLead(v)} />
           </label>
+          <label className="flex w-40 flex-col gap-1">
+            <span className="label">{tr("governance.team.chiave")}</span>
+            <input className="field font-mono uppercase" maxLength={20} value={boardKey} placeholder={name.trim() ? proposeKey(name) : ""}
+              pattern="[A-Za-z][A-Za-z0-9_]{0,19}" onChange={(e) => setBoardKey(e.target.value)} aria-describedby="team-chiave-aiuto" />
+          </label>
+          <label className="flex w-56 flex-col gap-1">
+            <span className="label">{tr("governance.team.modello")}</span>
+            <Select className="field" value={boardModel} onChange={(e) => setBoardModel(e.target.value)}>
+              <option value="">{tr("governance.team.modello.nessuno")}</option>
+              <option value="scrum">{tr("governance.team.modello.scrum")}</option>
+              <option value="kanban">{tr("governance.team.modello.kanban")}</option>
+              <option value="supporto">{tr("governance.team.modello.supporto")}</option>
+            </Select>
+          </label>
           <button className="btn btn-primary" disabled={create.isPending}>{tr("governance.compliance.aggiungi")}</button>
+          <p id="team-chiave-aiuto" className="m-0 basis-full text-[12.5px] text-muted">{tr("governance.team.chiaveAiuto")}</p>
         </form>
       )}
       <ErrorNote error={create.error ?? setLeadOf.error ?? teams.error} />

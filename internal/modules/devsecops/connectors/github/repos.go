@@ -159,6 +159,8 @@ type DiscoverResult struct {
 	New       int `json:"new"`
 	Missing   int `json:"missing"`
 	Suggested int `json:"suggested"`
+	// TagQuestions: repository con più schemi di tag, per cui scegliere il rilascio vero (tagfilter.go).
+	TagQuestions []TagQuestion `json:"tag_questions"`
 }
 
 // Discover legge i repository delle organizzazioni e aggiorna le proposte di associazione.
@@ -178,6 +180,9 @@ func (s *Service) Discover(ctx context.Context, a Actor, integrationID string) (
 	}
 	res, err := s.discover(ctx, a.TenantID, it, cl)
 	if err != nil {
+		return nil, err
+	}
+	if res.TagQuestions, err = s.tagQuestions(ctx, a.TenantID, it, cl); err != nil {
 		return nil, err
 	}
 	err = s.o.DB.InTenant(ctx, a.TenantID, db.TenantOpts{}, func(tx pgx.Tx) error {

@@ -60,6 +60,15 @@ export function moduleOn(me: Me | undefined | null, key: ModuleKey): boolean {
   return me?.active_tenant?.modules?.[key] !== false;
 }
 
+/**
+ * L'organizzazione lavora «da azienda»: demand o GRC accesi. Senza nessuno dei due (una persona
+ * sola, un home lab) il pannello DevSecOps nasconde approvazioni, change e asset logici
+ * (pilota home lab, difetto 6).
+ */
+export function enterpriseOn(me: Me | undefined | null): boolean {
+  return moduleOn(me, "demand") || moduleOn(me, "grc");
+}
+
 /** La pagina è raggiungibile: il suo modulo, se c'è, è acceso. */
 export function pathOn(me: Me | undefined | null, path: string): boolean {
   const m = moduleOfPath(path);

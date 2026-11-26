@@ -1,7 +1,7 @@
 // API del connettore Gitea (DevSecOps, ). Rispecchia internal/api/devsecops_gitea.go.
 // I profili di pipeline sono quelli di tutti i connettori (githubApi.profiles e compagnia).
 import { call } from "./api";
-import type { Preview, Preset, RateLimit, Repository, SyncStatus } from "./githubApi";
+import type { DiscoverResult, Preview, Preset, RateLimit, Repository, SyncStatus, TagFilterResult } from "./githubApi";
 
 const q = encodeURIComponent;
 const G = "/devsecops/gitea";
@@ -89,7 +89,8 @@ export const giteaApi = {
   test: (id: string) => call<GTTestResult>("POST", `${G}/integrations/${q(id)}/test`),
   webhookSecret: (id: string) => call<{ secret: string }>("POST", `${G}/integrations/${q(id)}/webhook-secret`),
   repos: (id: string) => call<{ items: GTRepo[] }>("GET", `${G}/integrations/${q(id)}/repositories`),
-  discover: (id: string) => call<{ found: number; new: number; missing: number; suggested: number }>("POST", `${G}/integrations/${q(id)}/discover`),
+  discover: (id: string) => call<DiscoverResult>("POST", `${G}/integrations/${q(id)}/discover`),
+  tagFilter: (id: string, repo: string, pattern: string) => call<TagFilterResult>("PUT", `${G}/integrations/${q(id)}/repositories/${q(repo)}/tag-filter`, { pattern }),
   mapRepo: (id: string, repo: string, body: { status: "confirmed" | "ignored" | "none"; application_id?: string; service_name?: string }) =>
     call<GTRepo>("PUT", `${G}/integrations/${q(id)}/repositories/${q(repo)}`, body),
   accept: (id: string, ids: string[]) => call<{ confirmed: number }>("POST", `${G}/integrations/${q(id)}/repositories/accept`, { ids }),

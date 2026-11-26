@@ -426,7 +426,9 @@ export const api = {
   members: () => call<{ items: Member[] }>("GET", "/members"),
 
   teams: () => call<{ items: Team[] }>("GET", "/teams"),
-  createTeam: (name: string, lead_id?: string) => call<{ id: string }>("POST", "/teams", { name, lead_id }),
+  /** board_key vuota = proposta dal nome; board_model vuoto = una colonna per fase (scrum, kanban, supporto). */
+  createTeam: (name: string, lead_id?: string, board?: { board_key?: string; board_model?: string }) =>
+    call<{ id: string }>("POST", "/teams", { name, lead_id, ...board }),
   updateTeam: (id: string, name: string, lead_id?: string, capacity_days_week?: number) =>
     call<void>("PATCH", `/teams/${id}`, { name, lead_id, capacity_days_week }),
   assets: () => call<{ items: Asset[] }>("GET", "/architecture/assets"),

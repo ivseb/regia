@@ -137,6 +137,9 @@ func (s *Service) Discover(ctx context.Context, a Actor, integrationID string) (
 	if err != nil {
 		return nil, err
 	}
+	if res.TagQuestions, err = s.tagQuestions(ctx, a.TenantID, it, cl); err != nil {
+		return nil, err
+	}
 	err = s.o.DB.InTenant(ctx, a.TenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
 		return audited(ctx, tx, a, "devsecops.gitea.discover", "integration", integrationID, map[string]any{"found": res.Found, "new": res.New, "missing": res.Missing})
 	})

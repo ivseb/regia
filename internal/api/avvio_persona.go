@@ -309,6 +309,22 @@ func (s *Server) personaFlow(ctx context.Context, tx pgx.Tx, adm engine.Actor, t
 	return it, err
 }
 
+// checkBoardKey controlla la chiave scelta per la board di un team (modello «Persona sola» e
+// creazione del team): forma valida e non già usata da un altro spazio.
+func checkBoardKey(ctx context.Context, tx pgx.Tx, key string) error {
+	if !personaBoardKeyRe.MatchString(key) {
+		return engine.InvalidValue("board_key", "chiave non valida: lettere maiuscole e cifre, inizia con una lettera, al massimo 20 caratteri")
+	}
+	var used bool
+	if err := tx.QueryRow(ctx, "select exists (select 1 from spaces where key = $1)", key).Scan(&used); err != nil {
+		return err
+	}
+	if used {
+		return engine.Duplicate("board_key", "la chiave %s è già usata da un altro spazio", key)
+	}
+	return nil
+}
+
 // personaBoard crea il team (il referente è chi applica il modello), lo spazio di delivery e la board
 // kanban senza sprint, con i tipi task, bug e idea e le sole colonne che hanno fasi.
 func (s *Server) personaBoard(ctx context.Context, tx pgx.Tx, p *auth.Principal, adm engine.Actor, par avvioParams) ([]avvioItem, error) {
@@ -332,15 +348,8 @@ func (s *Server) personaBoard(ctx context.Context, tx pgx.Tx, p *auth.Principal,
 	if key == "" {
 		key = personaDefaultKey
 	}
-	if !personaBoardKeyRe.MatchString(key) {
-		return nil, engine.InvalidValue("board_key", "chiave non valida: lettere maiuscole e cifre, inizia con una lettera, al massimo 20 caratteri")
-	}
-	var used bool
-	if err := tx.QueryRow(ctx, "select exists (select 1 from spaces where key = $1)", key).Scan(&used); err != nil {
+	if err := checkBoardKey(ctx, tx, key); err != nil {
 		return nil, err
-	}
-	if used {
-		return nil, engine.Duplicate("board_key", "la chiave %s è già usata da un altro spazio", key)
 	}
 	if !hasTeam {
 		if teamID, err = s.arch.CreateTeam(ctx, tx, adm, architecture.TeamInput{Name: name, LeadID: p.MemberID}); err != nil {
