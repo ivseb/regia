@@ -342,6 +342,11 @@ func (s *Service) UpdateProfile(ctx context.Context, a Actor, id string, in Prof
 
 // saveVersion aggiunge una versione se la definizione è cambiata.
 func (s *Service) saveVersion(ctx context.Context, tx pgx.Tx, a Actor, cur *Profile, def *profile.Definition, note string) (int, error) {
+	return saveVersionTx(ctx, tx, a, cur, def, note)
+}
+
+// saveVersionTx salva una nuova versione del profilo se la definizione è cambiata.
+func saveVersionTx(ctx context.Context, tx pgx.Tx, a Actor, cur *Profile, def *profile.Definition, note string) (int, error) {
 	var same bool
 	if err := tx.QueryRow(ctx, "select definition = $2::jsonb from pipeline_profile_versions where profile_id = $1 and version = $3",
 		cur.ID, def.Canonical(), cur.Version).Scan(&same); err != nil {

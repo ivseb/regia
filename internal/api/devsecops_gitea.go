@@ -48,6 +48,7 @@ func (s *Server) giteaRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("PUT "+b+"/integrations/{id}/"+seg+"/{repo}", adminSession(s.gtMapRepo))
 		mux.HandleFunc("POST "+b+"/integrations/{id}/"+seg+"/accept", adminSession(s.gtAccept))
 	}
+	mux.HandleFunc("PUT "+b+"/integrations/{id}/repositories/{repo}/tag-filter", adminSession(s.gtTagFilter))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/discover", adminOnly(s.gtDiscover))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/sync", adminOnly(s.gtSync))
 	mux.HandleFunc("GET "+b+"/integrations/{id}/runs", adminOnly(s.gtRuns))
@@ -174,6 +175,20 @@ func (s *Server) gtMapRepo(w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return
 	}
 	writeJSON(w, http.StatusOK, pr)
+}
+
+// gtTagFilter salva lo schema dei tag che vale come rilascio per un repository (pilota home lab, difetto 5).
+func (s *Server) gtTagFilter(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ghconn.TagFilterInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.gt.SetTagFilter(r.Context(), gtActor(r, p), r.PathValue("id"), r.PathValue("repo"), in)
+	if err != nil {
+		s.gtError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) gtAccept(w http.ResponseWriter, r *http.Request, p *auth.Principal) {

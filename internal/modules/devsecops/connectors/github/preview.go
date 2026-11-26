@@ -162,7 +162,7 @@ func (s *Service) Preview(ctx context.Context, a Actor, integrationID string, in
 			rel = r
 		}
 	} else if err := cl.Releases(ctx, repo.FullName, 2, func(r ghapi.Release) (bool, error) {
-		if r.Draft || !def.AcceptsTag(r.TagName, r.Prerelease) {
+		if r.Draft || !def.AcceptsRepoTag(repo.FullName, r.TagName, r.Prerelease) {
 			return false, nil
 		}
 		rel = &r

@@ -45,6 +45,10 @@ type ReleaseSpec struct {
 	TagPrefix string `json:"tag_prefix,omitempty"`
 	// TagFilter, se presente, è un modello (glob) dei tag da leggere (es. "v*").
 	TagFilter string `json:"tag_filter,omitempty"`
+	// TagFilters è il tag_filter di un repository (nome completo, es. "ivan/smart-proxy"),
+	// scelto alla scoperta quando il repository pubblica più schemi di tag (tags.go). Vale al
+	// posto di TagFilter; il valore vuoto vuol dire «tutti i tag sono rilasci».
+	TagFilters map[string]string `json:"tag_filters,omitempty"`
 	// IncludePrereleases legge anche le pre-release (di default no) e le bozze mai.
 	IncludePrereleases bool `json:"include_prereleases,omitempty"`
 	// MaxAssetMB è il limite di un allegato scaricato (default 25 MB).
@@ -206,6 +210,14 @@ func (d *Definition) Validate() []Problem {
 		if r.TagFilter != "" {
 			if _, err := path.Match(r.TagFilter, "v1.0.0"); err != nil {
 				add("release.tag_filter", "modello non valido")
+			}
+		}
+		for repo, f := range r.TagFilters {
+			if strings.TrimSpace(repo) == "" || len(repo) > 300 {
+				add("release.tag_filters", "serve il nome completo del repository (owner/nome)")
+			}
+			if _, err := path.Match(f, "v1.0.0"); err != nil {
+				add("release.tag_filters."+repo, "modello non valido")
 			}
 		}
 		if r.MaxAssetMB < 0 || r.MaxAssetMB > 200 {

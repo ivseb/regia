@@ -46,6 +46,7 @@ func (s *Server) githubRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+b+"/integrations/{id}/repositories", adminOnly(s.ghRepos))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/discover", adminOnly(s.ghDiscover))
 	mux.HandleFunc("PUT "+b+"/integrations/{id}/repositories/{repo}", adminSession(s.ghMapRepo))
+	mux.HandleFunc("PUT "+b+"/integrations/{id}/repositories/{repo}/tag-filter", adminSession(s.ghTagFilter))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/repositories/accept", adminSession(s.ghAcceptSuggestions))
 	mux.HandleFunc("POST "+b+"/integrations/{id}/sync", adminOnly(s.ghSync))
 	mux.HandleFunc("GET "+b+"/integrations/{id}/runs", adminOnly(s.ghRuns))
@@ -199,6 +200,20 @@ func (s *Server) ghMapRepo(w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return
 	}
 	writeJSON(w, http.StatusOK, repo)
+}
+
+// ghTagFilter salva lo schema dei tag che vale come rilascio per un repository (pilota home lab, difetto 5).
+func (s *Server) ghTagFilter(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ghconn.TagFilterInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.gh.SetTagFilter(r.Context(), ghActor(r, p), r.PathValue("id"), r.PathValue("repo"), in)
+	if err != nil {
+		s.ghError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) ghAcceptSuggestions(w http.ResponseWriter, r *http.Request, p *auth.Principal) {

@@ -60,16 +60,26 @@ type ReleaseOutput struct {
 	Warnings []string             `json:"warnings,omitempty"`
 }
 
-// AcceptsTag dice se il profilo legge una Release con quel tag.
+// AcceptsTag dice se il profilo legge una Release con quel tag (filtro generale).
 func (d *Definition) AcceptsTag(tag string, prerelease bool) bool {
+	return d.AcceptsRepoTag("", tag, prerelease)
+}
+
+// AcceptsRepoTag dice se il profilo legge una Release del repository con quel tag: il filtro
+// scelto per il repository, se c'è, vale al posto di quello generale.
+func (d *Definition) AcceptsRepoTag(repo, tag string, prerelease bool) bool {
 	if d == nil || d.Release == nil {
 		return !prerelease
 	}
 	if prerelease && !d.Release.IncludePrereleases {
 		return false
 	}
-	if d.Release.TagFilter != "" {
-		ok, _ := path.Match(d.Release.TagFilter, tag)
+	filter := d.Release.TagFilter
+	if f, ok := d.Release.TagFilters[repo]; ok && repo != "" {
+		filter = f
+	}
+	if filter != "" {
+		ok, _ := path.Match(filter, tag)
 		return ok
 	}
 	return true

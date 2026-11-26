@@ -20,6 +20,7 @@ import {
 import { PageHeader } from "../shell";
 import { ErrorNote, SectionTitle, ago } from "../ui";
 import { ConfirmButton, CopyBox, KV, MutError, SidePanel, Tag, dateTime } from "./adminUi";
+import { TagSchemeQuestions } from "./TagSchemes";
 import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
 import type { Key } from "../i18n/core";
@@ -565,6 +566,9 @@ function ReposTab({ it }: { it: GTIntegration }) {
           {t("altro.gitea.discovered", { found: discover.data.found, new: discover.data.new, suggested: discover.data.suggested })}
           {discover.data.missing > 0 && t("altro.gitea.discoveredMissing", { missing: discover.data.missing })}.
         </p>
+      )}
+      {discover.data?.tag_questions && (
+        <TagSchemeQuestions questions={discover.data.tag_questions} save={(repo, pattern) => giteaApi.tagFilter(it.id, repo, pattern)} onSaved={refresh} />
       )}
       <MutError errors={[discover.error, accept.error, repos.error]} />
       <p className="m-0 max-w-[720px] text-[13px] text-muted">

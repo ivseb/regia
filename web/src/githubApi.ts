@@ -4,6 +4,13 @@ import { call } from "./api";
 
 const q = encodeURIComponent;
 const G = "/devsecops/github";
+
+/** Schema dei tag di un repository (pilota home lab, difetto 5): v[0-9]*, chart-[0-9]*… */
+export type TagScheme = { pattern: string; count: number; examples: string[] };
+/** Repository con più schemi di tag: quale è il rilascio vero? */
+export type TagQuestion = { repository_id: string; full_name: string; schemes: TagScheme[] };
+export type TagFilterResult = { profile_id: string; profile_name: string; profile_version: number; profile_created: boolean; pruned: number };
+export type DiscoverResult = { found: number; new: number; missing: number; suggested: number; tag_questions?: TagQuestion[] };
 const P = "/devsecops/pipeline-profiles";
 
 export type RateLimit = { limit: number; remaining: number; used: number; reset: string; resource?: string; observed: string; waited_seconds?: number };
@@ -174,7 +181,8 @@ export const githubApi = {
   test: (id: string) => call<TestResult>("POST", `${G}/integrations/${q(id)}/test`),
   webhookSecret: (id: string) => call<{ secret: string }>("POST", `${G}/integrations/${q(id)}/webhook-secret`),
   repos: (id: string) => call<{ items: Repository[] }>("GET", `${G}/integrations/${q(id)}/repositories`),
-  discover: (id: string) => call<{ found: number; new: number; missing: number; suggested: number }>("POST", `${G}/integrations/${q(id)}/discover`),
+  discover: (id: string) => call<DiscoverResult>("POST", `${G}/integrations/${q(id)}/discover`),
+  tagFilter: (id: string, repo: string, pattern: string) => call<TagFilterResult>("PUT", `${G}/integrations/${q(id)}/repositories/${q(repo)}/tag-filter`, { pattern }),
   mapRepo: (id: string, repo: string, body: { status: "confirmed" | "ignored" | "none"; application_id?: string; service_name?: string }) =>
     call<Repository>("PUT", `${G}/integrations/${q(id)}/repositories/${q(repo)}`, body),
   accept: (id: string, ids: string[]) => call<{ confirmed: number }>("POST", `${G}/integrations/${q(id)}/repositories/accept`, { ids }),

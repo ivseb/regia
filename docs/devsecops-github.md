@@ -138,6 +138,17 @@ Struttura (estratto):
 }
 ```
 
+**Più tag per versione.** Un repository che pubblica due tag per ogni versione (per esempio `chart-0.3.1` e `v1.4.0`) conterebbe due rilasci, e le metriche DORA raddoppierebbero la frequenza. Alla **scoperta dei repository** Regia legge le Release recenti (al massimo 30 repository, prima gli associati), raggruppa i tag per prefisso davanti alla versione (`v[0-9]*`, `chart-[0-9]*`, `[0-9]*` senza prefisso) e, dove ce n'è più di uno, chiede quale è il rilascio vero. La risposta finisce nel profilo dell'integrazione come filtro del repository:
+
+```json
+"release": { "tag_prefix": "v", "tag_filters": { "ivan/smart-proxy": "v[0-9]*" } }
+```
+
+- `tag_filters` vale al posto di `tag_filter` per quel repository; il valore vuoto vuol dire «tutti i tag sono rilasci» e la domanda non torna.
+- Se l'integrazione non ha profilo, se ne crea uno («Rilasci di …») e si collega; altrimenti si salva una nuova versione del profilo.
+- I rilasci già letti dello schema scartato si tolgono (i deploy che li citavano restano, senza rilascio) e le metriche DORA si ricalcolano.
+- Vale anche per il connettore Gitea (`PUT …/integrations/{id}/repositories/{repo}/tag-filter` con `{"pattern": "v[0-9]*"}`).
+
 **Percorsi.** Sono semplici, senza un linguaggio:
 
 | Forma | Esempio |

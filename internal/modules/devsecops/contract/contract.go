@@ -143,6 +143,14 @@ type Ingestor interface {
 	IngestVulnReport(ctx context.Context, tx pgx.Tx, actor engine.Actor, v VulnReport) error
 }
 
+// ReleasePruner toglie i rilasci di un servizio che il connettore non considera più tali
+// (per esempio dopo la scelta dello schema dei tag: pilota home lab, difetto 5) e, se ne ha
+// tolti, ricalcola le metriche DORA. keep riceve l'indirizzo della Release; i rilasci senza
+// indirizzo restano. Lo implementa il modulo devsecops.
+type ReleasePruner interface {
+	PruneReleases(ctx context.Context, tx pgx.Tx, actor engine.Actor, svc Service, keep func(releaseURL string) bool) (int, error)
+}
+
 // ServiceIngestor registra un servizio senza altri dati: per esempio un repository scoperto
 // da un connettore, o un servizio censito prima di arrivare sulla pipeline. Idempotente come
 // Ingestor; lo implementa lo stesso modulo devsecops.
