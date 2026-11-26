@@ -165,6 +165,8 @@ test("vulnerabilità a 375 px: indicatori e «oltre la scadenza» prima dei filt
   const summary = page.getByRole("region", { name: "In sintesi" });
   await expect(summary).toBeVisible();
   await expect(summary).toBeInViewport();
+  // Le posizioni si misurano a pagina ferma: l'ingresso della pagina (shell.tsx) la sposta di 6 px per 0,25 s.
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
   // Il primo indicatore è «Oltre la scadenza»: sta in alto a sinistra, prima di «Da correggere».
   const overdue = (await summary.getByRole("button", { name: /^Oltre la scadenza/ }).boundingBox())!;
   const open = (await summary.getByRole("button", { name: /^Da correggere/ }).boundingBox())!;
