@@ -188,6 +188,9 @@ const MENU_OUT = new Set(["/richieste/nuova", "/portale", "/progetti/nuovo"]);
 const PORTFOLIO = ["/graduatoria", "/cabina", "/governance"];
 const FINANCE = ["/finanza", "/budget"];
 const CONFIG = ["/configurazione", "/processi"];
+/** Le pagine di DevSecOps e di Rischi e conformità: una voce sola con le schede (portafoglio-ui.tsx). */
+export const DEVSECOPS_TABS = ["/devsecops", "/devsecops/aderenza", "/devsecops/metriche", "/devsecops/vulnerabilita"];
+export const GRC_TABS = ["/rischi", "/conformita", "/privacy", "/audit-spazio"];
 
 /**
  * Un gruppo di pagine che nel menu diventa una voce sola. `make` riceve le pagine raggiungibili del
@@ -196,9 +199,16 @@ const CONFIG = ["/configurazione", "/processi"];
  */
 type Group = { of: (to: string) => boolean; make: (members: NavItem[]) => NavItem[] };
 const single = (m: NavItem[], hub: () => NavItem): NavItem[] => (m.length === 1 ? m : [hub()]);
+/** La prima pagina del gruppo nell'ordine delle schede (la voce porta lì). */
+const firstOf = (m: NavItem[], order: string[]) => order.find((to) => m.some((x) => x.to === to)) ?? m[0].to;
 const GROUPS: Group[] = [
   { of: (to) => PORTFOLIO.includes(to), make: (m) => single(m, () => ({ to: m[0].to, label: tr("shell.menu.portfolio"), also: PORTFOLIO })) },
   { of: (to) => FINANCE.includes(to), make: (m) => single(m, () => ({ to: m[0].to, label: tr("shell.menu.financeBudget"), also: FINANCE })) },
+  // DevSecOps: Panoramica, Aderenza, Metriche e Vulnerabilità sono schede; la voce ha il nome della sezione,
+  // quindi la testata stessa è il collegamento (shell.tsx).
+  { of: (to) => DEVSECOPS_TABS.includes(to), make: (m) => single(m, () => ({ to: firstOf(m, DEVSECOPS_TABS), label: tr("shell.nav.devsecops"), also: DEVSECOPS_TABS })) },
+  // Rischi e conformità: le schede sono le pagine che i permessi lasciano (grc.audit, grc.read, privacy.read).
+  { of: (to) => GRC_TABS.includes(to), make: (m) => single(m, () => ({ to: firstOf(m, GRC_TABS), label: tr("shell.colori.section.grc"), also: GRC_TABS })) },
   { of: (to) => to.startsWith("/elenco/"), make: () => [{ to: "/elenco", label: tr("shell.nav.section.lists"), also: ["/elenco"] }] },
   // L'indice /configurazione c'è solo se il profilo di menu lo mostra; senza, le voci restano com'erano.
   { of: (to) => CONFIG.some((b) => under(to, b)), make: (m) => (m.some((x) => x.to === "/configurazione") ? [{ to: "/configurazione", label: tr("shell.nav.section.config"), also: CONFIG }] : m) },

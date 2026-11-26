@@ -27,6 +27,7 @@ import { tr } from "../i18n/core";
 import { Trans } from "../i18n/Trans";
 import { loc } from "../i18n/format";
 import { crumbs } from "../crumbs";
+import { DevsecopsTabs } from "./portafoglio-ui";
 
 // ---------------------------------------------------------------------
 // Formati e livelli
@@ -679,6 +680,7 @@ export function DoraPage({ search, onSearch }: { search: DoraSearch; onSearch: (
           ) : undefined
         }
       />
+      <DevsecopsTabs />
       <div className="flex flex-col gap-8 px-4 pb-10 md:px-7">
         <p className="m-0 max-w-3xl text-muted">{tr("governance.dora.le_quattro_misure_dora_dai")}</p>
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">

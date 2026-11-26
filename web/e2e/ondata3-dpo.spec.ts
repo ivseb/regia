@@ -19,8 +19,11 @@ test("DPO: home, trattamento, DPIA, violazione con 72 ore, CSV e telefono", asyn
 
   await login(page, "dpo");
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Privacy (DPO)" }).first()).toBeVisible();
-  await page.getByRole("link", { name: "Privacy (DPO)" }).first().click();
+  // «Privacy (DPO)» è una scheda della voce «Rischi e conformità» (menu snello).
+  await page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("link", { name: "Rischi e conformità", exact: true }).click();
+  const grc = page.getByRole("navigation", { name: "Rischi e conformità" });
+  await expect(grc.getByRole("link", { name: "Privacy (DPO)" })).toBeVisible();
+  await grc.getByRole("link", { name: "Privacy (DPO)" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Privacy e protezione dei dati" })).toBeVisible();
 
   // Home: l'applicazione con dati personali senza trattamento e la violazione da notificare.
@@ -116,7 +119,8 @@ test("DPO a 375 px: nessuno scorrimento orizzontale e bersagli da 44 px", async 
 
 test("la voce di menu e le API privacy sono solo per chi ha il permesso", async ({ page, playwright, baseURL }) => {
   await login(page, "dm");
-  await page.goto("/");
+  await page.goto("/rischi");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "Privacy (DPO)" })).toHaveCount(0);
   const { req } = await apiAs(playwright, baseURL!, "dm");
   expect((await req.get("/api/v1/privacy/home")).status()).toBe(403);

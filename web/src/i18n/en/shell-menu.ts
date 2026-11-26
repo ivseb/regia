@@ -4,6 +4,7 @@ import type it from "../it/shell-menu";
 export default {
   "shell.menu.portfolio": "Portfolio",
   "shell.menu.financeBudget": "Finance and budget",
+  "shell.menu.overview": "Overview",
   "shell.menu.section": "{name} section",
   "shell.menu.lists.path": "lists",
   "shell.menu.lists.title": "Lists",

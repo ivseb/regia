@@ -35,7 +35,7 @@ test("il revisore (sola lettura) non vede le voci per creare e registrare", asyn
   await page.goto("/richieste");
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
   // Il profilo del revisore (ruolo Auditor) lascia solo i moduli di controllo: niente richieste né delivery.
-  await expect(nav.getByRole("link", { name: "Conformità" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Rischi e conformità", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Richieste", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("link", { name: "Nuova richiesta" })).toHaveCount(0);
   await expect(nav.getByRole("link", { name: "Timesheet" })).toHaveCount(0);

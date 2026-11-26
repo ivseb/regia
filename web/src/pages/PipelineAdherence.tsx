@@ -31,6 +31,7 @@ import { ProblemActions } from "./ProblemActions";
 import { tr } from "../i18n/core";
 import { Trans } from "../i18n/Trans";
 import { crumbs } from "../crumbs";
+import { DevsecopsTabs } from "./portafoglio-ui";
 
 const STATUSES: Status[] = ["fuori_politica", "parziale", "non_in_pipeline", "aderente"];
 
@@ -87,6 +88,7 @@ export function AdherencePage() {
   return (
     <>
       <PageHeader path={crumbs("governance", "devsecops", "adherence")} title={tr("governance.pipelineadherence.aderenza_della_pipeline")} actions={<Link to="/configurazione/devsecops/politica" search={{ tab: "matrice" }} className="btn no-underline">{tr("governance.pipelineadherence.politica")}</Link>} />
+      <DevsecopsTabs />
       <div className="flex max-w-6xl flex-col gap-7 px-4 pb-10 md:px-7">
         <ErrorNote error={q.error} />
         {q.isPending && <Loading className="m-0 text-muted" />}

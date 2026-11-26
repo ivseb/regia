@@ -16,6 +16,7 @@ import { Dialog } from "./work-ui";
 import { Countdown, dateTime, fromLocalInput, toLocalInput } from "./riskUi";
 import { DpiaDialog, DpiaTab, TreatmentDialog, TreatmentsTab, emptyTreatment, useTreatments } from "./PrivacyRegister";
 import { Block, Check, DataBadges, DpiaBadge, Empty, IssueBadge, TField } from "./privacy-ui";
+import { GrcTabs } from "./portafoglio-ui";
 
 export type PrivacyTab = "panoramica" | "trattamenti" | "dpia" | "violazioni" | "flussi";
 const TABS: PrivacyTab[] = ["panoramica", "trattamenti", "dpia", "violazioni", "flussi"];
@@ -34,6 +35,7 @@ export function PrivacyPage({ tab }: { tab: PrivacyTab }) {
   return (
     <>
       <PageHeader path={`${crumbs("governance")} / ${t("governance.privacy.crumb")}`} title={t("governance.privacy.title")} />
+      <GrcTabs />
       <div role="tablist" aria-label={t("governance.privacy.tabs")} className="flex flex-wrap gap-x-5 gap-y-0 border-b border-hair px-4 pt-1 md:px-7">
         {TABS.map((k) => (
           <Link

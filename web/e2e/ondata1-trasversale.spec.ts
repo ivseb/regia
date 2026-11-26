@@ -66,8 +66,13 @@ test("il revisore ha il menu ridotto ai moduli di controllo", async ({ page }) =
   expect(me.active_tenant.menu_profile).toBe("auditor");
   await page.goto("/conformita");
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
-  for (const name of ["Conformità", "Rischi e incidenti", "DevSecOps", "Architettura", "Documenti", "Registro di audit"]) {
+  for (const name of ["Rischi e conformità", "DevSecOps", "Architettura", "Documenti", "Registro di audit"]) {
     await expect(nav.getByRole("link", { name, exact: true }), name).toBeVisible();
+  }
+  // Conformità e Rischi sono schede della stessa voce.
+  const grc = page.getByRole("navigation", { name: "Rischi e conformità" });
+  for (const name of ["Conformità", "Rischi e incidenti"]) {
+    await expect(grc.getByRole("link", { name, exact: true }), name).toBeVisible();
   }
   for (const name of ["Richieste", "Cruscotto", "Graduatoria", "Le mie approvazioni", "Board dei team", "Timesheet", "Nuova richiesta"]) {
     await expect(nav.getByRole("link", { name, exact: true }), name).toHaveCount(0);

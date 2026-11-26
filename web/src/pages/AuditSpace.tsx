@@ -13,6 +13,7 @@ import { grcApi, EFFECTIVENESS } from "../grcApi";
 import { auditApi, type EngControl, type EngagementDetail, type Severity } from "../auditApi";
 import { ControlLink, FindingList, RequestList, SampleBlock, useRefreshAudit } from "./AuditPanels";
 import { tr } from "../i18n/core";
+import { GrcTabs } from "./portafoglio-ui";
 
 function Stat({ label, value, sub, tone, testId }: { label: string; value: string; sub?: string; tone?: "danger"; testId?: string }) {
   return (
@@ -253,6 +254,7 @@ export function AuditSpace({ incarico }: { incarico?: string }) {
   return (
     <>
       <PageHeader path="/audit-spazio" title={tr("governance.auditor.title")} />
+      <GrcTabs />
       <div className="flex max-w-[960px] flex-col gap-6 px-4 pb-10 md:px-7">
         {q.error && <ErrorNote error={q.error} />}
         {!h && !q.error && <Loading className="m-0 text-muted" />}
