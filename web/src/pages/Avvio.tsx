@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../api";
-import { avvioApi, MODEL_KEYS, type Applied as AppliedData, type AppliedProcess, type AvvioItem, type AvvioPreview, type ItemKind, type ModelKey, type StepKey } from "../avvioApi";
+import { avvioApi, MODEL_KEYS, type ModelParams, type Applied as AppliedData, type AppliedProcess, type AvvioItem, type AvvioPreview, type ItemKind, type ModelKey, type StepKey } from "../avvioApi";
 import { diffList, type Change } from "../casa/differenze";
 import type { Definition } from "../api";
 import { PageHeader } from "../shell";
@@ -138,7 +138,7 @@ function Steps() {
 // ---------------------------------------------------------------------
 // Modelli
 
-const KIND_ORDER: ItemKind[] = ["module", "type", "process", "body", "catalog"];
+const KIND_ORDER: ItemKind[] = ["module", "type", "field", "process", "team", "board", "body", "catalog"];
 
 function Models() {
   const t = useT();
@@ -146,9 +146,18 @@ function Models() {
   const models = useQuery({ queryKey: ["avvio", "modelli"], queryFn: avvioApi.models });
   const [open, setOpen] = useState<ModelKey | null>(null);
   const [result, setResult] = useState<AvvioPreview | null>(null);
-  const preview = useQuery({ queryKey: ["avvio", "anteprima", open], queryFn: () => avvioApi.preview(open!), enabled: !!open && !result });
+  // Parametri del modello «persona sola»: l'anteprima si rilegge quando si esce dal campo.
+  const [draft, setDraft] = useState({ board_key: "HL", team_name: t("configurazione.persona.teamPredefinito") });
+  const [params, setParams] = useState<ModelParams>(draft);
+  const paramsOf = (k: ModelKey): ModelParams | undefined => (k === "persona_sola" ? params : undefined);
+  const preview = useQuery({
+    queryKey: ["avvio", "anteprima", open, open === "persona_sola" ? params : null],
+    queryFn: () => avvioApi.preview(open!, paramsOf(open!)),
+    enabled: !!open && !result,
+    retry: false,
+  });
   const apply = useMutation({
-    mutationFn: (key: ModelKey) => avvioApi.apply(key),
+    mutationFn: (key: ModelKey) => avvioApi.apply(key, key === "persona_sola" ? { board_key: draft.board_key.trim().toUpperCase(), team_name: draft.team_name.trim() } : undefined),
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ["avvio"] });
@@ -190,6 +199,13 @@ function Models() {
               )}
               {open === k && (
                 <div className="flex w-full basis-full flex-col gap-3 border-t border-hair pt-3">
+                  {k === "persona_sola" && !result && (
+                    <PersonaFields
+                      value={draft}
+                      onChange={setDraft}
+                      onCommit={() => setParams({ board_key: draft.board_key.trim().toUpperCase(), team_name: draft.team_name.trim() })}
+                    />
+                  )}
                   {!result && preview.isPending && <Loading />}
                   <ErrorNote error={preview.error} />
                   {!result && preview.data && <PreviewList data={preview.data} />}
@@ -197,7 +213,7 @@ function Models() {
                   <ErrorNote error={apply.error} />
                   {!result && preview.data && (
                     <div className="flex flex-wrap items-center gap-3">
-                      <button className="btn btn-primary" disabled={apply.isPending} onClick={() => apply.mutate(k)}>
+                      <button className="btn btn-primary" disabled={apply.isPending || preview.isError} onClick={() => apply.mutate(k)} data-testid="modello-applica">
                         {apply.isPending ? t("configurazione.avvio.applicazione") : t("configurazione.avvio.applica")}
                       </button>
                       <span className="text-[12.5px] text-muted">{t("configurazione.avvio.nonCancellaNiente")}</span>
@@ -205,6 +221,11 @@ function Models() {
                   )}
                   {result && (
                     <div className="flex flex-wrap items-center gap-3">
+                      {k === "persona_sola" && result.items.some((i) => i.kind === "board") && (
+                        <Link to={"/delivery/board" as never} search={{ spazio: result.items.find((i) => i.kind === "board")!.key } as never} className="btn btn-primary no-underline" data-testid="modello-apri-board">
+                          {t("configurazione.persona.fattoVaiBoard")}
+                        </Link>
+                      )}
                       <Link to="/configurazione/avvio" search={{ tab: "passi" }} className="btn btn-primary no-underline">{t("configurazione.avvio.tornaAiPassi")}</Link>
                       <Link to="/configurazione/avvio" search={{ tab: "applicato" }} className="btn no-underline">{t("configurazione.avvio.vediApplicato")}</Link>
                     </div>
@@ -215,6 +236,43 @@ function Models() {
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+type PersonaDraft = { board_key: string; team_name: string };
+
+function PersonaFields({ value, onChange, onCommit }: { value: PersonaDraft; onChange: (v: PersonaDraft) => void; onCommit: () => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-3" data-testid="persona-campi">
+      <div className="flex flex-wrap gap-3">
+        <label className="flex w-40 flex-col gap-1">
+          <span className="label">{t("configurazione.persona.chiave")}</span>
+          <input
+            className="field font-mono uppercase"
+            value={value.board_key}
+            maxLength={20}
+            onChange={(e) => onChange({ ...value, board_key: e.target.value.toUpperCase() })}
+            onBlur={onCommit}
+            onKeyDown={(e) => e.key === "Enter" && onCommit()}
+            aria-describedby="persona-chiave-aiuto"
+          />
+        </label>
+        <label className="flex min-w-48 flex-1 flex-col gap-1">
+          <span className="label">{t("configurazione.persona.team")}</span>
+          <input
+            className="field"
+            value={value.team_name}
+            maxLength={120}
+            onChange={(e) => onChange({ ...value, team_name: e.target.value })}
+            onBlur={onCommit}
+            onKeyDown={(e) => e.key === "Enter" && onCommit()}
+          />
+        </label>
+      </div>
+      <p id="persona-chiave-aiuto" className="m-0 text-[12.5px] text-muted">{t("configurazione.persona.chiaveAiuto")} {t("configurazione.persona.teamAiuto")}</p>
+      <p className="m-0 text-[12.5px] text-muted">{t("configurazione.persona.nota")}</p>
     </div>
   );
 }
@@ -260,6 +318,7 @@ function PreviewRow({ item, done }: { item: AvvioItem; done: boolean }) {
       <span className="min-w-0 flex-1 basis-48">{item.name}</span>
       {item.detail ? <span className="font-mono text-[12px] text-muted tabular">{t("configurazione.avvio.voci", { count: item.detail })}</span> : null}
       {item.unverified && <span className="border border-danger px-1.5 font-mono text-[11.5px] text-danger">{t("configurazione.avvio.daVerificare")}</span>}
+      {item.off && <span className="font-mono text-[11.5px] text-muted">{item.kind === "module" ? t("configurazione.persona.spento") : t("configurazione.persona.archiviato")}</span>}
       <span className={`font-mono text-[11.5px] ${item.state === "new" ? "font-semibold text-fg" : "text-muted"}`}>
         {item.state === "new" ? (done ? t("configurazione.avvio.stato.creato") : t("configurazione.avvio.stato.nuovo")) : t("configurazione.avvio.stato.presente")}
       </span>

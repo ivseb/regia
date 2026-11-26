@@ -42,6 +42,8 @@ type avvioModel struct {
 	ModulesOn []string
 	Catalogs  []string
 	Bodies    []avvioBody
+	// Persona: modello «persona sola / home lab», con i suoi passi (avvio_persona.go).
+	Persona bool
 }
 
 // avvioCatalogo: il primo modello è banca/assicurazione; gli altri hanno la struttura ma sono «in arrivo».
@@ -57,6 +59,7 @@ var avvioCatalogo = []avvioModel{
 			{"modifiche_cab", "cab", "Comitato modifiche (CAB)", "Change advisory board (CAB)"},
 		},
 	},
+	{Key: personaKey, Available: true, Persona: true, ModulesOn: personaOn},
 	{Key: "software_house"},
 	{Key: "pmi"},
 	{Key: "pa"},
@@ -194,13 +197,15 @@ func (s *Server) runModel(ctx context.Context, tx pgx.Tx, p *auth.Principal, act
 // Anteprima e applicazione
 
 type avvioItem struct {
-	Kind  string `json:"kind"` // module | type | process | body | catalog
+	Kind  string `json:"kind"` // module | type | field | process | team | board | body | catalog
 	Key   string `json:"key"`
 	Name  string `json:"name"`
 	State string `json:"state"` // new | present
 	// Unverified: testo normativo non ancora verificato da una persona.
 	Unverified bool `json:"unverified,omitempty"`
 	Detail     int  `json:"detail,omitempty"` // requisiti del catalogo
+	// Off: modulo che il modello spegne o tipo che archivia.
+	Off bool `json:"off,omitempty"`
 }
 
 type avvioPreview struct {
@@ -289,6 +294,25 @@ func countItems(items []avvioItem) (n, present int) {
 	return n, present
 }
 
+// modelItems esegue il modello nella transazione e dice cosa è nato e cosa c'era già.
+func (s *Server) modelItems(ctx context.Context, tx pgx.Tx, p *auth.Principal, actor engine.Actor, m avvioModel, par avvioParams, lang string) ([]avvioItem, error) {
+	if m.Persona {
+		return s.runPersona(ctx, tx, p, actor, par, lang)
+	}
+	before, err := takeSnap(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.runModel(ctx, tx, p, actor, m, lang); err != nil {
+		return nil, err
+	}
+	after, err := takeSnap(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	return s.buildItems(ctx, tx, actor, m, lang, before, after)
+}
+
 func (s *Server) avvioModels(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	type row struct {
 		Key       string `json:"key"`
@@ -332,14 +356,14 @@ func (s *Server) avvioPreview(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	if !ok {
 		return
 	}
+	par, ok := avvioParamsOf(w, r)
+	if !ok {
+		return
+	}
 	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*avvioPreview, error) {
 		ctx := r.Context()
 		actor := actorOf(r, p)
 		lang, err := i18n.TenantLang(ctx, tx)
-		if err != nil {
-			return nil, err
-		}
-		before, err := takeSnap(ctx, tx)
 		if err != nil {
 			return nil, err
 		}
@@ -348,14 +372,7 @@ func (s *Server) avvioPreview(w http.ResponseWriter, r *http.Request, p *auth.Pr
 			return nil, err
 		}
 		defer func() { _ = sp.Rollback(ctx) }()
-		if err := s.runModel(ctx, sp, p, actor, m, lang); err != nil {
-			return nil, err
-		}
-		after, err := takeSnap(ctx, sp)
-		if err != nil {
-			return nil, err
-		}
-		items, err := s.buildItems(ctx, sp, actor, m, lang, before, after)
+		items, err := s.modelItems(ctx, sp, p, actor, m, par, lang)
 		if err != nil {
 			return nil, err
 		}
@@ -371,6 +388,10 @@ func (s *Server) avvioApply(w http.ResponseWriter, r *http.Request, p *auth.Prin
 	if !ok {
 		return
 	}
+	par, ok := avvioParamsOf(w, r)
+	if !ok {
+		return
+	}
 	defer s.mods.forget(p.TenantID)
 	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*avvioPreview, error) {
 		ctx := r.Context()
@@ -379,18 +400,7 @@ func (s *Server) avvioApply(w http.ResponseWriter, r *http.Request, p *auth.Prin
 		if err != nil {
 			return nil, err
 		}
-		before, err := takeSnap(ctx, tx)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.runModel(ctx, tx, p, actor, m, lang); err != nil {
-			return nil, err
-		}
-		after, err := takeSnap(ctx, tx)
-		if err != nil {
-			return nil, err
-		}
-		items, err := s.buildItems(ctx, tx, actor, m, lang, before, after)
+		items, err := s.modelItems(ctx, tx, p, actor, m, par, lang)
 		if err != nil {
 			return nil, err
 		}
@@ -405,7 +415,7 @@ func (s *Server) avvioApply(w http.ResponseWriter, r *http.Request, p *auth.Prin
 		}
 		kinds := map[string]string{"process": "processo", "catalog": "catalogo", "body": "organo"}
 		for _, it := range items {
-			if kind, ok := kinds[it.Kind]; ok && it.State == "new" {
+			if kind, ok := kinds[it.Kind]; ok && !m.Persona && it.State == "new" {
 				if err := rec(kind, it.Key, it.Unverified); err != nil {
 					return nil, err
 				}

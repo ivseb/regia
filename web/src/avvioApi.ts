@@ -7,11 +7,21 @@ export type StepKey = "organizzazione" | "moduli" | "persone" | "team" | "proces
 export type AvvioStep = { key: StepKey; done: boolean; not_needed?: boolean; count: number };
 export type AvvioState = { steps: AvvioStep[]; done: number; total: number; closed: boolean; model: string };
 
-export type ModelKey = "banca_assicurazione" | "software_house" | "pmi" | "pa" | "consulente";
+export type ModelKey = "banca_assicurazione" | "persona_sola" | "software_house" | "pmi" | "pa" | "consulente";
+/** Parametri facoltativi di un modello (oggi solo «persona_sola»): chiave della board e nome del team. */
+export type ModelParams = { board_key?: string; team_name?: string };
+function paramsQuery(p?: ModelParams): string {
+  const q = new URLSearchParams();
+  if (p?.board_key) q.set("board_key", p.board_key);
+  if (p?.team_name) q.set("team_name", p.team_name);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 export type ModelRow = { key: ModelKey; available: boolean; applied: boolean };
 
-export type ItemKind = "module" | "type" | "process" | "body" | "catalog";
-export type AvvioItem = { kind: ItemKind; key: string; name: string; state: "new" | "present"; unverified?: boolean; detail?: number };
+export type ItemKind = "module" | "type" | "field" | "process" | "team" | "board" | "body" | "catalog";
+export type AvvioItem = { kind: ItemKind; key: string; name: string; state: "new" | "present"; unverified?: boolean; detail?: number; off?: boolean };
 export type AvvioPreview = { key: ModelKey; available: boolean; items: AvvioItem[]; new: number; present: number; applied: boolean };
 
 export type AppliedProcess = {
@@ -73,8 +83,8 @@ export const avvioApi = {
   close: () => call<AvvioState>("POST", "/avvio/chiudi"),
   reopen: () => call<AvvioState>("DELETE", "/avvio/chiudi"),
   models: () => call<{ items: ModelRow[] }>("GET", "/avvio/modelli"),
-  preview: (key: string) => call<AvvioPreview>("GET", `/avvio/modelli/${encodeURIComponent(key)}`),
-  apply: (key: string) => call<AvvioPreview>("POST", `/avvio/modelli/${encodeURIComponent(key)}`),
+  preview: (key: string, params?: ModelParams) => call<AvvioPreview>("GET", `/avvio/modelli/${encodeURIComponent(key)}${paramsQuery(params)}`),
+  apply: (key: string, params?: ModelParams) => call<AvvioPreview>("POST", `/avvio/modelli/${encodeURIComponent(key)}`, params),
   applied: () => call<Applied>("GET", "/avvio/applicato"),
   restorePreview: (key: string) => call<RestorePreview>("GET", `/avvio/applicato/processi/${encodeURIComponent(key)}`),
   restore: (key: string, fromVersion: number) =>
@@ -82,4 +92,4 @@ export const avvioApi = {
   verify: (key: string) => call<Applied>("POST", `/avvio/applicato/cataloghi/${encodeURIComponent(key)}/verifica`),
 };
 
-export const MODEL_KEYS: ModelKey[] = ["banca_assicurazione", "software_house", "pmi", "pa", "consulente"];
+export const MODEL_KEYS: ModelKey[] = ["banca_assicurazione", "persona_sola", "software_house", "pmi", "pa", "consulente"];
