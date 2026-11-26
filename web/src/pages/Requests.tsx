@@ -16,6 +16,7 @@ import { LISTS } from "../views/lists";
 import { useTypeNames } from "../typesApi";
 import { Transitions, useRefreshElement } from "./ElementSections";
 import { EmptyState } from "../emptyState";
+import { FaseChip, Persona } from "../faseChip";
 import { DRIVERS, ElementTitle, ErrorNote, SectionTitle, StageGate, ago, date, euroRange, Loading } from "../ui";
 import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
@@ -125,11 +126,11 @@ export function Requests() {
                     {el.tags && el.tags.length > 0 && <TagChips tags={el.tags} onPick={(n) => onQuery(withLabel(query, n))} className="mt-1 block" />}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {type.data ? <StageGate states={type.data.states} current={el.state} /> : stateName(el.state)}
+                    {type.data ? <FaseChip states={type.data.states} current={el.state} /> : stateName(el.state)}
                   </td>
                   <td className="px-3 py-2 text-[12.5px] whitespace-nowrap">
                     {el.assignee_id ? (
-                      <span>{names.get(el.assignee_id) ?? "—"}</span>
+                      <Persona name={names.get(el.assignee_id) ?? "—"} />
                     ) : canWrite && meId ? (
                       <button className="btn btn-quiet py-0.5 text-[12.5px]" disabled={take.isPending} onClick={() => take.mutate(el)}>
                         {t("dafare.req.take")}

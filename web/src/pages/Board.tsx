@@ -17,8 +17,10 @@ import { TagChips } from "../tags";
 import { ErrorNote, Loading } from "../ui";
 import { useNarrow } from "./timeline";
 import { BulkBar, SelectBox, useSelection } from "./BulkBar";
-import { Dialog, MineChip, Person, PriorityDot, ReadOnlyBanner, SpacePicker, TimeLogForm, TypeMark, useSpaces } from "./work-ui";
-import { fmtMinutes, fmtPoints, lastSprint, rememberSprint, workApi, type Board as BoardData, type BoardSettings, type Card, type MoveInput, type Swimlane } from "../workApi";
+import { Dialog, MineChip, PriorityDot, ReadOnlyBanner, SpacePicker, TimeLogForm, useSpaces } from "./work-ui";
+import { Avatar } from "../moduleIcon";
+import { phaseTint, typeTint } from "../tinte";
+import { TYPE_MARK, fmtMinutes, fmtPoints, lastSprint, rememberSprint, workApi, type Board as BoardData, type BoardSettings, type Card, type MoveInput, type Swimlane } from "../workApi";
 import { useTypeNames } from "../typesApi";
 import { useT } from "../i18n/react";
 import { useStateName } from "../stateLabels";
@@ -455,14 +457,15 @@ function BoardGrid({ b, lanes, cells, counts, loaded, row, loadingCol, onMore, o
       {b.columns.map((col, i) => {
         const n = counts[i] ?? 0;
         const overWip = col.wip > 0 && n > col.wip;
+        const full = col.wip > 0 && n >= col.wip;
         return (
           <div
             key={col.name}
-            className={`flex shrink-0 snap-start items-baseline gap-2 border-b-2 pb-1.5 ${overWip ? "border-flag" : "border-rule"}`}
-            style={{ width: colW, ...(col.color && !overWip ? { borderColor: col.color } : {}) }}
+            className="flex shrink-0 snap-start items-center gap-2 border border-b-0 border-t-4 border-hair bg-side px-2.5 py-2"
+            style={{ width: colW, borderTopColor: col.color || `var(--m-${colTint(col.name, i, b.columns[i]?.category)})` }}
           >
-            <span className="label truncate">{stateName(col.name)}</span>
-            <span className={`font-mono text-[11.5px] tabular ${overWip ? "font-semibold text-flag" : "text-muted"}`}>
+            <span className="truncate text-[12.5px] font-bold tracking-[.05em] uppercase">{stateName(col.name)}</span>
+            <span className={`font-mono text-[11px] tabular ${full ? "font-bold text-flag" : "text-muted"}`}>
               {n}
               {col.wip > 0 && ` / ${col.wip}`}
             </span>
@@ -579,6 +582,47 @@ function BoardGrid({ b, lanes, cells, counts, loaded, row, loadingCol, onMore, o
 
 const EMPTY: Card[] = [];
 
+/** Colore della testata: da fare platform, in corso demand, revisione budget, fatto devsecops. */
+function colTint(name: string, index: number, category?: string) {
+  switch (category) {
+    case "todo":
+      return "platform";
+    case "in_progress":
+      return "demand";
+    case "review":
+    case "in_review":
+    case "verify":
+      return "budget";
+    case "done":
+      return "devsecops";
+  }
+  return phaseTint(name, index, category);
+}
+
+/** Targhetta piena del tipo (lettera) nel colore del tipo. */
+function TypeBadge({ type }: { type: string }) {
+  const tn = useTypeNames();
+  const base = TYPE_MARK[type] ?? { letter: type.slice(0, 1).toUpperCase(), name: type };
+  const name = tn.name(type, base.name);
+  return (
+    <span title={name} aria-label={name} className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center px-1 text-[10px] leading-none font-extrabold text-chip-ink uppercase" style={{ background: `var(--m-${typeTint(type)})` }}>
+      {base.letter}
+    </span>
+  );
+}
+
+/** Disegno della colonna vuota (aria-hidden). */
+function EmptyIll() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 120 80" width="120" height="80">
+      <rect x="20" y="18" width="80" height="50" fill="color-mix(in srgb, var(--m-devsecops) 30%, transparent)" />
+      <path d="M20 18h80v50H20z" fill="none" stroke="var(--fg)" strokeWidth="2" />
+      <path d="M40 44l12 12 26-26" fill="none" stroke="var(--fg)" strokeWidth="2" />
+      <rect x="88" y="10" width="14" height="14" fill="var(--m-budget)" />
+    </svg>
+  );
+}
+
 /** «Mostra altre (N)»: carica le card successive di una colonna della board paginata. */
 function MoreButton({ name, count, loading, onClick, className = "" }: { name: string; count: number; loading: boolean; onClick: () => void; className?: string }) {
   const t = useT();
@@ -670,23 +714,36 @@ const Cell = memo(function Cell({ cellId, lane, col, width, cards, b, row: ROW, 
             }
           : undefined
       }
-      className={`relative shrink-0 snap-start ${own ? "overflow-y-auto overscroll-contain" : ""} ${fill ? "max-h-full" : "max-h-[480px]"} ${dropIndex >= 0 ? "bg-sel/40" : ""}`}
-      style={{ width, height: fill ? "100%" : undefined, minHeight: 64 }}
+      className={`relative shrink-0 snap-start ${own ? "overflow-y-auto overscroll-contain" : ""} ${fill ? "max-h-full" : "max-h-[480px]"} border-x border-b border-hair bg-side`}
+      style={{
+        width,
+        height: fill ? "100%" : undefined,
+        minHeight: 64,
+        ...(dropIndex >= 0 ? { outline: "2px dashed color-mix(in srgb, var(--m-devsecops) 60%, transparent)", outlineOffset: -2, background: "color-mix(in srgb, var(--m-devsecops) 8%, var(--side))" } : {}),
+      }}
       role="group"
       aria-label={t("lavoro.board.cellLabel", { name: stateName(b.columns[col]?.name ?? ""), count: cards.length })}
     >
-      <div className="relative" style={{ height: Math.max(cards.length * ROW + foot, 64) }}>
+      <div className="relative" style={{ height: Math.max(cards.length * ROW + foot + 8, 64) }}>
         {cards.slice(start, end).map((c, i) => (
-          <div key={c.id} className="absolute inset-x-0" style={{ top: (start + i) * ROW, height: ROW - 8 }}>
-            <CardView card={c} b={b} draggable={canDrag} onStart={onStart} onEnd={onEnd} onMenu={onMenu} onTag={onTag} selected={sel.has(c.id)} selecting={selectMode || sel.size > 0} canSelect={canSelect} onSelect={onSelect} />
+          <div key={c.id} className="absolute inset-x-2" style={{ top: 8 + (start + i) * ROW, height: ROW - 8 }}>
+            <CardView card={c} delay={Math.min(i, 8) * 25} b={b} draggable={canDrag} onStart={onStart} onEnd={onEnd} onMenu={onMenu} onTag={onTag} selected={sel.has(c.id)} selecting={selectMode || sel.size > 0} canSelect={canSelect} onSelect={onSelect} />
           </div>
         ))}
         {more > 0 && (
-          <div className="absolute inset-x-0 flex items-center" style={{ top: cards.length * ROW, height: FOOT_H }}>
+          <div className="absolute inset-x-2 flex items-center" style={{ top: 8 + cards.length * ROW, height: FOOT_H }}>
             <MoreButton name={stateName(b.columns[col]?.name ?? "")} count={more} loading={loadingMore} onClick={() => onMore(col)} />
           </div>
         )}
-        {dropIndex >= 0 && <div className="pointer-events-none absolute inset-x-0 h-[3px] bg-accent" style={{ top: Math.max(0, dropIndex * ROW - 6) }} />}
+        {dropIndex >= 0 && <div className="pointer-events-none absolute inset-x-2 h-[3px] bg-accent" style={{ top: Math.max(0, 8 + dropIndex * ROW - 6) }} />}
+        {/* Il disegno solo nelle colonne a tutta altezza: nelle celle delle swimlane non c'è posto. */}
+        {cards.length === 0 && more === 0 && fill && (
+          <div className="pointer-events-none absolute inset-x-2 top-2 grid justify-items-center gap-1 py-2 text-center text-[12.5px] text-muted">
+            <EmptyIll />
+            <b className="text-[15px] text-fg">{t("lavoro.colori.board.vuotoTitolo")}</b>
+            {t("lavoro.colori.board.vuotoTesto")}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -694,6 +751,7 @@ const Cell = memo(function Cell({ cellId, lane, col, width, cards, b, row: ROW, 
 
 const CardView = memo(function CardView({
   card,
+  delay,
   b,
   draggable,
   onStart,
@@ -706,6 +764,7 @@ const CardView = memo(function CardView({
   onSelect,
 }: {
   card: Card;
+  delay: number;
   b: BoardData;
   draggable: boolean;
   onStart: (c: Card, e: DragEvent) => void;
@@ -722,6 +781,7 @@ const CardView = memo(function CardView({
   const prio = b.priorities.find((p) => p.id === card.priority);
   const epic = card.epic ? b.epics[card.epic] : undefined;
   const closed = !!card.resolved;
+  const tint = typeTint(card.type);
   return (
     <article
       draggable={draggable}
@@ -739,11 +799,12 @@ const CardView = memo(function CardView({
       }}
       aria-label={`${card.key} ${card.title}`}
       aria-selected={selected || undefined}
-      className={`group flex h-full cursor-pointer flex-col gap-1 border bg-bg px-2.5 py-2 hover:border-rule ${selected ? "border-accent bg-sel" : "border-hair"} ${draggable ? "active:cursor-grabbing" : ""}`}
+      style={{ borderLeft: `4px solid var(--m-${tint})`, animationDelay: `${delay}ms` }}
+      className={`group solleva entra m-${tint} flex h-full cursor-pointer flex-col gap-0.5 overflow-hidden border bg-bg px-2.5 py-1.5 hover:border-rule ${selected ? "border-accent bg-sel" : "border-hair"} ${draggable ? "active:cursor-grabbing" : ""}`}
     >
       <div className="flex items-center gap-1.5">
         {canSelect && <SelectBox id={card.id} checked={selected} label={t("lavoro.board.selectCard", { key: card.key })} onToggle={onSelect} className={selected || selecting ? "" : "opacity-40 group-hover:opacity-100"} />}
-        <TypeMark type={card.type} />
+        <TypeBadge type={card.type} />
         <Link
           to="/e/$key"
           params={{ key: card.key }}
@@ -770,7 +831,7 @@ const CardView = memo(function CardView({
       {card.tags && card.tags.length > 0 && <TagChips tags={card.tags} max={2} onPick={onTag} className="max-h-[18px] overflow-hidden" />}
       <div className="mt-auto flex items-center gap-2 text-[11.5px] text-muted">
         <PriorityDot opt={prio} />
-        {card.points != null && <span className="font-mono tabular" title={t("lavoro.board.points")}>{t("lavoro.board.pts", { n: fmtPoints(card.points) })}</span>}
+        {card.points != null && <span className="tinta px-1.5 font-mono leading-[16px] text-fg tabular" title={t("lavoro.board.points")}>{t("lavoro.board.pts", { n: fmtPoints(card.points) })}</span>}
         {card.points == null && card.estimate != null && <span className="font-mono tabular" title={t("lavoro.board.estimate")}>{fmtMinutes(card.estimate)}</span>}
         {!!card.children && (
           <span className="font-mono tabular" title={t("lavoro.board.childrenDone")}>
@@ -778,7 +839,7 @@ const CardView = memo(function CardView({
           </span>
         )}
         <span className="ml-auto">
-          <Person name={card.assignee ? b.members[card.assignee] : undefined} />
+          {card.assignee && b.members[card.assignee] ? <Avatar name={b.members[card.assignee]} /> : null}
         </span>
       </div>
     </article>

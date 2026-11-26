@@ -17,6 +17,8 @@ import { fmtNumber } from "../i18n/format";
 import type { Params } from "../i18n/core";
 import { MyBudget } from "./budget/MyBudget";
 import { crumbs } from "../crumbs";
+import { ModuleChip, type UiModule } from "../moduleIcon";
+import { phaseTint } from "../tinte";
 
 export function Dashboard({ filter }: { filter: DashFilter }) {
   const t = useT();
@@ -93,14 +95,31 @@ function Stat({ label, n, note, tone, size = "lg" }: { label: string; n: Num; no
   );
 }
 
+function Kpi({ module, label, n, tone, note, i }: { module: UiModule; label: string; n: Num; tone?: "flag" | "danger"; note?: ReactNode; i: number }) {
+  return (
+    <div
+      className={`entra relative flex min-w-0 flex-col gap-1.5 border border-hair px-3.5 pb-3 pt-3 m-${module}`}
+      style={{ background: "linear-gradient(color-mix(in srgb, var(--mc) 6%, var(--bg)), var(--bg))", animationDelay: `${i * 60}ms` }}
+    >
+      <span aria-hidden="true" className="absolute -left-px -right-px -top-px h-1 bg-mc" />
+      <span className="label flex items-center gap-2 text-muted">
+        <ModuleChip module={module} size="sm" />
+        {label}
+      </span>
+      <Count n={n} size="xl" tone={tone} label={label} />
+      {note && <span className="text-[12px] text-muted">{note}</span>}
+    </div>
+  );
+}
+
 function Headline({ d }: { d: Dash }) {
   const t = useT();
   return (
-    <section aria-label={t("lavoro.dashboard.summary")} className="grid grid-cols-2 gap-x-6 gap-y-5 border-y-2 border-rule py-4 md:grid-cols-4">
-      <Stat label={t("lavoro.dashboard.inScope")} n={d.total} size="xl" />
-      <Stat label={t("lavoro.dashboard.open")} n={d.open} size="xl" />
-      <Stat label={t("lavoro.dashboard.lateDeadline")} n={d.late_deadline} tone="flag" size="xl" />
-      <Stat label={t("lavoro.dashboard.reportsLate")} n={d.rag.overdue} tone="danger" size="xl" note={t("lavoro.dashboard.reportsLateNote")} />
+    <section aria-label={t("lavoro.dashboard.summary")} className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-4">
+      <Kpi i={0} module="demand" label={t("lavoro.dashboard.inScope")} n={d.total} />
+      <Kpi i={1} module="demand" label={t("lavoro.dashboard.open")} n={d.open} />
+      <Kpi i={2} module="grc" label={t("lavoro.dashboard.lateDeadline")} n={d.late_deadline} tone="flag" />
+      <Kpi i={3} module="work" label={t("lavoro.dashboard.reportsLate")} n={d.rag.overdue} tone="danger" note={t("lavoro.dashboard.reportsLateNote")} />
     </section>
   );
 }
@@ -192,7 +211,7 @@ function Panel({ k, d }: { k: string; d: Dash }) {
           {d.reviews_late.length === 0 ? (
             <p className="m-0 text-[12.5px] text-muted">{t("lavoro.dashboard.reviewsNone")}</p>
           ) : (
-            <Bars items={d.reviews_late.map((r) => ({ key: r.team, label: r.team, n: r }))} tone="danger" />
+            <Bars items={d.reviews_late.map((r) => ({ key: r.team, label: r.team, n: r }))} tone="danger" module="grc" />
           )}
         </Section>
       );
@@ -201,13 +220,13 @@ function Panel({ k, d }: { k: string; d: Dash }) {
     case "driver":
       return (
         <Section title={t("lavoro.dashboard.byDriver")}>
-          <Bars items={d.by_driver.map((s) => ({ key: s.key, label: s.label, n: s }))} />
+          <Bars items={d.by_driver.map((s) => ({ key: s.key, label: s.label, n: s }))} module="arch" />
         </Section>
       );
     case "unita":
       return (
         <Section title={t("lavoro.dashboard.byUnit")}>
-          <Bars items={d.by_unit.map((s) => ({ key: s.key || "-", label: s.label, n: s }))} />
+          <Bars items={d.by_unit.map((s) => ({ key: s.key || "-", label: s.label, n: s }))} module="platform" />
         </Section>
       );
   }
@@ -228,7 +247,7 @@ function Note({ children }: { children: ReactNode }) {
 }
 
 /** Barre orizzontali sottili con il numero cliccabile a destra. */
-function Bars({ items, tone }: { items: { key: string; label: string; n: Num }[]; tone?: "danger" }) {
+function Bars({ items, tone, module = "demand" }: { items: { key: string; label: string; n: Num }[]; tone?: "danger"; module?: UiModule }) {
   const t = useT();
   const max = Math.max(1, ...items.map((i) => i.n.count));
   if (items.length === 0) return <p className="m-0 text-[12.5px] text-muted">{t("lavoro.dashboard.nothing")}</p>;
@@ -237,8 +256,8 @@ function Bars({ items, tone }: { items: { key: string; label: string; n: Num }[]
       {items.map((i) => (
         <li key={i.key} className="grid grid-cols-[minmax(0,40%)_minmax(0,1fr)_48px] items-center gap-3 border-b border-hair py-1.5">
           <span className="truncate" title={i.label}>{i.label}</span>
-          <span className="h-1.5 bg-hair">
-            <span className={`block h-full ${tone === "danger" ? "bg-danger" : "bg-fg"}`} style={{ width: `${(100 * i.n.count) / max}%` }} />
+          <span className={`m-${module} h-3 bg-[color-mix(in_srgb,var(--mc)_22%,transparent)]`}>
+            <span className={`cresce block h-full ${tone === "danger" ? "bg-danger" : "bg-mc"}`} style={{ width: `${(100 * i.n.count) / max}%` }} />
           </span>
           <span className="text-right">
             <Count n={i.n} size="md" label={i.label} />
@@ -258,15 +277,15 @@ function PhasesPanel({ d }: { d: Dash }) {
   const main = d.phases.filter((p) => !p.off_path);
   const off = d.phases.filter((p) => p.off_path);
   const max = Math.max(1, ...d.phases.map((p) => p.count));
-  const row = (p: Dash["phases"][number], i?: number) => (
+  const row = (p: Dash["phases"][number], i?: number, idx = -1) => (
     <tr key={p.name} className="border-b border-hair">
       <td className="py-1.5 pr-3">
         {i != null && <span className="mr-1.5 font-mono text-[11px] text-muted tabular">{String(i + 1).padStart(2, "0")}</span>}
-        <span className={p.off_path ? "text-muted" : ""}>{p.name}</span>
+        <span className={`chip-fase m-${phaseTint(p.name, idx, p.category)} ${p.off_path ? "text-muted" : ""}`}>{p.name}</span>
       </td>
       <td className="w-[38%] py-1.5 pr-3">
-        <span className="block h-1.5 bg-hair">
-          <span className={`block h-full ${p.category === "done" ? "bg-fg" : p.off_path ? "bg-muted" : "bg-accent"}`} style={{ width: `${(100 * p.count) / max}%` }} />
+        <span className={`m-${phaseTint(p.name, idx, p.category)} block h-4 bg-[color-mix(in_srgb,var(--mc)_22%,transparent)]`}>
+          <span className="cresce block h-full bg-mc" style={{ width: `${(100 * p.count) / max}%`, animationDelay: `${(i ?? 0) * 50}ms` }} />
         </span>
       </td>
       <td className="py-1.5 pr-3 text-right"><Count n={p} size="md" label={p.name} /></td>
@@ -288,7 +307,7 @@ function PhasesPanel({ d }: { d: Dash }) {
             </tr>
           </thead>
           <tbody>
-            {main.map((p, i) => row(p, i))}
+            {main.map((p, i) => row(p, i, i))}
             {off.map((p) => row(p))}
           </tbody>
         </table>
@@ -448,7 +467,7 @@ function LoadPanel({ d }: { d: Dash }) {
                 <line x1={0} x2={8 * 9} y1={22 - 22 / 1.5} y2={22 - 22 / 1.5} className="stroke-rule" strokeWidth={1} strokeDasharray="2 2" />
                 {t.weeks.map((w, i) => {
                   const h = Math.max(1, (Math.min(w, 150) / 150) * 22);
-                  return <rect key={i} x={i * 9} y={22 - h} width={7} height={h} className={w > 100 ? "fill-danger" : "fill-fg"} />;
+                  return <rect key={i} x={i * 9} y={22 - h} width={7} height={h} className={w > 100 ? "fill-danger" : "fill-m-work"} />;
                 })}
               </svg>
               <span className={`text-right font-mono tabular ${t.peak_pct > 100 ? "font-semibold text-danger" : ""}`} title={tr("lavoro.dashboard.weeklyPeak")}>

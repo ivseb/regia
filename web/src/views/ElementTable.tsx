@@ -18,6 +18,7 @@ import { useT } from "../i18n/react";
 import { tr } from "../i18n/core";
 import { loc } from "../i18n/format";
 import { useTypeNames } from "../typesApi";
+import { FaseChip, IconaOrologio, Persona, Punteggio, Unita } from "../faseChip";
 
 export type Column = {
   id: string;
@@ -134,13 +135,18 @@ const defaultTitle: TitleCell = (el) => (
 /** Colonne disponibili e campi di raggruppamento, dai campi di sistema e personalizzati del tenant. */
 export function useListColumns(renderTitle: TitleCell = defaultTitle, labels: Record<string, RefLabel> = EMPTY_LABELS, withDemand = false, onPickTag?: (name: string) => void) {
   const t = useT();
-  const stateName = useStateName();
   const tn = useTypeNames();
   const fields = useQuery({ queryKey: ["query-fields"], queryFn: queryApi.fields, staleTime: 300_000 });
   const members = useQuery({ queryKey: ["members"], queryFn: api.members, staleTime: 300_000 });
+  // Fasi delle richieste: servono ai quadratini di avanzamento nel chip di fase.
+  const reqType = useQuery({ queryKey: ["type", "business_request"], queryFn: () => api.type("business_request"), staleTime: 300_000, enabled: withDemand });
+  const reqStates = withDemand ? reqType.data?.states : undefined;
   const names = useMemo(() => new Map((members.data?.items ?? []).map((m) => [m.id, m.display_name])), [members.data]);
   return useMemo(() => {
-    const person = (id: string | null | undefined) => (id ? names.get(id) ?? "—" : <span className="text-muted">—</span>);
+    const person = (id: string | null | undefined) => {
+      const n = id ? names.get(id) : undefined;
+      return n ? <Persona name={n} /> : <span className="text-muted">—</span>;
+    };
     const day = (v: string | null | undefined) => (v ? date(v) : <span className="text-muted">—</span>);
     const sys: Column[] = [
       {
@@ -152,7 +158,7 @@ export function useListColumns(renderTitle: TitleCell = defaultTitle, labels: Re
         ),
       },
       { id: "title", label: t("altro.views.col.title"), sort: "titolo", first: "asc", width: 340, essential: true, cell: renderTitle },
-      { id: "state", label: t("altro.views.col.state"), sort: "fase", first: "asc", width: 150, essential: true, cell: (el) => (el.state ? stateName(el.state) : <span className="text-muted">—</span>) },
+      { id: "state", label: t("altro.views.col.state"), sort: "fase", first: "asc", width: 220, essential: true, cell: (el) => (el.state ? <FaseChip states={reqStates} current={el.state} /> : <span className="text-muted">—</span>) },
       { id: "type", label: t("altro.views.col.type"), width: 140, cell: (el) => tn.name(el.type, el.type_name) },
       { id: "space", label: t("altro.views.col.space"), width: 80, cell: (el) => <span className="font-mono text-[12px]">{el.space_key}</span> },
       { id: "labels", label: t("lavoro.etichette.col"), width: 200, cell: (el) => (el.tags?.length ? <TagChips tags={el.tags} onPick={onPickTag} /> : <span className="text-muted">—</span>) },
@@ -168,18 +174,19 @@ export function useListColumns(renderTitle: TitleCell = defaultTitle, labels: Re
     const dash = <span className="text-muted">—</span>;
     const demandCols: Column[] = withDemand
       ? [
-          { id: "unit", label: t("tastiera.col.unit"), width: 150, cell: (el) => el.demand?.unit ?? dash },
-          { id: "sponsor", label: t("tastiera.col.sponsor"), width: 150, cell: (el) => el.demand?.sponsor ?? dash },
+          { id: "unit", label: t("tastiera.col.unit"), width: 150, cell: (el) => (el.demand?.unit ? <Unita name={el.demand.unit} /> : dash) },
+          { id: "sponsor", label: t("tastiera.col.sponsor"), width: 150, cell: (el) => (el.demand?.sponsor ? <Persona name={el.demand.sponsor} /> : dash) },
           {
             id: "estimate", label: t("tastiera.col.estimate"), width: 110, align: "right",
             cell: (el) => (el.demand && (el.demand.estimate_low_cents != null || el.demand.estimate_high_cents != null) ? euroRange(el.demand.estimate_low_cents, el.demand.estimate_high_cents) : dash),
           },
           {
             // Scadenza normativa: in evidenza (colore e testo) quando c'è un obbligo.
-            id: "deadline", label: t("tastiera.col.deadline"), sort: "scadenza", first: "asc", width: 120, align: "right",
+            id: "deadline", label: t("tastiera.col.deadline"), sort: "scadenza", first: "asc", width: 140, align: "right",
             cell: (el) =>
               el.demand?.regulatory_deadline ? (
-                <span className={el.demand.is_mandatory ? "font-semibold text-flag" : ""} title={el.demand.is_mandatory ? t("tastiera.col.mandatory") : undefined}>
+                <span className={el.demand.is_mandatory ? "font-bold whitespace-nowrap text-flag" : ""} title={el.demand.is_mandatory ? t("tastiera.col.mandatory") : undefined}>
+                  {el.demand.is_mandatory && <IconaOrologio />}
                   {date(el.demand.regulatory_deadline)}
                   {el.demand.is_mandatory && <span className="sr-only"> · {t("tastiera.col.mandatory")}</span>}
                 </span>
@@ -187,13 +194,13 @@ export function useListColumns(renderTitle: TitleCell = defaultTitle, labels: Re
                 dash
               ),
           },
-          { id: "score", label: t("tastiera.col.score"), width: 90, align: "right", cell: (el) => (el.demand?.score != null ? Number(el.demand.score).toLocaleString(loc(), { maximumFractionDigits: 1 }) : dash) },
+          { id: "score", label: t("tastiera.col.score"), width: 130, align: "right", cell: (el) => (el.demand?.score != null ? <Punteggio value={Number(el.demand.score)} text={Number(el.demand.score).toLocaleString(loc(), { maximumFractionDigits: 1 })} /> : dash) },
           {
             // Fase con i giorni trascorsi nella fase.
-            id: "stage", label: t("tastiera.col.stage"), sort: "fase", first: "asc", width: 190, essential: true,
+            id: "stage", label: t("tastiera.col.stage"), sort: "fase", first: "asc", width: 280, essential: true,
             cell: (el) => (
               <span>
-                {el.state ? stateName(el.state) : dash}
+                {el.state ? <FaseChip states={reqStates} current={el.state} /> : dash}
                 {el.demand && <span className="ml-1.5 text-[12px] text-muted tabular">· {t("tastiera.col.stageDays", { count: el.demand.days_in_state })}</span>}
               </span>
             ),
@@ -226,7 +233,7 @@ export function useListColumns(renderTitle: TitleCell = defaultTitle, labels: Re
         .map((f) => ({ id: `f:${f.key}`, label: f.label })),
     ];
     return { all: [...sys, ...demandCols, ...custom], groups, fields: fields.data?.items ?? [], names };
-  }, [fields.data, names, renderTitle, labels, t, tn, withDemand, stateName, onPickTag]);
+  }, [fields.data, names, renderTitle, labels, t, tn, withDemand, reqStates, onPickTag]);
 }
 
 /** Il valore di raggruppamento di un elemento (testo da mostrare; NO_GROUP = senza valore). */
