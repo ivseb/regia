@@ -9,6 +9,7 @@ import { fmtScore } from "./Evaluation";
 import { useT } from "../i18n/react";
 import type { Key } from "../i18n/core";
 import { fmtDate, loc } from "../i18n/format";
+import { PortfolioTabs } from "./portafoglio-ui";
 
 // Governance (demand.md §7, D06): organi con presidente, segretario, membri e quorum;
 // calendario delle sedute; dettaglio della seduta con ordine del giorno proposto dalle
@@ -78,6 +79,7 @@ export function Governance() {
           )
         }
       />
+      <PortfolioTabs />
       <div className="flex flex-col gap-7 px-4 pb-10 md:px-7">
         <ErrorNote error={bodies.error ?? meetings.error} />
         {creating && <NewMeeting bodies={manageable} onDone={() => setCreating(false)} />}

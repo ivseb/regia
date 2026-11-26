@@ -6,6 +6,7 @@ import { TagChips } from "../tags";
 import { withLabel } from "../query";
 import { api, collab, type Element, type ElementDetail } from "../api";
 import { useMe } from "../shell";
+import { pathVisible } from "../modules";
 import { BulkBar, SelectBox, useSelection } from "./BulkBar";
 import { workApi } from "../workApi";
 import { requestsRoute } from "../router";
@@ -35,6 +36,8 @@ export function Requests() {
   const me = useMe();
   const meId = me.data?.active_tenant?.member_id ?? "";
   const canWrite = !!me.data?.active_tenant?.permissions.some((p) => p === "*" || p === "element.write");
+  // Portale dei richiedenti: per vedere ciò che vedono loro (stesse regole della voce che stava nel menu).
+  const canPortal = !!me.data?.active_tenant?.permissions.some((p) => p === "*" || p === "element.write" || p === "portal.submit") && pathVisible(me.data, "/portale");
   const members = useQuery({ queryKey: ["members"], queryFn: api.members, staleTime: 300_000 });
   const names = useMemo(() => new Map((members.data?.items ?? []).map((m) => [m.id, m.display_name])), [members.data]);
   // Selezione multipla (ondata 2): le richieste scelte si prendono in carico, si assegnano, cambiano fase insieme.
@@ -68,9 +71,19 @@ export function Requests() {
       onSearch={(s) => navigate({ search: { ...s, sel: s.sel ?? (s.v === search.v ? sel : undefined) } })}
       selection={canWrite ? { ids: selection.sel, onChange: (ids) => selection.set([...ids]) } : undefined}
       actions={
-        <Link to="/richieste/nuova" className="btn btn-primary no-underline">
-          {tn.create("business_request", t("lavoro.requests.typeName"))}
-        </Link>
+        // Le azioni stanno qui e in ⌘K, non nel menu (menu snello, nav.ts).
+        <>
+          {canPortal && (
+            <Link to="/portale" className="btn no-underline">
+              {t("shell.nav.portal", { type: tn.plural("business_request", t("shell.nav.requests")).toLowerCase() })}
+            </Link>
+          )}
+          {canWrite && (
+            <Link to="/richieste/nuova" className="btn btn-primary no-underline">
+              {tn.create("business_request", t("lavoro.requests.typeName"))}
+            </Link>
+          )}
+        </>
       }
       renderTitle={renderTitle}
       renderList={({ items, sel: cur, empty, query, onQuery }) => (

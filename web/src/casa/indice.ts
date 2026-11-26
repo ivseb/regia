@@ -34,6 +34,7 @@ const DEFS: Def[] = [
   { id: "fields", goal: "types", to: "/configurazione/campi", perms: ["fields.admin", "tenant.admin"] },
   { id: "processes", goal: "processes", to: "/processi", perms: ["process.admin"] },
   { id: "reviews", goal: "processes", to: "/configurazione/valutazioni", perms: ["process.admin"] },
+  { id: "projectsCfg", goal: "processes", to: "/configurazione/progetti", perms: ["tenant.admin"] },
   { id: "progress", goal: "processes", to: "/configurazione/avanzamento", perms: ["portfolio.admin", "tenant.admin"] },
   { id: "portal", goal: "processes", to: "/configurazione/portale", perms: ["portfolio.admin", "tenant.admin"] },
   { id: "bodies", goal: "governance", to: "/governance", perms: ["element.read"] },

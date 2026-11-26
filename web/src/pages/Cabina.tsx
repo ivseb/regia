@@ -18,6 +18,7 @@ import { RoadmapChart } from "./Roadmap";
 import { ZoomSwitch, type Zoom } from "./timeline";
 import { CabinaSeduta } from "./CabinaSeduta";
 import { autoCut, evalCut, occupants, suggestMove, whyHere, type CutEval, type TeamStat } from "./cabina-calc";
+import { PortfolioTabs } from "./portafoglio-ui";
 
 // Cabina di portafoglio (ondata 3, proposta 9): graduatoria, budget, capacità dei team, roadmap, scenari
 // e pacchetto della seduta sulla stessa pagina, con un solo carico di dati (GET /portfolio/cabina).
@@ -32,17 +33,7 @@ export function CabinaPage({ unit, period }: { unit?: string; period?: string })
   return (
     <>
       <PageHeader path={crumbs("demand", "ranking")} title={t("lavoro.cabina.title")} />
-      <div role="tablist" aria-label={t("lavoro.roadmap.view")} className="flex gap-6 border-b border-hair px-4 pt-1 md:px-7">
-        <Link to="/graduatoria" role="tab" aria-selected="false" className="touch-44 pb-2.5 text-muted no-underline hover:text-fg">
-          {t("budget.rank.tab.ranking")}
-        </Link>
-        <Link to="/roadmap" role="tab" aria-selected="false" className="touch-44 pb-2.5 text-muted no-underline hover:text-fg">
-          {t("lavoro.roadmap.tabRoadmap")}
-        </Link>
-        <span role="tab" aria-selected="true" className="border-b-2 border-fg pb-2.5 font-semibold">
-          {t("lavoro.cabina.tab")}
-        </span>
-      </div>
+      <PortfolioTabs />
       <div className="flex flex-col gap-6 px-4 py-5 md:px-7">
         <ErrorNote error={q.error} />
         <AreaPicker unit={unit} period={period} />

@@ -10,7 +10,7 @@ import { ErrorNote } from "./ui";
 import { useLiveUpdates } from "./live";
 import { createKinds, SHORTCUT, useCurrentKey, useKeyboardShortcuts, usePaletteShortcut, type CreateKind, type ItemAction, type PaletteStart } from "./shortcuts";
 import { FavoriteViews } from "./views/FavoriteViews";
-import { buildNav, type NavItem, type NavSection } from "./nav";
+import { buildNav, navItemActive, navPages, sectionKey, type NavItem, type NavSection } from "./nav";
 import { Avatar, ModuleChip, uiIconOfPath, uiModuleOfPath } from "./moduleIcon";
 import { useTypeNames } from "./typesApi";
 import { moduleOfPath, moduleOn, pathAfterSwitch, pathOn, type ModuleKey } from "./modules";
@@ -106,19 +106,29 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
   });
 
   const tn = useTypeNames();
-  const sections = buildNav(
-    me,
-    {
-      todo: todoCount.data?.total,
-      todoMore: todoCount.data?.more,
-      activity: unread.data?.unread,
-      timePending: timePending.data?.items.length,
-    },
-    tn,
-  );
+  const counts = {
+    todo: todoCount.data?.total,
+    todoMore: todoCount.data?.more,
+    activity: unread.data?.unread,
+    timePending: timePending.data?.items.length,
+  };
+  const sections = buildNav(me, counts, tn);
+  // Tutte le pagine del menu, anche quelle riunite in una voce o in un indice (Configurazione, Elenchi).
+  const pages = navPages(me, counts, tn);
 
-  // Pagine raggiungibili con «g» + lettera: le voci del menu (con i permessi e i moduli accesi) e le due fisse.
-  const allowed = useMemo(() => new Set<string>(["/notifiche", "/profilo", ...sections.flatMap((s) => s.items.map((i) => i.to ?? ""))]), [sections]);
+  // Pagine raggiungibili con «g» + lettera: le pagine del menu (con i permessi e i moduli accesi) e le due fisse.
+  const allowedKey = pages.map((i) => i.to ?? "").join("|");
+  const allowed = useMemo(() => new Set<string>(["/notifiche", "/profilo", ...allowedKey.split("|")]), [allowedKey]);
+  // Sezioni chiuse dall'utente, ricordate nel browser; quella della pagina attiva resta aperta.
+  const [closed, setClosed] = useState<ReadonlySet<string>>(readClosed);
+  const toggleSection = useCallback((key: string) => {
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      writeClosed(next);
+      return next;
+    });
+  }, []);
   const currentKey = useCurrentKey();
   useKeyboardShortcuts(
     {
@@ -142,7 +152,7 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
   // titolo proprio, come elementi e documenti, lo impostano dopo aver caricato i dati).
   // Il layout effect gira prima degli effetti dei figli: le pagine con un titolo proprio (e la pagina
   // «non trovato», anche sotto una voce di menu come /architettura/xyz) lo impostano dopo di lui.
-  const navTitle = pageTitleFor(path, sections);
+  const navTitle = pageTitleFor(path, pages);
   useLayoutEffect(() => {
     if (navTitle) document.title = `${navTitle} · Regia`;
   }, [navTitle, path]);
@@ -212,9 +222,10 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
           </button>
         </div>
         <FavoriteViews enabled={!!me.active_tenant} />
-        {sections.map((sec) => (
-          <NavGroup key={sec.label} sec={sec} />
-        ))}
+        {sections.map((sec) => {
+          const key = sectionKey(sec);
+          return <NavGroup key={key} id={key} sec={sec} path={path} closed={closed.has(key)} onToggle={toggleSection} />;
+        })}
         <div className="mt-auto flex flex-col gap-3 border-t border-hair pt-4">
           <ThemeSwitch />
           <div className="flex items-center gap-2.5">
@@ -297,59 +308,123 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
 /** Percorsi le cui voci restano attive anche nelle sottopagine. */
 const NAV_PREFIX = new Set(["/processi", "/configurazione/valutazioni", "/configurazione/campi", "/configurazione/tipi", "/configurazione/requisiti", "/documenti", "/architettura"]);
 
+const CLOSED_KEY = "regia.menu.chiuse";
+
+function readClosed(): ReadonlySet<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? "[]");
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeClosed(keys: ReadonlySet<string>) {
+  try {
+    localStorage.setItem(CLOSED_KEY, JSON.stringify([...keys]));
+  } catch {
+    // Archivio del browser non disponibile: la scelta vale fino al prossimo caricamento.
+  }
+}
+
+/** Freccia della sezione richiudibile: giù se aperta, a destra se chiusa. */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" aria-hidden="true" className={`shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`}>
+      <path d="M4.5 2.5 8 6l-3.5 3.5" />
+    </svg>
+  );
+}
+
 /**
  * Sezione della barra laterale: quadratino del modulo con l'icona, voci con la barretta del colore del
  * modulo quando sono attive, contatori a pillola (pieni se chiedono un'azione). Una sezione con una sola
- * voce dallo stesso nome (Documenti, Architettura) è un collegamento unico.
+ * voce dallo stesso nome (Documenti, Architettura, Elenchi, Configurazione) è un collegamento unico.
+ * Le sezioni con più voci si chiudono dalla testata; quella della pagina attiva resta sempre aperta.
  */
-function NavGroup({ sec }: { sec: NavSection }) {
+function NavGroup({ id, sec, path, closed, onToggle }: { id: string; sec: NavSection; path: string; closed: boolean; onToggle: (key: string) => void }) {
   const t = useT();
   // La prima voce con il nome della sezione (DevSecOps, Documenti, Architettura) diventa la testata.
   const head = sec.items[0]?.to && sec.items[0].label === sec.label ? sec.items[0] : null;
   const rest = head ? sec.items.slice(1) : sec.items;
-  const activeOptions = (it: NavItem) => ({ exact: !it.match && !NAV_PREFIX.has(it.to!), includeSearch: false });
+  const isActive = (it: NavItem) => navItemActive(it, path, NAV_PREFIX);
+  const current = sec.items.some(isActive);
+  const canClose = rest.length > 0 && !current;
+  const open = !canClose || !closed;
+  const listId = `menu-sezione-${id}`;
+  const voce = (it: NavItem) => (isActive(it) ? { "aria-current": "page" as const } : {});
   return (
     <div className={`m-${sec.module} flex flex-col gap-0.5`}>
       {head ? (
-        <Link
-          to={head.to!}
-          activeOptions={activeOptions(head)}
-          className="nav-voce nav-testa -mx-1 flex min-h-11 items-center gap-2 px-1 py-1 text-[12.5px] font-bold text-fg no-underline md:min-h-0"
-          activeProps={{ className: "nav-attiva" }}
+        <div className="flex items-center">
+          <Link
+            to={head.to!}
+            {...voce(head)}
+            activeOptions={{ exact: true, includeSearch: false }}
+            className={`nav-voce nav-testa -mx-1 flex min-h-11 flex-1 items-center gap-2 px-1 py-1 text-[12.5px] font-bold text-fg no-underline md:min-h-0 ${isActive(head) ? "nav-attiva" : ""}`}
+          >
+            <ModuleChip module={sec.module} icon={sec.icon} />
+            <span className="flex-1">{sec.label}</span>
+          </Link>
+          {canClose && (
+            <button
+              type="button"
+              className="flex size-11 shrink-0 items-center justify-center text-muted hover:text-fg md:size-7"
+              aria-expanded={open}
+              aria-controls={listId}
+              aria-label={t("shell.menu.section", { name: sec.label })}
+              onClick={() => onToggle(id)}
+            >
+              <Chevron open={open} />
+            </button>
+          )}
+        </div>
+      ) : canClose ? (
+        <button
+          type="button"
+          className="flex min-h-11 w-full items-center gap-2 pb-1 text-left text-fg md:min-h-0"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => onToggle(id)}
         >
           <ModuleChip module={sec.module} icon={sec.icon} />
-          <span className="flex-1">{sec.label}</span>
-        </Link>
+          <span className="flex-1 text-[12.5px] font-bold">{sec.label}</span>
+          <Chevron open={open} />
+        </button>
       ) : (
         <div className="flex items-center gap-2 pb-1">
           <ModuleChip module={sec.module} icon={sec.icon} />
           <span className="text-[12.5px] font-bold">{sec.label}</span>
         </div>
       )}
-      {rest.map((it) =>
-        it.to ? (
-          <Link
-            key={it.label}
-            to={it.to}
-            activeOptions={activeOptions(it)}
-            className="nav-voce flex min-h-11 items-center gap-2 py-1 pr-2 pl-[30px] text-fg no-underline md:min-h-0"
-            activeProps={{ className: "nav-attiva" }}
-          >
-            <span className="flex-1">{it.label}</span>
-            {!!it.count && (
-              <span className={`nav-conta tabular ${it.hot ? "urgente" : ""}`}>
-                {it.count}
-                {it.more ? "+" : ""}
-                {it.countLabel ? ` ${it.countLabel}` : ""}
+      {rest.length > 0 && (
+        <div id={listId} hidden={!open} className="flex flex-col gap-0.5">
+          {rest.map((it) =>
+            it.to ? (
+              <Link
+                key={it.label}
+                to={it.to}
+                {...voce(it)}
+                activeOptions={{ exact: true, includeSearch: false }}
+                className={`nav-voce flex min-h-11 items-center gap-2 py-1 pr-2 pl-[30px] text-fg no-underline md:min-h-0 ${isActive(it) ? "nav-attiva" : ""}`}
+              >
+                <span className="flex-1">{it.label}</span>
+                {!!it.count && (
+                  <span className={`nav-conta tabular ${it.hot ? "urgente" : ""}`}>
+                    {it.count}
+                    {it.more ? "+" : ""}
+                    {it.countLabel ? ` ${it.countLabel}` : ""}
+                  </span>
+                )}
+              </Link>
+            ) : (
+              <span key={it.label} className="flex items-center gap-2 py-1 pl-[30px] text-muted" aria-disabled="true">
+                <span className="flex-1">{it.label}</span>
+                <span className="font-mono text-[10.5px]">{t("shell.soon")}</span>
               </span>
-            )}
-          </Link>
-        ) : (
-          <span key={it.label} className="flex items-center gap-2 py-1 pl-[30px] text-muted" aria-disabled="true">
-            <span className="flex-1">{it.label}</span>
-            <span className="font-mono text-[10.5px]">{t("shell.soon")}</span>
-          </span>
-        ),
+            ),
+          )}
+        </div>
       )}
     </div>
   );
@@ -407,15 +482,16 @@ function ModuleOff({ module }: { module: ModuleKey }) {
   );
 }
 
-/** Voce di menu che corrisponde meglio al percorso (la più specifica), per il titolo della scheda. */
-function pageTitleFor(path: string, sections: { items: NavItem[] }[]): string | null {
+/**
+ * Pagina del menu che corrisponde meglio al percorso (la più specifica), per il titolo della scheda.
+ * Usa tutte le pagine (navPages), anche quelle che nel menu stanno dentro un indice o una scheda.
+ */
+function pageTitleFor(path: string, pages: NavItem[]): string | null {
   let best: NavItem | null = null;
-  for (const sec of sections) {
-    for (const it of sec.items) {
-      if (!it.to) continue;
-      if (path === it.to || path.startsWith(it.to + "/")) {
-        if (!best || it.to.length > best.to!.length) best = it;
-      }
+  for (const it of pages) {
+    if (!it.to) continue;
+    if (path === it.to || path.startsWith(it.to + "/")) {
+      if (!best || it.to.length > best.to!.length) best = it;
     }
   }
   if (best) return best.label;
