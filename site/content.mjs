@@ -15,45 +15,6 @@ export const it = {
   tagline: "Piattaforma enterprise per demand, delivery e conformità",
   description:
     "Regia è una piattaforma open source per demand e portafoglio, SDLC con stage-gate, work management, knowledge, DevSecOps, GRC e architettura enterprise. Un solo binario Go con Postgres incluso.",
-  hero: {
-    label: "Open source · AGPL-3.0",
-    title: "Dalla richiesta al rilascio e alla conformità, in un solo posto.",
-    lead:
-      "Regia è la piattaforma enterprise per governare demand e portafoglio, far passare il lavoro per gli stage-gate, rilasciare software in modo sicuro e dimostrare la conformità a DORA, NIS2, ISO 27001, GDPR e AgID. Un solo binario Go con Postgres incluso, nessun servizio esterno.",
-    primary: "Installa Regia",
-    secondary: "Leggi la documentazione",
-    code: "Codice sorgente",
-  },
-  facts: [
-    ["Un solo binario", "Go, con Postgres gestito dal binario"],
-    ["Multi-tenant", "Isolamento con RLS di Postgres"],
-    ["Italiano e inglese", "Interfaccia completa nelle due lingue"],
-    ["AI opzionale", "Tutto funziona anche senza"],
-    ["AGPL-3.0-only", "Codice aperto, dati a casa tua"],
-  ],
-  what: {
-    label: "Cos'è",
-    title: "Gli strumenti separati, finalmente collegati",
-    p1:
-      "Nelle organizzazioni regolamentate issue, documenti, portafoglio, pipeline, rischi e architettura vivono in strumenti che non si parlano. Le evidenze per l'audit si ricostruiscono a posteriori e le domande trasversali restano senza risposta.",
-    p2:
-      "Regia tiene tutto in un solo modello di dati collegato: una richiesta di business arriva fino alle applicazioni, ai rilasci, ai controlli e ai rischi che la riguardano, e le evidenze nascono dal lavoro di ogni giorno.",
-    list: [
-      "Dalla richiesta di business al rilascio in produzione, con le valutazioni e le approvazioni di mezzo.",
-      "Dal lavoro dei team alla spesa, con il budget gerarchico e il costo delle ore.",
-      "Dalla pipeline alle vulnerabilità, ai requisiti e al gate di rilascio.",
-      "Dalle norme ai controlli, ai rischi e alle evidenze per l'auditor.",
-    ],
-  },
-  shots: {
-    label: "Il prodotto",
-    title: "Come si presenta",
-    items: [
-      { id: "richieste", alt: "Elenco delle richieste di Regia con filtri e stato nello stage-gate", cap: "Le richieste, con la barra della query e le fasi dello stage-gate." },
-      { id: "percorso", alt: "Una richiesta di Regia in fase di approvazione, con le fasi dello stage-gate, gli approvatori e i campi", cap: "Una richiesta in approvazione: fasi dello stage-gate, chi ha già deciso e cosa manca." },
-      { id: "board", alt: "Board di un team in Regia con colonne, limiti di lavoro in corso e corsie", cap: "La board di un team, con colonne, limiti WIP e corsie." },
-    ],
-  },
   modules: {
     label: "Funzionalità per modulo",
     title: "Otto aree, un solo prodotto",
@@ -145,39 +106,6 @@ export const it = {
       },
     ],
   },
-  strengths: {
-    label: "Punti di forza",
-    title: "Pensato per stare in casa tua",
-    items: [
-      ["Installazione in un minuto", "Un comando avvia tutto. Al primo avvio Regia crea da sola il database e applica le migrazioni."],
-      ["Nessun servizio esterno", "Niente code, cache o database da installare: Postgres 18 è nell'immagine Docker, e il binario lo avvia e lo ferma da solo."],
-      ["Dati in casa", "Tutto sta nella tua cartella dati. Nessuna richiesta a CDN o servizi esterni; backup cifrati con passphrase e controllo dell'istanza con `regia doctor`."],
-      ["Open source AGPL", "Il codice è pubblico e ispezionabile. Licenza AGPL-3.0-only, copyright di Ivan Sebben."],
-      ["Veloce anche con tanti dati", "Con un milione di richieste in un tenant, dettaglio e liste restano sotto i 5 ms (p95) e la ricerca full-text sotto i 75 ms. Misure in documentazione."],
-    ],
-    benchmark: "Vedi il benchmark",
-  },
-  quick: {
-    label: "Installazione rapida",
-    title: "Prova Regia in locale",
-    docker: "Con Docker",
-    binary: "Dal sorgente",
-    note: "Poi apri http://localhost:8080. Il controllo di salute risponde su `/healthz`.",
-    more: "Tutti i dettagli nella pagina Installazione",
-  },
-  more: {
-    label: "Documentazione e codice",
-    title: "Tutto è scritto e pubblico",
-    docs: ["Documentazione", "Guide per chi installa e gestisce Regia, e note per chi sviluppa."],
-    code: ["Codice sorgente", "Il repository pubblico su GitHub, con i sorgenti e la storia delle modifiche."],
-    license: ["Licenza", "AGPL-3.0-only: cosa permette e cosa chiede."],
-  },
-  footer: {
-    line: "Regia — AGPL-3.0-only — © 2026 Ivan Sebben",
-    code: "Codice sorgente",
-    license: "Licenza",
-    docs: "Documentazione",
-  },
   install: {
     title: "Installazione",
     description: "Come installare Regia con Docker o dal sorgente: porta 8080, volume dati, controllo di salute e primo accesso.",
@@ -256,45 +184,6 @@ export const en = {
   tagline: "Enterprise platform for demand, delivery and compliance",
   description:
     "Regia is an open source platform for demand and portfolio management, stage-gate SDLC, work management, knowledge, DevSecOps, GRC and enterprise architecture. One Go binary with Postgres included.",
-  hero: {
-    label: "Open source · AGPL-3.0",
-    title: "From request to release to compliance, in one place.",
-    lead:
-      "Regia is the enterprise platform to govern demand and portfolio, move work through stage-gates, ship software securely and show compliance with DORA, NIS2, ISO 27001, GDPR and AgID. One Go binary with Postgres included, no external service.",
-    primary: "Install Regia",
-    secondary: "Read the documentation",
-    code: "Source code",
-  },
-  facts: [
-    ["One binary", "Go, with Postgres run by the binary"],
-    ["Multi-tenant", "Isolation with Postgres RLS"],
-    ["Italian and English", "Complete interface in both languages"],
-    ["Optional AI", "Everything works without it"],
-    ["AGPL-3.0-only", "Open code, your data at home"],
-  ],
-  what: {
-    label: "What it is",
-    title: "Separate tools, finally connected",
-    p1:
-      "In regulated organisations, issues, documents, portfolio, pipelines, risks and architecture live in tools that do not talk to each other. Audit evidence is rebuilt after the fact and cross-cutting questions stay unanswered.",
-    p2:
-      "Regia keeps everything in a single connected data model: a business request reaches the applications, releases, controls and risks that concern it, and evidence is produced by everyday work.",
-    list: [
-      "From the business request to production release, with the assessments and approvals in between.",
-      "From team work to spend, with the hierarchical budget and the cost of hours.",
-      "From the pipeline to vulnerabilities, requirements and the release gate.",
-      "From regulations to controls, risks and evidence for the auditor.",
-    ],
-  },
-  shots: {
-    label: "The product",
-    title: "What it looks like",
-    items: [
-      { id: "richieste", alt: "Regia request list with filters and stage-gate status", cap: "Requests, with the query bar and the stage-gate phases." },
-      { id: "percorso", alt: "A Regia request in the approval phase, with stage-gate phases, approvers and fields", cap: "A request in approval: stage-gate phases, who has decided and what is missing." },
-      { id: "board", alt: "A team board in Regia with columns, work-in-progress limits and swimlanes", cap: "A team board, with columns, WIP limits and swimlanes." },
-    ],
-  },
   modules: {
     label: "Features by module",
     title: "Eight areas, one product",
@@ -385,39 +274,6 @@ export const en = {
         ],
       },
     ],
-  },
-  strengths: {
-    label: "Strengths",
-    title: "Built to live in your house",
-    items: [
-      ["Installed in a minute", "One command starts everything. On first start Regia creates its own database and applies the migrations."],
-      ["No external service", "No queue, cache or database to install: Postgres 18 comes with the Docker image, and the binary starts it for you."],
-      ["Your data at home", "Everything is in your data folder. No request to any CDN or external service; encrypted backups with a passphrase and an instance check with `regia doctor`."],
-      ["Open source AGPL", "The code is public and inspectable. Licensed AGPL-3.0-only, copyright Ivan Sebben."],
-      ["Fast with a lot of data", "With a million requests in one tenant, detail and lists stay under 5 ms (p95) and full-text search under 75 ms. Measurements in the documentation."],
-    ],
-    benchmark: "See the benchmark",
-  },
-  quick: {
-    label: "Quick install",
-    title: "Try Regia locally",
-    docker: "With Docker",
-    binary: "From source",
-    note: "Then open http://localhost:8080. The health check answers on `/healthz`.",
-    more: "Full details on the Installation page",
-  },
-  more: {
-    label: "Documentation and code",
-    title: "Everything is written and public",
-    docs: ["Documentation", "Guides for those who install and run Regia, and notes for those who develop it. Currently in Italian."],
-    code: ["Source code", "The public GitHub repository, with sources and change history."],
-    license: ["License", "AGPL-3.0-only: what it allows and what it asks."],
-  },
-  footer: {
-    line: "Regia — AGPL-3.0-only — © 2026 Ivan Sebben",
-    code: "Source code",
-    license: "License",
-    docs: "Documentation",
   },
   install: {
     title: "Installation",
