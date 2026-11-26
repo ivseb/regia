@@ -42,8 +42,50 @@ var importFields = map[string]string{
 	"capitalizable": "capitalizzabile (sì/no)",
 }
 
-// ImportFields sono i campi a cui si può mappare una colonna, con l'etichetta.
+// Campi di destinazione delle ore (target work_logs): le etichette sono quelle del catalogo
+// dell'interfaccia, qui servono i codici.
+var hoursFields = map[string]string{
+	"element":       "attività o elemento (chiave)",
+	"member":        "persona (email)",
+	"work_date":     "data",
+	"hours":         "ore",
+	"minutes":       "minuti",
+	"activity_type": "tipo di attività",
+	"text":          "testo",
+	"capitalizable": "capitalizzabile (sì/no)",
+	"source_ref":    "riferimento (numero della riga)",
+}
+
+// Target dell'import CSV.
+const (
+	TargetCosts = "cost_entries"
+	TargetHours = "work_logs"
+)
+
+func validTarget(t string) bool { return t == TargetCosts || t == TargetHours }
+
+// ImportFields sono i campi a cui si può mappare una colonna dei costi, con l'etichetta.
 func ImportFields() map[string]string { return importFields }
+
+// ImportFieldsFor sono i campi del target indicato (costi se vuoto).
+func ImportFieldsFor(target string) map[string]string {
+	if target == TargetHours {
+		return hoursFields
+	}
+	return importFields
+}
+
+// NormTarget legge il target di una richiesta: vuoto = costi.
+func NormTarget(t string) (string, error) {
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return TargetCosts, nil
+	}
+	if !validTarget(t) {
+		return "", engine.InvalidCode("validation.finance.import_target", "target", "destinazione dell'import non ammessa (costi od ore)")
+	}
+	return t, nil
+}
 
 // Mapping è la mappatura di un profilo: colonne del file → campi, formati e valori di default.
 type Mapping struct {
@@ -57,13 +99,14 @@ type Mapping struct {
 var dateLayouts = map[string]string{"": "2006-01-02", "AAAA-MM-GG": "2006-01-02", "GG/MM/AAAA": "02/01/2006",
 	"GG.MM.AAAA": "02.01.2006", "MM/GG/AAAA": "01/02/2006", "GG-MM-AAAA": "02-01-2006"}
 
-func (m *Mapping) validate() error {
+func (m *Mapping) validate(target string) error {
+	fields := ImportFieldsFor(target)
 	if len(m.Columns) == 0 {
 		return engine.InvalidCode("validation.finance.mapping_no_columns", "mapping.columns", "mappa almeno una colonna")
 	}
 	seen := map[string]bool{}
 	for col, f := range m.Columns {
-		if _, ok := importFields[f]; !ok {
+		if _, ok := fields[f]; !ok {
 			return engine.InvalidValue("mapping.columns", "campo %q sconosciuto per la colonna %q", f, col)
 		}
 		if seen[f] {
@@ -72,20 +115,26 @@ func (m *Mapping) validate() error {
 		seen[f] = true
 	}
 	for f := range m.Defaults {
-		if _, ok := importFields[f]; !ok {
+		if _, ok := fields[f]; !ok {
 			return engine.InvalidValue("mapping.defaults", "campo %q sconosciuto", f)
 		}
 	}
-	for _, need := range []string{"entry_date", "amount"} {
-		if !seen[need] {
-			return engine.Required("mapping.columns", "manca la colonna per il campo %q", importFields[need])
+	if target == TargetHours {
+		if err := m.validateHours(seen); err != nil {
+			return err
 		}
-	}
-	if !seen["element"] && m.Defaults["element"] == "" {
-		return engine.Required("mapping.columns", "serve la colonna dell'elemento o un elemento di default")
-	}
-	if !seen["category"] && m.Defaults["category"] == "" {
-		return engine.Required("mapping.columns", "serve la colonna della categoria o una categoria di default")
+	} else {
+		for _, need := range []string{"entry_date", "amount"} {
+			if !seen[need] {
+				return engine.Required("mapping.columns", "manca la colonna per il campo %q", importFields[need])
+			}
+		}
+		if !seen["element"] && m.Defaults["element"] == "" {
+			return engine.Required("mapping.columns", "serve la colonna dell'elemento o un elemento di default")
+		}
+		if !seen["category"] && m.Defaults["category"] == "" {
+			return engine.Required("mapping.columns", "serve la colonna della categoria o una categoria di default")
+		}
 	}
 	if _, ok := dateLayouts[m.DateFormat]; !ok {
 		return engine.InvalidValue("mapping.date_format", "formato di data non ammesso")
@@ -111,8 +160,13 @@ type Profile struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (s *Service) Profiles(ctx context.Context, tx pgx.Tx) ([]Profile, error) {
-	rows, err := tx.Query(ctx, "select id, name, target, mapping, updated_at from import_profiles where target = 'cost_entries' order by lower(name)")
+// Profiles elenca i profili del target (costi se vuoto).
+func (s *Service) Profiles(ctx context.Context, tx pgx.Tx, target string) ([]Profile, error) {
+	target, err := NormTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, "select id, name, target, mapping, updated_at from import_profiles where target = $1 order by lower(name)", target)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +187,7 @@ func (s *Service) Profiles(ctx context.Context, tx pgx.Tx) ([]Profile, error) {
 func (s *Service) profile(ctx context.Context, tx pgx.Tx, id string) (*Profile, error) {
 	var p Profile
 	var raw []byte
-	err := tx.QueryRow(ctx, "select id, name, target, mapping, updated_at from import_profiles where id::text = $1", id).
+	err := tx.QueryRow(ctx, "select id, name, target, mapping, updated_at from import_profiles where id::text = $1 and target in ('cost_entries', 'work_logs')", id).
 		Scan(&p.ID, &p.Name, &p.Target, &raw, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, engine.NotFound("profile_id", "profile", "profilo inesistente")
@@ -146,6 +200,7 @@ func (s *Service) profile(ctx context.Context, tx pgx.Tx, id string) (*Profile, 
 
 type ProfileInput struct {
 	Name    string  `json:"name"`
+	Target  string  `json:"target"` // vuoto = costi; di un profilo esistente non cambia
 	Mapping Mapping `json:"mapping"`
 }
 
@@ -158,16 +213,26 @@ func (s *Service) SaveProfile(ctx context.Context, tx pgx.Tx, actor engine.Actor
 	if in.Name == "" {
 		return nil, engine.Required("name", "serve un nome")
 	}
-	if err := in.Mapping.validate(); err != nil {
+	target, err := NormTarget(in.Target)
+	if err != nil {
+		return nil, err
+	}
+	if id != "" { // un profilo esistente tiene il suo target
+		old, err := s.profile(ctx, tx, id)
+		if err != nil {
+			return nil, err
+		}
+		target = old.Target
+	}
+	if err := in.Mapping.validate(target); err != nil {
 		return nil, err
 	}
 	raw, _ := json.Marshal(in.Mapping)
 	action := "import_profile.update"
-	var err error
 	if id == "" {
 		id, action = db.NewID(), "import_profile.create"
-		_, err = tx.Exec(ctx, `insert into import_profiles (tenant_id, id, name, target, mapping, created_by) values (app_tenant(), $1, $2, 'cost_entries', $3, $4)`,
-			id, in.Name, raw, nullable(actor.MemberID))
+		_, err = tx.Exec(ctx, `insert into import_profiles (tenant_id, id, name, target, mapping, created_by) values (app_tenant(), $1, $2, $3, $4, $5)`,
+			id, in.Name, target, raw, nullable(actor.MemberID))
 	} else {
 		var tag interface{ RowsAffected() int64 }
 		tag, err = tx.Exec(ctx, `update import_profiles set name = $2, mapping = $3, updated_at = now() where id::text = $1`, id, in.Name, raw)
@@ -227,6 +292,10 @@ type PreviewRow struct {
 	Description     string `json:"description"`
 	SourceRef       string `json:"source_ref"`
 	Duplicate       bool   `json:"duplicate"`
+	// Solo per le ore (target work_logs).
+	Person       string `json:"person,omitempty"`
+	Minutes      int    `json:"minutes,omitempty"`
+	ActivityType string `json:"activity_type,omitempty"`
 }
 
 type parsedRow struct {
@@ -237,6 +306,8 @@ type parsedRow struct {
 	fxRate                string
 	date                  time.Time
 	capitalizable         bool
+	memberID              string  // ore: la persona
+	roleKey               *string // ore: il ruolo con cui ha lavorato, fotografato
 }
 
 type analysis struct {
@@ -247,7 +318,24 @@ type analysis struct {
 
 const maxImportRows = 50_000
 
-func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m Mapping, content string) (*analysis, error) {
+// errorRows conta le righe con almeno un errore (una riga può avere più errori).
+func (a *analysis) errorRows() int {
+	rows := map[int]bool{}
+	for _, e := range a.errors {
+		rows[e.Row] = true
+	}
+	return len(rows)
+}
+
+// sheet è un CSV aperto: intestazione letta e colonne dei campi risolte.
+type sheet struct {
+	rd       *csv.Reader
+	fieldCol map[string]int
+	defaults map[string]string
+}
+
+// openSheet legge l'intestazione e collega ogni campo mappato alla sua colonna.
+func openSheet(m Mapping, content string) (*sheet, error) {
 	content = strings.TrimPrefix(content, string(rune(0xFEFF)))
 	delim := m.Delimiter
 	if delim == "" {
@@ -278,6 +366,52 @@ func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m 
 			return nil, engine.InvalidParams("validation.finance.mapping_column_missing", "mapping.columns", map[string]any{"column": h}, "nel file manca la colonna %q", h)
 		}
 		fieldCol[f] = i
+	}
+	return &sheet{rd: rd, fieldCol: fieldCol, defaults: m.Defaults}, nil
+}
+
+// each scorre le righe del file (la riga 1 è l'intestazione): conta le righe e gli errori di
+// lettura nell'analisi, salta le vuote e passa a fn il valore dei campi (con i default) e la
+// funzione che registra un errore della riga.
+func (sh *sheet) each(a *analysis, fn func(line int, get func(f string) string, fail func(field, msg string)) error) error {
+	for line := 2; ; line++ {
+		rec, err := sh.rd.Read()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			a.errors = append(a.errors, RowError{Row: line, Message: "riga non leggibile: " + err.Error()})
+			a.total++
+			continue
+		}
+		if len(rec) == 1 && strings.TrimSpace(rec[0]) == "" {
+			continue // riga vuota
+		}
+		a.total++
+		if a.total > maxImportRows {
+			return engine.InvalidParams("validation.finance.csv_too_many_rows", "csv", map[string]any{"max": maxImportRows}, "al massimo %d righe per file", maxImportRows)
+		}
+		get := func(f string) string {
+			if i, ok := sh.fieldCol[f]; ok && i < len(rec) {
+				if v := strings.TrimSpace(rec[i]); v != "" {
+					return v
+				}
+			}
+			return strings.TrimSpace(sh.defaults[f])
+		}
+		fail := func(field, msg string) {
+			a.errors = append(a.errors, RowError{Row: line, Field: field, Message: msg})
+		}
+		if err := fn(line, get, fail); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m Mapping, content string) (*analysis, error) {
+	sh, err := openSheet(m, content)
+	if err != nil {
+		return nil, err
 	}
 	base, err := BaseCurrency(ctx, tx)
 	if err != nil {
@@ -321,34 +455,7 @@ func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m 
 	a := &analysis{}
 	refs := map[string]bool{}
 	layout := dateLayouts[m.DateFormat]
-	for line := 2; ; line++ {
-		rec, err := rd.Read()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			a.errors = append(a.errors, RowError{Row: line, Message: "riga non leggibile: " + err.Error()})
-			a.total++
-			continue
-		}
-		if len(rec) == 1 && strings.TrimSpace(rec[0]) == "" {
-			continue // riga vuota
-		}
-		a.total++
-		if a.total > maxImportRows {
-			return nil, engine.InvalidParams("validation.finance.csv_too_many_rows", "csv", map[string]any{"max": maxImportRows}, "al massimo %d righe per file", maxImportRows)
-		}
-		get := func(f string) string {
-			if i, ok := fieldCol[f]; ok && i < len(rec) {
-				if v := strings.TrimSpace(rec[i]); v != "" {
-					return v
-				}
-			}
-			return strings.TrimSpace(m.Defaults[f])
-		}
-		fail := func(field, msg string) {
-			a.errors = append(a.errors, RowError{Row: line, Field: field, Message: msg})
-		}
+	err = sh.each(a, func(line int, get func(f string) string, fail func(field, msg string)) error {
 		var p parsedRow
 		p.Row = line
 		ok := true
@@ -359,7 +466,7 @@ func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m 
 			if e, err := s.eng.Get(ctx, tx, actor, key); err == nil {
 				el = e
 			} else if !errors.Is(err, engine.ErrNotFound) {
-				return nil, err
+				return err
 			}
 			elements[key] = el
 		}
@@ -428,22 +535,22 @@ func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m 
 			p.supplier = &v
 		}
 		if !ok {
-			continue
+			return nil
 		}
 		// Conversione: un controllo per valuta e data.
 		k := p.Currency + "|" + p.EntryDate
 		if msg, done := fx[k]; done && msg != "" {
 			fail("currency", msg)
-			continue
+			return nil
 		}
 		base2, rate, err := convert(ctx, tx, p.AmountCents, p.Currency, base, p.date)
 		if errors.Is(err, ErrNoRate) {
 			fx[k] = err.Error()
 			fail("currency", err.Error())
-			continue
+			return nil
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 		fx[k] = ""
 		p.AmountBaseCents, p.fxRate = base2, rate
@@ -460,6 +567,10 @@ func (s *Service) analyze(ctx context.Context, tx pgx.Tx, actor engine.Actor, m 
 		}
 		refs[p.SourceRef] = true
 		a.rows = append(a.rows, p)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	// Righe già importate (anche da file precedenti).
 	if len(a.rows) > 0 {
@@ -552,6 +663,7 @@ func parseAmount(v, decimal string) (int64, error) {
 
 type Run struct {
 	ID         string       `json:"id"`
+	Target     string       `json:"target"`
 	ProfileID  *string      `json:"profile_id"`
 	Profile    *string      `json:"profile"`
 	FileName   string       `json:"file_name"`
@@ -568,7 +680,7 @@ type Run struct {
 	FinishedAt *time.Time   `json:"finished_at"`
 }
 
-const runSelect = `select r.id, r.profile_id, p.name, r.file_name, r.status, coalesce(r.rows_total, 0), coalesce(r.rows_ok, 0),
+const runSelect = `select r.id, r.target, r.profile_id, p.name, r.file_name, r.status, coalesce(r.rows_total, 0), coalesce(r.rows_ok, 0),
 	coalesce(r.rows_error, 0), r.rows_duplicate, r.errors, r.preview, r.dry_run, m.display_name, r.created_at, r.finished_at
 	from import_runs r left join import_profiles p on p.tenant_id = r.tenant_id and p.id = r.profile_id
 	left join members m on m.tenant_id = r.tenant_id and m.id = r.created_by`
@@ -577,7 +689,7 @@ func scanRuns(rows pgx.Rows) ([]Run, error) {
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Run, error) {
 		var x Run
 		var errs, prev []byte
-		if err := r.Scan(&x.ID, &x.ProfileID, &x.Profile, &x.FileName, &x.Status, &x.RowsTotal, &x.RowsOK, &x.RowsError, &x.RowsDup,
+		if err := r.Scan(&x.ID, &x.Target, &x.ProfileID, &x.Profile, &x.FileName, &x.Status, &x.RowsTotal, &x.RowsOK, &x.RowsError, &x.RowsDup,
 			&errs, &prev, &x.DryRun, &x.CreatedBy, &x.CreatedAt, &x.FinishedAt); err != nil {
 			return x, err
 		}
@@ -592,8 +704,13 @@ func scanRuns(rows pgx.Rows) ([]Run, error) {
 	return out, err
 }
 
-func (s *Service) Runs(ctx context.Context, tx pgx.Tx) ([]Run, error) {
-	rows, err := tx.Query(ctx, runSelect+` where r.target = 'cost_entries' order by r.created_at desc limit 50`)
+// Runs elenca le ultime esecuzioni del target (costi se vuoto).
+func (s *Service) Runs(ctx context.Context, tx pgx.Tx, target string) ([]Run, error) {
+	target, err := NormTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, runSelect+` where r.target = $1 order by r.created_at desc limit 50`, target)
 	if err != nil {
 		return nil, err
 	}
@@ -627,6 +744,7 @@ func (s *Service) run(ctx context.Context, tx pgx.Tx, id string) (*Run, error) {
 // ImportInput: un file con un profilo salvato, oppure con una mappatura indicata qui
 // (prova di una mappatura senza salvarla).
 type ImportInput struct {
+	Target    string   `json:"target"` // solo con una mappatura senza profilo; vuoto = costi
 	ProfileID string   `json:"profile_id"`
 	Mapping   *Mapping `json:"mapping"`
 	FileName  string   `json:"file_name"`
@@ -644,11 +762,11 @@ func (s *Service) Preview(ctx context.Context, tx pgx.Tx, actor engine.Actor, in
 	if err := requireWrite(actor); err != nil {
 		return nil, err
 	}
-	m, profileID, err := s.mappingOf(ctx, tx, in)
+	target, m, profileID, err := s.mappingOf(ctx, tx, in)
 	if err != nil {
 		return nil, err
 	}
-	a, err := s.analyze(ctx, tx, actor, m, in.CSV)
+	a, err := s.analyzeFor(ctx, tx, actor, target, m, in.CSV)
 	if err != nil {
 		return nil, err
 	}
@@ -676,29 +794,42 @@ func (s *Service) Preview(ctx context.Context, tx pgx.Tx, actor engine.Actor, in
 	id := db.NewID()
 	if _, err := tx.Exec(ctx, `insert into import_runs (tenant_id, id, profile_id, target, file_name, file_sha256, status, rows_total, rows_ok, rows_error,
 		rows_duplicate, errors, preview, dry_run, mapping, created_by)
-		values (app_tenant(), $1, $2, 'cost_entries', $3, $4, 'preview', $5, $6, $7, $8, $9, $10, true, $11, $12)`,
-		id, nullable(profileID), name, fileSHA(in.CSV), a.total, len(a.rows)-a.duplicates, len(a.errors), a.duplicates,
-		errsJSON, prevJSON, mapJSON, nullable(actor.MemberID)); err != nil {
+		values (app_tenant(), $1, $2, $13, $3, $4, 'preview', $5, $6, $7, $8, $9, $10, true, $11, $12)`,
+		id, nullable(profileID), name, fileSHA(in.CSV), a.total, len(a.rows)-a.duplicates, a.errorRows(), a.duplicates,
+		errsJSON, prevJSON, mapJSON, nullable(actor.MemberID), target); err != nil {
 		return nil, err
 	}
 	return s.run(ctx, tx, id)
 }
 
-func (s *Service) mappingOf(ctx context.Context, tx pgx.Tx, in ImportInput) (Mapping, string, error) {
+// mappingOf restituisce il target, la mappatura e l'id del profilo (se c'è) di una richiesta.
+func (s *Service) mappingOf(ctx context.Context, tx pgx.Tx, in ImportInput) (string, Mapping, string, error) {
 	if len(in.CSV) == 0 {
-		return Mapping{}, "", engine.InvalidCode("validation.finance.csv_empty", "csv", "il file è vuoto")
+		return "", Mapping{}, "", engine.InvalidCode("validation.finance.csv_empty", "csv", "il file è vuoto")
 	}
 	if in.ProfileID != "" {
 		p, err := s.profile(ctx, tx, in.ProfileID)
 		if err != nil {
-			return Mapping{}, "", err
+			return "", Mapping{}, "", err
 		}
-		return p.Mapping, p.ID, nil
+		return p.Target, p.Mapping, p.ID, nil
 	}
 	if in.Mapping == nil {
-		return Mapping{}, "", engine.Required("profile_id", "indica un profilo o una mappatura")
+		return "", Mapping{}, "", engine.Required("profile_id", "indica un profilo o una mappatura")
 	}
-	return *in.Mapping, "", in.Mapping.validate()
+	target, err := NormTarget(in.Target)
+	if err != nil {
+		return "", Mapping{}, "", err
+	}
+	return target, *in.Mapping, "", in.Mapping.validate(target)
+}
+
+// analyzeFor analizza il file secondo il target.
+func (s *Service) analyzeFor(ctx context.Context, tx pgx.Tx, actor engine.Actor, target string, m Mapping, content string) (*analysis, error) {
+	if target == TargetHours {
+		return s.analyzeHours(ctx, tx, actor, m, content)
+	}
+	return s.analyze(ctx, tx, actor, m, content)
 }
 
 // ConfirmInput conferma un'anteprima con lo stesso file.
@@ -714,9 +845,9 @@ func (s *Service) Confirm(ctx context.Context, tx pgx.Tx, actor engine.Actor, ru
 	if err := requireWrite(actor); err != nil {
 		return nil, err
 	}
-	var status string
+	var status, target string
 	var sha, mapRaw []byte
-	err := tx.QueryRow(ctx, "select status, file_sha256, mapping from import_runs where id::text = $1 for update", runID).Scan(&status, &sha, &mapRaw)
+	err := tx.QueryRow(ctx, "select status, target, file_sha256, mapping from import_runs where id::text = $1 and target in ('cost_entries', 'work_logs') for update", runID).Scan(&status, &target, &sha, &mapRaw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, engine.ErrNotFound
 	}
@@ -733,14 +864,42 @@ func (s *Service) Confirm(ctx context.Context, tx pgx.Tx, actor engine.Actor, ru
 	if err := json.Unmarshal(mapRaw, &m); err != nil {
 		return nil, err
 	}
-	a, err := s.analyze(ctx, tx, actor, m, in.CSV)
+	a, err := s.analyzeFor(ctx, tx, actor, target, m, in.CSV)
 	if err != nil {
 		return nil, err
 	}
 	if len(a.errors) > 0 && !in.SkipErrors {
-		return nil, engine.InvalidParams("validation.finance.import_rows_with_errors", "csv", map[string]any{"n": len(a.errors)}, "%d righe con errori: correggile o conferma ignorandole", len(a.errors))
+		return nil, engine.InvalidParams("validation.finance.import_rows_with_errors", "csv", map[string]any{"n": a.errorRows()}, "%d righe con errori: correggile o conferma ignorandole", a.errorRows())
 	}
-	// Un solo insert per tutte le righe (array per colonna).
+	var inserted int64
+	if target == TargetHours {
+		inserted, err = s.insertHours(ctx, tx, actor, runID, a.rows)
+	} else {
+		inserted, err = insertCosts(ctx, tx, actor, runID, a.rows)
+	}
+	if err != nil {
+		return nil, err
+	}
+	dups := len(a.rows) - int(inserted)
+	errsJSON, _ := json.Marshal(a.errors)
+	if a.errors == nil {
+		errsJSON = []byte("[]")
+	}
+	if _, err := tx.Exec(ctx, `update import_runs set status = 'done', dry_run = false, rows_total = $2, rows_ok = $3, rows_error = $4,
+		rows_duplicate = $5, errors = $6, finished_at = now() where id = $1`, runID, a.total, inserted, a.errorRows(), dups, errsJSON); err != nil {
+		return nil, err
+	}
+	if err := audit.Append(ctx, tx, audit.Event{Action: "import.confirm", EntityType: "import_run", EntityID: runID, ActorAccountID: actor.AccountID,
+		ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"rows_total": a.total, "rows_ok": inserted,
+			"rows_duplicate": dups, "rows_error": a.errorRows(), "file_sha256": hex.EncodeToString(sha)}}); err != nil {
+		return nil, err
+	}
+	return s.run(ctx, tx, runID)
+}
+
+// insertCosts scrive in un solo insert le righe nuove (un array per colonna); i riferimenti
+// già presenti sono ignorati.
+func insertCosts(ctx context.Context, tx pgx.Tx, actor engine.Actor, runID string, rows []parsedRow) (int64, error) {
 	var (
 		elems, cats, refs, curs, descs, kinds, rates []string
 		units, sups                                  []*string
@@ -748,7 +907,7 @@ func (s *Service) Confirm(ctx context.Context, tx pgx.Tx, actor engine.Actor, ru
 		amounts, bases                               []int64
 		caps                                         []bool
 	)
-	for _, r := range a.rows {
+	for _, r := range rows {
 		if r.Duplicate {
 			continue
 		}
@@ -757,44 +916,29 @@ func (s *Service) Confirm(ctx context.Context, tx pgx.Tx, actor engine.Actor, ru
 		units, sups, dates = append(units, r.orgUnitID), append(sups, r.supplier), append(dates, r.date)
 		amounts, bases, caps = append(amounts, r.AmountCents), append(bases, r.AmountBaseCents), append(caps, r.capitalizable)
 	}
-	var inserted int64
-	if len(elems) > 0 {
-		tag, err := tx.Exec(ctx, `insert into cost_entries (tenant_id, id, element_id, cost_category_id, org_unit_id, source, source_ref, entry_date, kind,
-			amount_cents, currency, amount_base_cents, fx_rate, capitalizable, description, supplier, import_run_id, created_by)
-			select app_tenant(), gen_random_uuid(), e, c, u, 'import', r, d, k, a, cur, b, x::numeric, cap, de, su, $14, $15
-			from unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::date[], $6::text[], $7::bigint[], $8::text[], $9::bigint[],
-			            $10::text[], $11::bool[], $12::text[], $13::text[]) as t(e, c, u, r, d, k, a, cur, b, x, cap, de, su)
-			on conflict (tenant_id, source, source_ref) where source_ref is not null and source <> 'work_log' do nothing`,
-			elems, cats, units, refs, dates, kinds, amounts, curs, bases, rates, caps, descs, sups, runID, nullable(actor.MemberID))
-		if err != nil {
-			return nil, err
-		}
-		inserted = tag.RowsAffected()
+	if len(elems) == 0 {
+		return 0, nil
 	}
-	dups := len(a.rows) - int(inserted)
-	errsJSON, _ := json.Marshal(a.errors)
-	if a.errors == nil {
-		errsJSON = []byte("[]")
+	tag, err := tx.Exec(ctx, `insert into cost_entries (tenant_id, id, element_id, cost_category_id, org_unit_id, source, source_ref, entry_date, kind,
+		amount_cents, currency, amount_base_cents, fx_rate, capitalizable, description, supplier, import_run_id, created_by)
+		select app_tenant(), gen_random_uuid(), e, c, u, 'import', r, d, k, a, cur, b, x::numeric, cap, de, su, $14, $15
+		from unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::date[], $6::text[], $7::bigint[], $8::text[], $9::bigint[],
+		            $10::text[], $11::bool[], $12::text[], $13::text[]) as t(e, c, u, r, d, k, a, cur, b, x, cap, de, su)
+		on conflict (tenant_id, source, source_ref) where source_ref is not null and source <> 'work_log' do nothing`,
+		elems, cats, units, refs, dates, kinds, amounts, curs, bases, rates, caps, descs, sups, runID, nullable(actor.MemberID))
+	if err != nil {
+		return 0, err
 	}
-	if _, err := tx.Exec(ctx, `update import_runs set status = 'done', dry_run = false, rows_total = $2, rows_ok = $3, rows_error = $4,
-		rows_duplicate = $5, errors = $6, finished_at = now() where id = $1`, runID, a.total, inserted, len(a.errors), dups, errsJSON); err != nil {
-		return nil, err
-	}
-	if err := audit.Append(ctx, tx, audit.Event{Action: "import.confirm", EntityType: "import_run", EntityID: runID, ActorAccountID: actor.AccountID,
-		ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"rows_total": a.total, "rows_ok": inserted,
-			"rows_duplicate": dups, "rows_error": len(a.errors), "file_sha256": hex.EncodeToString(sha)}}); err != nil {
-		return nil, err
-	}
-	return s.run(ctx, tx, runID)
+	return tag.RowsAffected(), nil
 }
 
-// Rollback annulla un import: le sue voci si eliminano (gli aggregati si aggiornano).
+// Rollback annulla un import: le sue voci o le sue ore si eliminano (gli aggregati si aggiornano).
 func (s *Service) Rollback(ctx context.Context, tx pgx.Tx, actor engine.Actor, runID string) (*Run, error) {
 	if err := requireWrite(actor); err != nil {
 		return nil, err
 	}
-	var status string
-	err := tx.QueryRow(ctx, "select status from import_runs where id::text = $1 for update", runID).Scan(&status)
+	var status, target string
+	err := tx.QueryRow(ctx, "select status, target from import_runs where id::text = $1 and target in ('cost_entries', 'work_logs') for update", runID).Scan(&status, &target)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, engine.ErrNotFound
 	}
@@ -804,7 +948,11 @@ func (s *Service) Rollback(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 	if status != "done" {
 		return nil, engine.InvalidCode("validation.finance.import_undo_only_completed", "status", "si annullano solo gli import completati")
 	}
-	tag, err := tx.Exec(ctx, "delete from cost_entries where import_run_id = $1", runID)
+	table := "cost_entries"
+	if target == TargetHours {
+		table = "work_logs" // i costi calcolati dalle ore se ne vanno con loro (on delete cascade)
+	}
+	tag, err := tx.Exec(ctx, "delete from "+table+" where import_run_id = $1", runID)
 	if err != nil {
 		return nil, err
 	}
