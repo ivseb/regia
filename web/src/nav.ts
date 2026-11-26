@@ -49,6 +49,14 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
     ...(has("portal.submit", "element.write") ? [{ to: "/portale", label: tr("shell.nav.portal", { type: names.plural("business_request", tr("shell.nav.requests")).toLowerCase() }) }] : []),
   ];
 
+  // Progetti (replica/progetti.md): il piano del PM sopra le epiche.
+  const projects: NavItem[] = has("element.read")
+    ? [
+        { to: "/progetti", label: names.plural("project", tr("shell.nav.projects")) },
+        ...(has("element.write") ? [{ to: "/progetti/nuovo", label: names.create("project", "Progetto") }] : []),
+      ]
+    : [];
+
   // Work management (piano, passi 10 e 18).
   const delivery: NavItem[] = [
     { to: "/delivery/board", label: tr("shell.nav.board") },
@@ -100,6 +108,8 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
     ...(has("fields.admin", "tenant.admin") ? [{ to: "/configurazione/campi", label: tr("shell.nav.fields") }] : []),
     // Organizzazione: albero delle unità, persone con ruolo, import CSV (la visibilità dei budget lo segue).
     ...(has("tenant.admin", "finance.write") ? [{ to: "/configurazione/organizzazione", label: tr("budget.nav.org") }] : []),
+    // Progetti: modello predefinito, nascita dalla richiesta, ruoli del progetto (tenant.admin).
+    ...(isAdmin ? [{ to: "/configurazione/progetti", label: tr("shell.nav.projectsCfg") }] : []),
     // Tipi di elemento: nomi, icone e colori per tenant (tenant.admin).
     ...(isAdmin ? [{ to: "/configurazione/tipi", label: tr("shell.nav.types") }] : []),
     // Status report e portale (piano, passi 13 e 14): governo del portafoglio o amministratore.
@@ -146,6 +156,7 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
   const sections: NavSection[] = [
     { label: tr("dafare.nav.section"), module: "budget", icon: "star", items: personal },
     { label: tr("shell.nav.section.demand"), module: "demand", items: demand },
+    { label: tr("shell.nav.section.projects"), module: "work", icon: "list", items: projects },
     { label: tr("shell.nav.section.delivery"), module: "work", items: delivery },
     { label: tr("shell.colori.section.grc"), module: "grc", items: grc },
     // Quando la prima voce ha il nome della sezione, la testata stessa è il collegamento (shell.tsx).

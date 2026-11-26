@@ -63,8 +63,23 @@ const EvidenceSection = lazy(() => import("./ComplianceSections").then((m) => ({
 const ApplicationCompliance = lazy(() => import("./ComplianceSections").then((m) => ({ default: m.ApplicationCompliance })));
 const RequirementLinks = lazy(() => import("./ComplianceSections").then((m) => ({ default: m.RequirementLinks })));
 
-export type TabKey = "sintesi" | "attivita" | "dettagli" | "analisi" | "valutazioni" | "requisiti" | "piano" | "stato" | "approvazioni" | "allegati" | "produzione" | "gate";
-export const TAB_KEYS: TabKey[] = ["sintesi", "attivita", "dettagli", "analisi", "valutazioni", "requisiti", "piano", "stato", "approvazioni", "allegati", "produzione", "gate"];
+export type TabKey =
+  | "sintesi" | "panoramica" | "attivita" | "dettagli" | "analisi" | "valutazioni" | "requisiti" | "piano" | "wp" | "milestone"
+  | "stato" | "approvazioni" | "allegati" | "produzione" | "gate";
+export const TAB_KEYS: TabKey[] = [
+  "sintesi", "panoramica", "attivita", "dettagli", "analisi", "valutazioni", "requisiti", "piano", "wp", "milestone",
+  "stato", "approvazioni", "allegati", "produzione", "gate",
+];
+
+// Progetti (replica/progetti.md, passi 1 e 2): Panoramica del PM, Piano, Work package e Milestone del
+// progetto; «Dettagli» delle voci di piano; il progetto della richiesta nella scheda «Piano».
+const ProjectOverview = lazy(() => import("./progetti/ProjectOverview").then((m) => ({ default: m.ProjectOverview })));
+const ProjectPlanTab = lazy(() => import("./progetti/ProjectPlan").then((m) => ({ default: m.ProjectPlanTab })));
+const WorkPackagesTab = lazy(() => import("./progetti/ProjectTables").then((m) => ({ default: m.WorkPackagesTab })));
+const MilestonesTab = lazy(() => import("./progetti/ProjectTables").then((m) => ({ default: m.MilestonesTab })));
+const PlanItemPanel = lazy(() => import("./progetti/PlanItemPanel").then((m) => ({ default: m.PlanItemPanel })));
+const RequestProjectBanner = lazy(() => import("./progetti/RequestProject").then((m) => ({ default: m.RequestProjectBanner })));
+const PLAN_ITEM_TYPES = ["work_package", "plan_activity", "milestone"];
 
 type Tab = { key: TabKey; label: string; count?: number };
 
@@ -74,6 +89,9 @@ function tabsFor(t: T, d: ElementDetail): Tab[] {
   const tabs: Tab[] = [];
   // La sintesi apre la richiesta («decisione prima») e l'applicazione (vista 360).
   if (ty === "business_request" || ty === "application") tabs.push({ key: "sintesi", label: t("scheda.tab") });
+  // Il progetto si apre sulla Panoramica del PM; Piano, Work package e Milestone vengono dopo l'attività.
+  if (ty === "project") tabs.push({ key: "panoramica", label: t("progetti.tab.overview") });
+  if (PLAN_ITEM_TYPES.includes(ty)) tabs.push({ key: "dettagli", label: t("lavoro.elementpage.tabDetails") });
   tabs.push({ key: "attivita", label: t("lavoro.elementpage.tabActivity") });
   if (ty === "business_request" || d.impact || d.application || ty === "review" || ty === "requirement" || ty === "exception")
     tabs.push({ key: "dettagli", label: ty === "requirement" ? t("lavoro.elementpage.tabVerification") : t("lavoro.elementpage.tabDetails") });
@@ -83,7 +101,8 @@ function tabsFor(t: T, d: ElementDetail): Tab[] {
   if (ty === "business_request") tabs.push({ key: "analisi", label: t("lavoro.elementpage.tabAnalysis") });
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "valutazioni", label: t("lavoro.elementpage.tabReviews") });
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "requisiti", label: t("lavoro.elementpage.tabRequirements") });
-  if (ty === "business_request") tabs.push({ key: "piano", label: t("lavoro.elementpage.tabPlan") });
+  if (ty === "business_request" || ty === "project") tabs.push({ key: "piano", label: t("lavoro.elementpage.tabPlan") });
+  if (ty === "project") tabs.push({ key: "wp", label: t("progetti.tab.workPackages") }, { key: "milestone", label: t("progetti.tab.milestones") });
   if (ty === "business_request") tabs.push({ key: "stato", label: t("lavoro.elementpage.tabStatus") });
   if (ty === "logical_asset") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabProduction") });
   if (ty === "application") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabServices") });
@@ -108,6 +127,8 @@ function defaultTab(d: ElementDetail, tabs: Tab[], memberId?: string): TabKey {
   if (mine.size > 0 && [...mine].every((r) => r === "requester" || r === "business_owner") && has("stato")) return "stato";
   if (mine.has("compliance") && has("gate")) return "gate";
   if (["reviewer", "review_lead", "review_owner", "review_compiler", "compliance"].some((r) => mine.has(r)) && has("requisiti")) return "requisiti";
+  if (has("panoramica")) return "panoramica";
+  if (PLAN_ITEM_TYPES.includes(d.element.type) && has("dettagli")) return "dettagli";
   return has("sintesi") ? "sintesi" : "attivita";
 }
 
@@ -429,11 +450,34 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
   switch (tab) {
     case "sintesi":
       return el.type === "application" ? <Application360 detail={detail} onTab={onTab} /> : <RequestSummaryTab detail={detail} onTab={onTab} />;
+    case "panoramica":
+      return (
+        <Suspense fallback={<Loading className="text-muted" />}>
+          <ProjectOverview refKey={key} onTab={onTab} />
+        </Suspense>
+      );
+    case "wp":
+      return (
+        <Suspense fallback={<Loading className="text-muted" />}>
+          <WorkPackagesTab refKey={key} />
+        </Suspense>
+      );
+    case "milestone":
+      return (
+        <Suspense fallback={<Loading className="text-muted" />}>
+          <MilestonesTab refKey={key} />
+        </Suspense>
+      );
     case "attivita":
       return <ActivityFeed detail={detail} />;
     case "dettagli":
       return (
         <>
+          {PLAN_ITEM_TYPES.includes(el.type) && (
+            <Suspense fallback={<Loading className="text-muted" />}>
+              <PlanItemPanel refKey={key} />
+            </Suspense>
+          )}
           {detail.demand && <DemandFacts detail={detail} onDone={refresh} />}
           {el.type === "business_request" && <Evaluation detail={detail} onDone={refresh} />}
           {el.type === "business_request" && <RequestFinance detail={detail} />}
@@ -483,7 +527,18 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
         </Suspense>
       );
     case "piano":
-      return <PlanPreview refKey={key} />;
+      return el.type === "project" ? (
+        <Suspense fallback={<Loading className="text-muted" />}>
+          <ProjectPlanTab refKey={key} />
+        </Suspense>
+      ) : (
+        <>
+          <Suspense fallback={null}>
+            <RequestProjectBanner refKey={key} />
+          </Suspense>
+          <PlanPreview refKey={key} />
+        </>
+      );
     case "stato":
       return (
         <Suspense fallback={<Loading className="text-muted" />}>

@@ -16,6 +16,7 @@ import (
 	"regia/internal/engine"
 	"regia/internal/modules/architecture"
 	"regia/internal/modules/knowledge"
+	"regia/internal/modules/projects"
 	"regia/internal/modules/work"
 	"regia/internal/platform/audit"
 	"regia/internal/platform/auth"
@@ -48,7 +49,7 @@ var (
 	personaTypes   = []string{"task", "bug", "idea"}
 	personaRetired = []string{"story", "epic", "sprint"}
 	// Moduli accesi e spenti: Architettura serve al catalogo delle applicazioni del connettore.
-	personaOn  = []string{"work", "devsecops", "knowledge", "architecture"}
+	personaOn  = []string{"work", "projects", "devsecops", "knowledge", "architecture"}
 	personaOff = []string{"demand", "grc"}
 )
 
@@ -121,7 +122,7 @@ func (s *Server) runPersona(ctx context.Context, tx pgx.Tx, p *auth.Principal, a
 	if err != nil {
 		return nil, err
 	}
-	for _, prov := range []provisionFn{architecture.Provision, work.Provision, knowledge.Provision} {
+	for _, prov := range []provisionFn{architecture.Provision, work.Provision, projects.Provision, knowledge.Provision} {
 		if err := prov(ctx, tx, p.MemberID); err != nil {
 			return nil, err
 		}

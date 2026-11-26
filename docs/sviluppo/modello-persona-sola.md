@@ -12,7 +12,7 @@ Nessuna migrazione.
 
 | Area | Effetto |
 | --- | --- |
-| Moduli | Accesi Work, DevSecOps, Knowledge e Architettura (serve al catalogo delle applicazioni del connettore); spenti Demand e portafoglio, GRC. |
+| Moduli | Accesi Work, Progetti (progetto da zero con Gantt e work package agili), DevSecOps, Knowledge e Architettura (serve al catalogo delle applicazioni del connettore); spenti Demand e portafoglio, GRC. |
 | Tipi | `task` diventa «Attività» (etichetta inglese «Task» in `labels`); `bug` resta «Bug»; `idea` è un tipo nuovo del modulo work, creato con `engine.CreateType` da `task` (copia fasi, campi e spazi); se esiste archiviato si ripristina. `story`, `epic` e `sprint` si archiviano **solo se non hanno elementi** (update diretto, con evento di audit `type.update`). |
 | Flusso | Uguale per i tre tipi: Da fare → In corso → Fatto, più Annullato (fuori percorso). Niente «In revisione», nessun gate sull'assegnatario; passaggi avanti e indietro come nel pacchetto `task_standard`. È una **nuova versione pubblicata** del processo di ciascun tipo (`SaveDraft` + `Publish`): le versioni precedenti non si toccano. Le opzioni di fase che il flusso non usa più e che nessun elemento usa si archiviano, così non compaiono come colonne. |
 | Campi | Solo la priorità (`priorita`): `punti` e `stima` si tolgono dai tre tipi (`type_fields`). |

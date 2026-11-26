@@ -67,7 +67,7 @@ func TestAvvioModelloPersonaSola(t *testing.T) {
 		}
 		kinds[k][o["key"].(string)] = o["state"].(string)
 	}
-	if kinds["type"]["idea"] != "new" || kinds["team"]["team"] != "new" || kinds["board"]["HL"] != "new" || len(kinds["process"]) != 3 || len(kinds["module"]) != 6 {
+	if kinds["type"]["idea"] != "new" || kinds["team"]["team"] != "new" || kinds["board"]["HL"] != "new" || len(kinds["process"]) != 3 || len(kinds["module"]) != 7 {
 		t.Fatalf("anteprima: %v", kinds)
 	}
 	if n := len(list(adm.do("GET", "/api/v1/work/spaces", nil, http.StatusOK)["items"])); n != 0 {

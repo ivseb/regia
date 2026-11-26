@@ -42,6 +42,12 @@ var moduleDefs = []Module{
 		prefixes:    []string{"demand", "portfolio", "scorecards", "governance", "finance", "portal", "report", "status-reports", "dashboard", "reviews", "review-config", "impacts"},
 	},
 	{
+		Key: "projects", Name: "Progetti",
+		Description: "Progetti sopra le epiche: piano del PM con fasi, work package agili, a cascata o del fornitore, milestone e Panoramica.",
+		Effect:      "Spariscono progetti, piani e Panoramica; le API dei progetti rispondono 404.",
+		prefixes:    []string{"projects", "plan-items", "plan-phases"},
+	},
+	{
 		Key: "work", Name: "Work e delivery",
 		Description: "Board dei team, backlog e sprint, il mio lavoro, timesheet e capacità.",
 		Effect:      "Spariscono board, backlog, il mio lavoro e timesheet; le API del lavoro rispondono 404.",

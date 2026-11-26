@@ -49,6 +49,10 @@ type Task struct {
 	EffortDays    *float64 `json:"estimate_effort_days"`
 	DependsOn     []string `json:"depends_on"` // id degli impatti da cui dipende
 	Capacity      float64  `json:"team_capacity"`
+	// Deps: dipendenze tipizzate (fs, ss, ff con ritardo) delle voci di un progetto; se nil
+	// valgono DependsOn come fine→inizio. Milestone: voce di durata zero.
+	Deps      []Dep `json:"deps,omitempty"`
+	Milestone bool  `json:"-"`
 }
 
 // RequestWindow è la richiesta con la sua finestra e le scadenze.

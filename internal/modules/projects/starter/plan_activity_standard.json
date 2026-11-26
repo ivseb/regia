@@ -1,0 +1,25 @@
+{
+  "format": "regia.process/v1",
+  "key": "plan_activity_standard",
+  "name": "Ciclo di vita dell'attività di piano",
+  "description": "Pacchetto di partenza: passo di un work package a cascata, con l'avanzamento dichiarato in percentuale e le ore registrate.",
+  "type": "plan_activity",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da fare", "category": "todo", "color": "#6B7280"},
+      {"name": "In corso", "category": "in_progress", "color": "#3550C8"},
+      {"name": "Fatta", "category": "done", "color": "#1F2937"},
+      {"name": "Annullata", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Da fare",
+    "transitions": [
+      {"from": ["Da fare"], "to": "In corso", "label": "Avvia"},
+      {"from": ["In corso"], "to": "Fatta", "label": "Segna come fatta"},
+      {"from": ["Fatta"], "to": "In corso", "label": "Riapri"},
+      {"from": ["Da fare", "In corso"], "to": "Annullata", "label": "Annulla", "comment_required": true},
+      {"from": ["Annullata"], "to": "Da fare", "label": "Ripristina"}
+    ]
+  }
+}

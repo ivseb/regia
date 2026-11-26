@@ -82,7 +82,8 @@ export function uiModuleOfPath(path: string): UiModule {
   if (under("/finanza") || under("/budget") || under("/da-fare") || under("/notifiche")) return "budget";
   const m = moduleOfPath(path);
   if (!m) return "platform";
-  return m === "architecture" ? "arch" : m;
+  // I progetti hanno il colore del lavoro: il piano del PM sta sopra le board dei team.
+  return m === "architecture" ? "arch" : m === "projects" ? "work" : m;
 }
 
 /** Avatar tondo con le iniziali, nel colore stabile della persona (tinte.ts). */

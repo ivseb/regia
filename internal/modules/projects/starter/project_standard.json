@@ -1,0 +1,29 @@
+{
+  "format": "regia.process/v1",
+  "key": "project_standard",
+  "name": "Ciclo di vita del progetto",
+  "description": "Pacchetto di partenza: il progetto nasce in pianificazione (dalla richiesta approvata o da zero), va in esecuzione e si chiude.",
+  "type": "project",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "In pianificazione", "category": "todo", "color": "#6B7280", "description": "Il PM mette giù il piano di massima: fasi, work package, milestone."},
+      {"name": "In esecuzione", "category": "in_progress", "color": "#3550C8", "description": "I work package sono in corso: avanzamento e scostamenti dalla Panoramica."},
+      {"name": "In chiusura", "category": "in_progress", "color": "#0B6E8E", "description": "Consegne accettate, ultime attività e bilancio."},
+      {"name": "Chiuso", "category": "done", "color": "#1F2937", "description": "Il progetto è concluso."},
+      {"name": "Sospeso", "category": "in_progress", "color": "#B45309", "off_path": true, "description": "Fermo in attesa di una decisione."},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "In pianificazione",
+    "transitions": [
+      {"from": ["In pianificazione"], "to": "In esecuzione", "label": "Avvia l'esecuzione"},
+      {"from": ["In esecuzione"], "to": "In chiusura", "label": "Passa alla chiusura"},
+      {"from": ["In chiusura"], "to": "Chiuso", "label": "Chiudi il progetto"},
+      {"from": ["In chiusura"], "to": "In esecuzione", "label": "Riapri l'esecuzione"},
+      {"from": ["In pianificazione", "In esecuzione", "In chiusura"], "to": "Sospeso", "label": "Sospendi", "comment_required": true},
+      {"from": ["Sospeso"], "to": "In esecuzione", "label": "Riprendi"},
+      {"from": ["In pianificazione", "In esecuzione", "In chiusura", "Sospeso"], "to": "Annullato", "label": "Annulla il progetto", "comment_required": true}
+    ]
+  }
+}
