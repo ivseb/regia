@@ -27,8 +27,9 @@ const (
 	TypeBug    = "bug"
 	TypeSprint = "sprint"
 
-	ImpactType  = "impact"           // modulo architettura
-	RequestType = "business_request" // modulo demand
+	ImpactType      = "impact"           // modulo architettura
+	WorkPackageType = "work_package"     // modulo dei progetti
+	RequestType     = "business_request" // modulo demand
 
 	// RelPlannedIn: elemento → sprint in cui è pianificato (al massimo uno).
 	RelPlannedIn = "planned_in"
@@ -77,6 +78,7 @@ func Register(eng *engine.Service) *Service {
 	eng.Facts(TypeSprint, s.sprintFacts)
 	eng.Facts(ImpactType, s.deliveryFacts)
 	eng.Facts(RequestType, s.deliveryFacts)
+	eng.Facts(WorkPackageType, s.deliveryFacts)
 	eng.Action(ActionCreateEpic, s.actionCreateEpic)
 	eng.Action(ActionSprintStart, s.actionSprintStart)
 	eng.Action(ActionSprintClose, s.actionSprintClose, checkSprintClose)
@@ -124,7 +126,7 @@ func describe(eng *engine.Service) {
 		engine.FactInfo{Key: "elementi", Name: "Elementi pianificati", Kind: "number"},
 		engine.FactInfo{Key: "elementi_aperti", Name: "Elementi pianificati ancora aperti", Kind: "number"},
 	)
-	for _, t := range []string{ImpactType, RequestType} {
+	for _, t := range []string{ImpactType, RequestType, WorkPackageType} {
 		eng.DescribeFacts(t,
 			engine.FactInfo{Key: "avanzamento", Name: "Avanzamento degli epic dei team (%)", Kind: "number", Example: "100"},
 			engine.FactInfo{Key: "epic", Name: "Epic dei team", Kind: "text"},

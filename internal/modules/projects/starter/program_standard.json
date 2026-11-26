@@ -1,0 +1,20 @@
+{
+  "format": "regia.process/v1",
+  "key": "program_standard",
+  "name": "Ciclo di vita del programma",
+  "description": "Pacchetto di partenza: il programma raggruppa progetti con un obiettivo comune.",
+  "type": "program",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Attivo", "category": "in_progress", "color": "#3550C8"},
+      {"name": "Chiuso", "category": "done", "color": "#1F2937"}
+    ],
+    "initial": "Attivo",
+    "transitions": [
+      {"from": ["Attivo"], "to": "Chiuso", "label": "Chiudi il programma"},
+      {"from": ["Chiuso"], "to": "Attivo", "label": "Riapri"}
+    ]
+  }
+}

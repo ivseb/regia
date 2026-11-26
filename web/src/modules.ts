@@ -3,7 +3,7 @@
 // barra laterale, ⌘K e pagine; i suoi dati restano e le sue API rispondono 404.
 import { call, type Me } from "./api";
 
-export type ModuleKey = "demand" | "work" | "knowledge" | "devsecops" | "grc" | "architecture";
+export type ModuleKey = "demand" | "projects" | "work" | "knowledge" | "devsecops" | "grc" | "architecture";
 
 export type ModuleInfo = {
   key: ModuleKey;
@@ -26,6 +26,7 @@ const MODULE_PATHS: Record<ModuleKey, string[]> = {
     "/richieste", "/cruscotto", "/roadmap", "/graduatoria", "/cabina", "/governance", "/approvazioni", "/valutazioni", "/requisiti", "/finanza", "/budget",
     "/portale", "/configurazione/avanzamento", "/configurazione/valutazioni", "/configurazione/requisiti", "/elenco/impatti",
   ],
+  projects: ["/progetti", "/configurazione/progetti"],
   work: ["/delivery", "/tempo"],
   knowledge: ["/documenti", "/elenco/documenti"],
   devsecops: ["/devsecops", "/configurazione/devsecops", "/configurazione/gate", "/configurazione/vulnerabilita", "/configurazione/integrazioni"],
@@ -46,6 +47,7 @@ export function moduleOfPath(path: string): ModuleKey | undefined {
 /** Tipi di elemento che appartengono a un modulo (la ricerca ⌘K non cerca nei moduli spenti). */
 export const MODULE_TYPES: Record<ModuleKey, string[]> = {
   demand: ["business_request", "impact"],
+  projects: ["program", "project", "work_package", "plan_activity", "milestone", "deliverable", "change_request"],
   work: ["epic", "story", "task", "bug"],
   knowledge: ["page"],
   devsecops: [],

@@ -86,6 +86,8 @@ func epicsOf(ctx context.Context, tx pgx.Tx, el *engine.Element) ([]string, erro
 			join elements ep on ep.tenant_id = x.tenant_id and ep.parent_id = x.element_id and ep.deleted_at is null
 			join element_types t on t.tenant_id = ep.tenant_id and t.id = ep.type_id and t.key = 'epic'
 			where x.request_id = $1`
+	case WorkPackageType:
+		return EpicsOfWorkPackage(ctx, tx, el.ID)
 	default:
 		return nil, nil
 	}
@@ -94,6 +96,26 @@ func epicsOf(ctx context.Context, tx pgx.Tx, el *engine.Element) ([]string, erro
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// EpicsOfWorkPackage restituisce gli epic di un work package di un progetto: i figli del
+// work package e, se nasce da un impatto, quelli dell'impatto.
+func EpicsOfWorkPackage(ctx context.Context, tx pgx.Tx, wpID string) ([]string, error) {
+	rows, err := tx.Query(ctx, `select ep.id::text from elements ep
+		join element_types t on t.tenant_id = ep.tenant_id and t.id = ep.type_id and t.key = 'epic'
+		where ep.deleted_at is null and (ep.parent_id = $1
+		   or ep.parent_id = (select impact_id from ext_work_package where element_id = $1))
+		order by ep.created_at`, wpID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// ProgressOf è l'avanzamento degli epic indicati (story chiuse su story non annullate):
+// lo usa il modulo dei progetti per l'avanzamento dei work package agili.
+func ProgressOf(ctx context.Context, tx pgx.Tx, epicIDs []string) (Progress, error) {
+	return progressOf(ctx, tx, epicIDs)
 }
 
 // deliveryFacts: avanzamento degli epic dei team, sull'impatto e sulla richiesta. Senza epic
@@ -186,8 +208,21 @@ func (s *Service) actionCreateEpic(ctx context.Context, tx pgx.Tx, actor engine.
 			note += "non creati: " + strings.Join(skipped, "; ")
 		}
 		return note, nil
+	case WorkPackageType:
+		ep, created, err := s.ensureEpicWP(ctx, tx, actor, el.ID)
+		if err != nil {
+			var ve *engine.ValidationError
+			if errors.As(err, &ve) {
+				return "epic non creato: " + ve.Msg, nil
+			}
+			return "", err
+		}
+		if !created {
+			return "", engine.ErrNoEffect
+		}
+		return "epic " + ep.Key + " nello spazio " + ep.SpaceKey, nil
 	default:
-		return "azione create_epic valida solo su impatti e richieste", nil
+		return "azione create_epic valida solo su impatti, richieste e work package", nil
 	}
 }
 
@@ -199,16 +234,22 @@ func (s *Service) CreateEpicFor(ctx context.Context, tx pgx.Tx, actor engine.Act
 	if err != nil {
 		return nil, err
 	}
-	if imp.TypeKey != ImpactType {
+	if imp.TypeKey != ImpactType && imp.TypeKey != WorkPackageType {
 		return nil, engine.InvalidCode("validation.work.epic_from_impact", "impact", "l'epic si crea da un impatto")
 	}
 	if !actor.Has("element.write") {
-		ok, err := engine.HasRole(ctx, tx, imp.ID, actor.MemberID, []string{"team_lead", "technical_analyst", "demand_manager", "pmo"})
+		ok, err := engine.HasRole(ctx, tx, imp.ID, actor.MemberID, []string{"team_lead", "technical_analyst", "demand_manager", "pmo", "project_manager"})
 		if err != nil || !ok {
 			return nil, firstErr(err, engine.ErrForbidden)
 		}
 	}
-	ep, created, err := s.ensureEpic(ctx, tx, actor, imp.ID)
+	var ep *engine.Element
+	var created bool
+	if imp.TypeKey == WorkPackageType {
+		ep, created, err = s.ensureEpicWP(ctx, tx, actor, imp.ID)
+	} else {
+		ep, created, err = s.ensureEpic(ctx, tx, actor, imp.ID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -307,6 +348,94 @@ func (s *Service) ensureEpic(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 	return ep, true, nil
 }
 
+// ensureEpicWP crea l'epic di un work package agile di un progetto, come per gli impatti: nello
+// spazio del team responsabile (creandolo se manca), figlio del work package, con
+// l'assegnazione al team. Un work package nato da un impatto usa l'epic dell'impatto.
+func (s *Service) ensureEpicWP(ctx context.Context, tx pgx.Tx, actor engine.Actor, wpID string) (*engine.Element, bool, error) {
+	sys := engine.Actor{MemberID: actor.MemberID, AccountID: actor.AccountID, IP: actor.IP, Permissions: []string{"element.read"}}
+	var title, projKey, projTitle, mode string
+	var app, teamID, team, lead, impactID *string
+	var effort *float64
+	err := tx.QueryRow(ctx, `
+		select e.title, ps.key || '-' || p.number, p.title, x.delivery_mode, ap.title, x.team_id, t.name, t.lead_id,
+		       x.estimate_effort_days::float8, x.impact_id
+		from ext_work_package x
+		join elements e on e.tenant_id = x.tenant_id and e.id = x.element_id
+		join elements p on p.tenant_id = x.tenant_id and p.id = x.project_id
+		join spaces ps on ps.tenant_id = p.tenant_id and ps.id = p.space_id
+		left join elements ap on ap.tenant_id = x.tenant_id and ap.id = x.application_id
+		left join teams t on t.tenant_id = x.tenant_id and t.id = x.team_id
+		where x.element_id = $1`, wpID).Scan(&title, &projKey, &projTitle, &mode, &app, &teamID, &team, &lead, &effort, &impactID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, engine.NotFound("work_package", "", "work package inesistente")
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if mode != "agile" {
+		return nil, false, engine.InvalidCode("validation.work.epic_agile_only", "delivery_mode", "l'epic serve solo ai work package agili")
+	}
+	if impactID != nil {
+		return s.ensureEpic(ctx, tx, actor, *impactID)
+	}
+	if teamID == nil {
+		return nil, false, engine.InvalidCode("validation.work.wp_no_team", "team", "il work package non ha un team responsabile")
+	}
+	var existing *string
+	if err := tx.QueryRow(ctx, `select coalesce(
+			(select delivery_element_id::text from assignments where element_id = $1 and team_id = $2
+			   and status not in ('rejected', 'cancelled') and delivery_element_id is not null limit 1),
+			(select ep.id::text from elements ep join element_types t on t.tenant_id = ep.tenant_id and t.id = ep.type_id and t.key = 'epic'
+			   where ep.parent_id = $1 and ep.deleted_at is null limit 1))`, wpID, *teamID).Scan(&existing); err != nil {
+		return nil, false, err
+	}
+	if existing != nil {
+		ep, err := s.eng.Get(ctx, tx, sys, *existing)
+		return ep, false, err
+	}
+	spaceID, err := EnsureTeamSpace(ctx, tx, actor, SpaceInput{TeamID: *teamID})
+	if err != nil {
+		return nil, false, err
+	}
+	var spaceKey string
+	if err := tx.QueryRow(ctx, "select key from spaces where id = $1", spaceID).Scan(&spaceKey); err != nil {
+		return nil, false, err
+	}
+	body := fmt.Sprintf("Work package «%s» del progetto %s «%s», team %s.", title, projKey, projTitle, deref(team))
+	if app != nil {
+		body += " Applicazione: " + *app + "."
+	}
+	if effort != nil {
+		body += fmt.Sprintf("\n\nStima del piano: %s giornate.", strings.TrimSuffix(strings.TrimSuffix(fmt.Sprintf("%.1f", *effort), "0"), "."))
+	}
+	epTitle := projTitle + " · " + title
+	if len(epTitle) > 500 {
+		epTitle = epTitle[:500]
+	}
+	ep, err := s.eng.Create(ctx, tx, actor, engine.CreateInput{SpaceKey: spaceKey, TypeKey: TypeEpic, Title: epTitle,
+		BodyText: body, AssigneeID: deref(lead), ParentID: wpID})
+	if err != nil {
+		return nil, false, err
+	}
+	if err := fillRanks(ctx, tx, spaceID); err != nil {
+		return nil, false, err
+	}
+	if _, err := tx.Exec(ctx, `insert into assignments (tenant_id, element_id, team_id, status, estimate_effort_days,
+		delivery_element_id, responded_by, responded_at)
+		values (app_tenant(), $1, $2, 'accepted', $3, $4, $5, now())
+		on conflict (tenant_id, element_id, team_id) where status not in ('rejected','cancelled')
+		do update set delivery_element_id = excluded.delivery_element_id, status = 'accepted'`,
+		wpID, *teamID, effort, ep.ID, nullable(actor.MemberID)); err != nil {
+		return nil, false, err
+	}
+	if err := audit.Append(ctx, tx, audit.Event{Action: "assignment.accept", EntityType: "assignment", EntityID: wpID,
+		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
+		Payload: map[string]any{"team_id": *teamID, "epic_id": ep.ID, "work_package": true}}); err != nil {
+		return nil, false, err
+	}
+	return ep, true, nil
+}
+
 // afterTransition tiene allineato lo stato dell'assegnazione con quello dell'epic.
 func (s *Service) afterTransition(ctx context.Context, tx pgx.Tx, ev engine.TransitionEvent) error {
 	if ev.Element.TypeKey != TypeEpic {
@@ -366,8 +495,8 @@ func (s *Service) DeliveryOf(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 	}
 	out := &Delivery{Kind: "none", Epics: []EpicView{}}
 	switch el.TypeKey {
-	case RequestType, ImpactType:
-		out.Kind = map[string]string{RequestType: "request", ImpactType: "impact"}[el.TypeKey]
+	case RequestType, ImpactType, WorkPackageType:
+		out.Kind = map[string]string{RequestType: "request", ImpactType: "impact", WorkPackageType: "work_package"}[el.TypeKey]
 		ids, err := epicsOf(ctx, tx, el)
 		if err != nil {
 			return nil, err
@@ -382,10 +511,16 @@ func (s *Service) DeliveryOf(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 			}
 			out.Progress = &p
 		}
-		if el.TypeKey == ImpactType && len(ids) == 0 && (el.StateCategory == "in_progress" || el.StateCategory == "done") {
+		agileWP := false
+		if el.TypeKey == WorkPackageType {
+			if err := tx.QueryRow(ctx, `select coalesce((select delivery_mode = 'agile' and team_id is not null from ext_work_package where element_id = $1), false)`, el.ID).Scan(&agileWP); err != nil {
+				return nil, err
+			}
+		}
+		if (el.TypeKey == ImpactType || agileWP) && len(ids) == 0 && (el.StateCategory == "in_progress" || el.StateCategory == "done") {
 			if actor.Has("element.write") {
 				out.CanCreateEpic = true
-			} else if ok, err := engine.HasRole(ctx, tx, el.ID, actor.MemberID, []string{"team_lead", "technical_analyst", "demand_manager", "pmo"}); err != nil {
+			} else if ok, err := engine.HasRole(ctx, tx, el.ID, actor.MemberID, []string{"team_lead", "technical_analyst", "demand_manager", "pmo", "project_manager"}); err != nil {
 				return nil, err
 			} else {
 				out.CanCreateEpic = ok
@@ -423,7 +558,7 @@ func (s *Service) DeliveryOf(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 			return nil, err
 		}
 	}
-	if out.Kind != "none" && out.Kind != "request" && out.Kind != "impact" {
+	if out.Kind != "none" && out.Kind != "request" && out.Kind != "impact" && out.Kind != "work_package" {
 		out.Space = &Ref{Key: el.SpaceKey}
 		_ = tx.QueryRow(ctx, "select name from spaces where id = $1", el.SpaceID).Scan(&out.Space.Title)
 	}

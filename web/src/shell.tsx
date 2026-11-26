@@ -372,6 +372,7 @@ function PageEnter({ path, children }: { path: string; children: ReactNode }) {
 
 const MODULE_NAMES: Record<ModuleKey, Key> = {
   demand: "shell.module.demand",
+  projects: "shell.module.projects",
   work: "shell.module.work",
   knowledge: "shell.module.knowledge",
   devsecops: "shell.module.devsecops",

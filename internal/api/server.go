@@ -37,6 +37,7 @@ import (
 	"regia/internal/modules/portfolio"
 	"regia/internal/modules/privacy"
 	"regia/internal/modules/problems"
+	"regia/internal/modules/projects"
 	"regia/internal/modules/report"
 	"regia/internal/modules/requirements"
 	"regia/internal/modules/reviews"
@@ -79,6 +80,8 @@ type Server struct {
 	reviews *reviews.Service
 	// Work management di base e assegnazione ai team (piano, passi 10 e 18; work.go).
 	work *work.Service
+	// Progetti: piano del PM, modi di consegna, Panoramica (projects.go).
+	proj *projects.Service
 	// Avanzamento: status report, cruscotto e portale (piano, passi 13 e 14; report.go).
 	report *report.Service
 	swr    swrCache
@@ -220,6 +223,8 @@ func New(o Options) *Server {
 	if s.dso == nil && o.Engine != nil {
 		s.dso = devsecops.Register(o.Engine, s.req)
 	}
+	// Progetti (replica/progetti.md, passi 1 e 2): dopo il lavoro (create_epic) e la finanza (budget).
+	s.projectsInit()
 	// Timesheet: la settimana inviata passa dal motore delle approvazioni.
 	if s.work != nil {
 		s.work.UseApprovals(o.Approvals)
@@ -297,6 +302,7 @@ func (s *Server) Handler() http.Handler {
 	s.schedaRoutes(mux)
 	s.percorsoRichiestaRoutes(mux)
 	s.guideRoutes(mux)
+	s.projectRoutes(mux)
 
 	mux.HandleFunc("GET /api/v1/types/{key}", inTenant(s.getType))
 	mux.HandleFunc("GET /api/v1/elements", inTenant(s.search))

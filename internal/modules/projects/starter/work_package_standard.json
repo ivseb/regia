@@ -1,0 +1,37 @@
+{
+  "format": "regia.process/v1",
+  "key": "work_package_standard",
+  "name": "Ciclo di vita del work package",
+  "description": "Pacchetto di partenza: il PM pianifica il work package e coinvolge il responsabile; il team lo accetta (se è agile nasce l'epic sulla board del team), lo realizza e lo completa.",
+  "type": "work_package",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Da pianificare", "category": "todo", "color": "#6B7280", "description": "Nel piano di massima del PM: date grossolane, nessun impegno del team."},
+      {"name": "Proposto", "category": "todo", "color": "#6B4FC8", "description": "Proposto al responsabile (team, persona o fornitore), in attesa che lo accetti."},
+      {"name": "Accettato", "category": "in_progress", "color": "#3550C8", "description": "Il responsabile ha preso in carico il perimetro; se è agile c'è l'epic sulla board del team."},
+      {"name": "In corso", "category": "in_progress", "color": "#3A7A1C", "description": "Lavoro in corso: l'avanzamento sale dall'epic, dalle attività o dalla dichiarazione."},
+      {"name": "Completato", "category": "done", "color": "#1F2937", "description": "Consegnato."},
+      {"name": "Annullato", "category": "cancelled", "color": "#6B7280", "off_path": true}
+    ],
+    "initial": "Da pianificare",
+    "gates": [
+      {"key": "responsabile", "name": "Responsabile del work package", "condition": "responsabile: sì", "message": "indica il team, la persona o il fornitore responsabile prima di coinvolgerlo"}
+    ],
+    "transitions": [
+      {"from": ["Da pianificare"], "to": "Proposto", "label": "Coinvolgi il team", "gates": ["responsabile"]},
+      {"from": ["Proposto"], "to": "Accettato", "label": "Accetta il work package", "roles": ["team_lead", "project_manager"]},
+      {"from": ["Proposto"], "to": "Da pianificare", "label": "Rimanda al PM", "roles": ["team_lead", "project_manager"], "comment_required": true},
+      {"from": ["Da pianificare", "Accettato"], "to": "In corso", "label": "Avvia"},
+      {"from": ["In corso"], "to": "Completato", "label": "Completa"},
+      {"from": ["Completato"], "to": "In corso", "label": "Riapri"},
+      {"from": ["Da pianificare", "Proposto", "Accettato", "In corso"], "to": "Annullato", "label": "Annulla", "comment_required": true},
+      {"from": ["Annullato"], "to": "Da pianificare", "label": "Ripristina"}
+    ],
+    "rules": [
+      {"key": "epic_del_team", "name": "All'accettazione di un work package agile nasce l'epic sulla board del team", "on": "enter:Accettato",
+       "when": "modo_consegna: agile", "actions": [{"kind": "create_epic"}]}
+    ]
+  }
+}

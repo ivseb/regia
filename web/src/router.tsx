@@ -827,6 +827,18 @@ export const listRoute = createRoute({
   component: Lists,
 }); // i18n-ok: codice TypeScript letto come testo
 
+// Progetti (replica/progetti.md, passi 1 e 2): elenco, nuovo progetto, piano a tutta pagina, impostazioni.
+const ProjectsPage = lazyRouteComponent(() => import("./pages/progetti/ProjectsList"), "ProjectsPage");
+const NewProjectPage = lazyRouteComponent(() => import("./pages/progetti/ProjectsList"), "NewProjectPage");
+const ProjectPlanRoute = lazyRouteComponent(() => import("./pages/progetti/ProjectPlan"), "ProjectPlanRoute");
+const ProjectSettingsPage = lazyRouteComponent(() => import("./pages/progetti/ProjectSettings"), "ProjectSettingsPage");
+const projectRoutes = [
+  createRoute({ getParentRoute: () => rootRoute, path: "/progetti", component: ProjectsPage }), // i18n-ok: codice TypeScript letto come testo
+  createRoute({ getParentRoute: () => rootRoute, path: "/progetti/nuovo", component: NewProjectPage }), // i18n-ok: codice TypeScript letto come testo
+  createRoute({ getParentRoute: () => rootRoute, path: "/progetti/$key/piano", component: ProjectPlanRoute }), // i18n-ok: codice TypeScript letto come testo
+  createRoute({ getParentRoute: () => rootRoute, path: "/configurazione/progetti", component: ProjectSettingsPage }), // i18n-ok: codice TypeScript letto come testo
+];
+
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
@@ -868,6 +880,7 @@ export const router = createRouter({
     configHomeRoute,
     ...guidaAdminRoutes,
     coinvolgiRoute,
+    ...projectRoutes,
   ]),
   defaultPreload: "intent",
   defaultNotFoundComponent: NotFound,

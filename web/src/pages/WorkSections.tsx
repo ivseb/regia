@@ -37,11 +37,13 @@ export function WorkSidebar({ detail, narrow }: { detail: ElementDetail; narrow:
   const el = detail.element;
   const key = el.key || el.id;
   const workTypes = useWorkTypes();
-  if (!["business_request", "impact"].includes(el.type) && !workTypes.isWork(el.type)) return null;
+  // Progetti: sulle attività e sui work package si registrano le ore (gli epic li mostra la scheda «Dettagli»).
+  const planItem = el.type === "work_package" || el.type === "plan_activity";
+  if (!["business_request", "impact"].includes(el.type) && !workTypes.isWork(el.type) && !planItem) return null;
   return (
     <>
-      <DeliveryBlock refKey={key} detail={detail} open={!narrow} />
-      {workTypes.isWork(el.type) && <TimeBlock refKey={key} open={!narrow} />}
+      {!planItem && <DeliveryBlock refKey={key} detail={detail} open={!narrow} />}
+      {(workTypes.isWork(el.type) || planItem) && <TimeBlock refKey={key} open={!narrow} />}
     </>
   );
 }
