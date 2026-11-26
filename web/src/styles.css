@@ -87,6 +87,8 @@
    la regola forte (2 px in Atlante) e il peso dei titoli. */
 @layer utilities {
   .border-b-2 { border-bottom-width: var(--rule-strong); }
+  /* Atlante scuro: una linea chiara da 2 px sotto ogni titolo fa rumore, basta 1 px. */
+  [data-skin="atlante"][data-theme="dark"] .border-b-2 { border-bottom-width: 1px; }
   h1.font-bold, h2.font-bold { font-weight: var(--title-weight); }
 }
 
