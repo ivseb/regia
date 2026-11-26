@@ -557,8 +557,8 @@ func (s *Service) AutoPlan(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 	return changes, s.saveChanges(ctx, tx, actor, proj.ID, sch, changes)
 }
 
-// saveChanges scrive le date cambiate, allarga la finestra del progetto (inviluppo delle voci) e
-// registra storia e audit.
+// saveChanges scrive le date cambiate, allarga la finestra del progetto (inviluppo delle voci),
+// registra storia e audit e controlla le tolleranze della baseline.
 func (s *Service) saveChanges(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID string, sch *planning.Scheduler, changes []planning.Change) error {
 	for _, c := range changes {
 		st, en := sch.Span(c.ID)
@@ -583,8 +583,12 @@ func (s *Service) saveChanges(ctx context.Context, tx pgx.Tx, actor engine.Actor
 	if len(changes) == 0 {
 		return nil
 	}
-	return audit.Append(ctx, tx, audit.Event{Action: "plan.update", EntityType: TypeProject, EntityID: projectID,
-		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"changes": changes}})
+	if err := audit.Append(ctx, tx, audit.Event{Action: "plan.update", EntityType: TypeProject, EntityID: projectID,
+		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"changes": changes}}); err != nil {
+		return err
+	}
+	// Oltre le tolleranze rispetto alla baseline nasce la change request (passo 3).
+	return s.checkTolerances(ctx, tx, actor, projectID)
 }
 
 // ProgressEntry è una riga dello storico dell'avanzamento dichiarato.

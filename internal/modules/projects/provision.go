@@ -13,8 +13,8 @@ import (
 	"regia/internal/platform/db"
 )
 
-// types sono i tipi del modulo, tutti nello spazio PRJ. deliverable e change_request sono
-// solo tipi per ora (passi 3 e 4): niente processo, niente logica.
+// types sono i tipi del modulo, tutti nello spazio PRJ. deliverable è solo un tipo per ora
+// (passo 4): niente processo, niente logica.
 var types = []struct{ key, name, plural string }{
 	{TypeProgram, "Programma", "Programmi"},
 	{TypeProject, "Progetto", "Progetti"},
@@ -105,19 +105,26 @@ func Provision(ctx context.Context, tx pgx.Tx, adminMemberID string) error {
 	if err := exec(`insert into project_settings (tenant_id) values (app_tenant()) on conflict do nothing`); err != nil {
 		return err
 	}
-	// Cancelli di fase: decide lo sponsor del progetto (modificabile nelle politiche di approvazione).
-	var hasPolicy bool
-	if err := tx.QueryRow(ctx, `select exists (select 1 from approval_policies p join element_types t on t.tenant_id = p.tenant_id and t.id = p.type_id
-		where t.key = $1 and p.stage = $2)`, TypeProject, GatePolicyStage).Scan(&hasPolicy); err != nil {
-		return err
-	}
-	if !hasPolicy {
+	// Cancelli di fase e change request: decide lo sponsor del progetto (modificabile nelle
+	// politiche di approvazione).
+	for _, pol := range []struct{ stage, name string }{
+		{GatePolicyStage, "Cancello di fase del progetto"},
+		{CRPolicyStage, "Change request del progetto"},
+	} {
+		var hasPolicy bool
+		if err := tx.QueryRow(ctx, `select exists (select 1 from approval_policies p join element_types t on t.tenant_id = p.tenant_id and t.id = p.type_id
+			where t.key = $1 and p.stage = $2)`, TypeProject, pol.stage).Scan(&hasPolicy); err != nil {
+			return err
+		}
+		if hasPolicy {
+			continue
+		}
 		rules, _ := json.Marshal(map[string]any{"outcomes": map[string]string{}, "rules": []map[string]any{
 			{"when": map[string]any{}, "steps": []any{map[string]any{"approvers": []map[string]string{{"role": "sponsor"}}}}},
 		}})
 		if err := exec(`insert into approval_policies (tenant_id, id, name, type_id, stage, rules)
-			select app_tenant(), $1, 'Cancello di fase del progetto', id, $2, $3 from element_types where key = $4`,
-			db.NewID(), GatePolicyStage, rules, TypeProject); err != nil {
+			select app_tenant(), $1, $2, id, $3, $4 from element_types where key = $5`,
+			db.NewID(), pol.name, pol.stage, rules, TypeProject); err != nil {
 			return err
 		}
 	}
