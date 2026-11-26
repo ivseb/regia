@@ -39,6 +39,7 @@ Richieste di esempio in varie fasi dello stage-gate: `scripts/dev-demo-data.sh h
 - [Percorso guidato e mappa dei processi](sviluppo/percorso-guidato-mappa.md): tappe di configurazione calcolate dai dati del tenant e mappa d'insieme di tipi, fasi, team, valutazioni e approvazioni.
 - [Versioni in vigore](sviluppo/versioni-vigore.md): data di entrata in vigore e di fine, deprecazione, regola di transizione per fase con anteprima, guide allegate; componente riusabile per gli altri moduli.
 - [Organizzazioni](sviluppo/organizzazioni.md): il superamministratore dell'istanza crea organizzazioni dall'interfaccia e ci entra; comando `regia platform-admin`.
+- [Progetti](sviluppo/progetti.md): progetto sopra le epiche, dalla richiesta approvata o da zero; piano con fasi, work package agili, a cascata o del fornitore, attività, milestone, dipendenze fs/ss/ff; cancelli di fase; avanzamento pesato e Panoramica del PM.
 - [Board per team](sviluppo/board-team.md): colonne proprie con più fasi, WIP, corsie, modelli Scrum/Kanban/Supporto.
 - [Tipi del lavoro](sviluppo/tipi-lavoro.md): board, backlog e «Il mio lavoro» per ogni tipo del modulo work, «Nuovo elemento» con i tipi e i campi della board, tipi di sistema archiviabili senza elementi.
 - [Lavoro](sviluppo/lavoro.md): pianificazione e tempo, commenti e notifiche, work management, import, viste salvate, «Da fare», etichette nelle liste (`etichetta:`) e board paginata con tutti gli sprint.

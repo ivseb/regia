@@ -6,7 +6,7 @@ Passi 1 e 2 di `replica/progetti.md`. La richiesta dice perché e quanto, il pro
 - API: `internal/api/projects.go`.
 - Migrazione: `migrations/0077_progetti.sql`.
 - Interfaccia: `web/src/projectsApi.ts`, `web/src/pages/progetti/`, schede in `web/src/pages/ElementPage.tsx`.
-- Testi: aree `progetti` (`progetti.ts`, `progetti-piano.ts`, `progetti-voci.ts`) ed `errors-progetti.ts`.
+- Testi: area `progetti` (`progetti.ts` schede, `progetti-pm.ts` Panoramica, tabelle ed elenco, `progetti-piano.ts` Gantt, `progetti-voci.ts` scheda della voce e impostazioni) ed `errors-progetti.ts`.
 - Test: `internal/itest/progetti_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts`.
 
 ## Dati
@@ -91,7 +91,7 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
   - A mano: `POST /plan-items/{id}/epic`. L'avanzamento sono le story chiuse degli epic (`work.ProgressOf`, `work.EpicsOfWorkPackage`).
 - **A cascata:** attività con avanzamento dichiarato, `POST /plan-items/{id}/progress {percent, note, date?}`, storicizzato in `ext_plan_progress`. Lo storico si legge con `GET`.
   - L'avanzamento del work package è la media delle attività pesata sulle stime.
-  - Le ore si registrano sull'attività come su ogni elemento (`work_logs`).
+  - Le ore si registrano sull'attività (e sul work package) dal blocco «Ore lavorate» della colonna laterale (`WorkSections.tsx`), in `work_logs`. Registra l'assegnatario o chi ha `element.write`: lo spazio PRJ non ha un team.
 - **Fornitore:** per ora solo `delivery_mode = supplier`, il fornitore del catalogo (`supplier_id`, tipo `ict_provider`) e l'avanzamento dichiarato dal PM. SAL, deliverable e accesso esterno sono il passo 4 (`supplier_updates` è già nel dato).
 
 **Import dal timesheet aziendale:** i profili CSV dei costi (`import_profiles`, target `cost_entries`) riconoscono l'elemento per chiave, quindi anche un'attività (`PRJ-12`); lo verifica il test.
