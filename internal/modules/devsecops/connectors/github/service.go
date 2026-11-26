@@ -659,9 +659,19 @@ var requiredPermissions = []string{"contents", "metadata", "deployments", "check
 func (s *Service) Test(ctx context.Context, a Actor, id string) (*TestResult, error) {
 	var it *Integration
 	var sec secrets
+	// Un repository associato e privato, se c'è: serve a provare la lettura dei check run.
+	var probeRepo, probeBranch string
 	if err := s.o.DB.InTenant(ctx, a.TenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
 		var err error
-		it, sec, err = s.load(ctx, tx, id)
+		if it, sec, err = s.load(ctx, tx, id); err != nil {
+			return err
+		}
+		err = tx.QueryRow(ctx, `select full_name, coalesce(default_branch, '') from connector_repositories
+			where integration_id = $1 and mapping_status = 'confirmed' and missing_since is null
+			order by private desc, lower(full_name) limit 1`, id).Scan(&probeRepo, &probeBranch)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = nil
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -740,6 +750,21 @@ func (s *Service) Test(ctx context.Context, a Actor, id string) (*TestResult, er
 		res.Server = "GitHub Enterprise Server " + v
 	} else if it.Config.BaseURL != "https://api.github.com" {
 		res.Server = "GitHub Enterprise Server"
+	}
+	if it.Config.AuthMode != "app" && strings.HasPrefix(sec.Token, "github_pat_") {
+		res.Details = append(res.Details, "Token fine-grained: GitHub non offre il permesso «Checks»; i controlli si leggono dalle Actions (permesso «Actions» in lettura) o dagli stati dei commit («Commit statuses»).")
+	}
+	if probeRepo != "" && probeBranch != "" {
+		if sha, err := cl.BranchHead(ctx, probeRepo, probeBranch); err == nil {
+			if _, err := cl.CheckRuns(ctx, probeRepo, sha); ghapi.IsForbidden(err) {
+				if _, via, ferr := cl.ChecksWithFallback(ctx, probeRepo, sha); ferr == nil {
+					res.Warnings = append(res.Warnings, fmt.Sprintf("Check run non leggibili su %s (403): i controlli si leggeranno da %s.", probeRepo,
+						map[string]string{"actions": "GitHub Actions", "statuses": "stati del commit"}[via]))
+				} else {
+					res.Warnings = append(res.Warnings, fmt.Sprintf("Controlli non leggibili su %s (403): concedi al token «Actions» o «Commit statuses» in lettura.", probeRepo))
+				}
+			}
+		}
 	}
 	res.OK = true
 	what := "Organizzazione raggiungibile"

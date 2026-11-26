@@ -39,12 +39,14 @@ Una GitHub App è il modo consigliato: i permessi sono minimi e in sola lettura,
 |---|---|
 | URL base | `https://api.github.com` per github.com; per GitHub Enterprise Server l'indirizzo dell'istanza (`https://github.azienda.it`): Regia aggiunge `/api/v3` |
 | Organizzazioni | una o più, separate da virgole |
-| Autenticazione | **GitHub App**: App ID, installation ID, contenuto del file `.pem`. Oppure **Token** per le prove (permessi `repo` e `read:org`, o un fine-grained token in lettura) |
+| Autenticazione | **GitHub App**: App ID, installation ID, contenuto del file `.pem`. Oppure **Token** per le prove (permessi `repo` e `read:org`, o un fine-grained token in lettura con Metadata, Contents, Deployments, Actions e Commit statuses: vedi sotto) |
 | Profilo di pipeline | dove la pipeline deposita i suoi artefatti (vedi il §5). Senza profilo Regia usa solo i dati base delle Release: tag, data, autore |
 | Repository GitOps | `org/nome` del repository con `envs/<ambiente>/`; se vuoto valgono quelli del profilo |
 | Intervallo | ogni quanti minuti leggere (da 5 a 1440, predefinito 30) |
 | Controllo verdetto | il check run che decide l'esito di un commit (es. `Verdict`, anche come `ci / Verdict`); se vuoto vale quello del profilo, e senza nessuno conta l'insieme dei controlli |
 | Ambiente dei rilasci | l'ambiente delle Release quando il registro non lo dice (predefinito `prod`) |
+
+**Token fine-grained e controlli.** GitHub non offre il permesso «Checks» ai token fine-grained: sui repository privati la lettura dei check run risponde 403. Regia allora ripiega sugli esiti delle GitHub Actions del commit (permesso «Actions» in lettura) e, se mancano anche quelli, sugli stati del commit («Commit statuses» in lettura). La sincronizzazione lo segnala come avviso, non come errore, e la prova di connessione lo dice prima, provando un repository associato.
 
 I segreti (chiave privata, token, segreto del webhook) sono cifrati con la chiave applicativa della cartella dati (`<data>/keys/secrets.key`) e **non tornano mai** dalle API: l'interfaccia dice solo se ci sono. Lasciando vuoto un campo segreto in una modifica, il valore salvato resta.
 

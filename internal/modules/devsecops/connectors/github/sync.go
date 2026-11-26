@@ -764,9 +764,13 @@ func (s *Service) syncRepo(ctx context.Context, cl *ghapi.Client, in *syncInput,
 			return objs, cur, warns, fmt.Errorf("branch %s: %w", r.DefaultBranch, err)
 		}
 		if sc.Full || sha != cur.ChecksSHA {
-			runs, err := cl.CheckRuns(ctx, r.FullName, sha)
+			runs, via, err := cl.ChecksWithFallback(ctx, r.FullName, sha)
 			if err != nil {
 				return objs, cur, warns, fmt.Errorf("check run: %w", err)
+			}
+			if via != "checks" {
+				// Token fine-grained: niente permesso «Checks», si leggono Actions o stati del commit.
+				warns = append(warns, fmt.Sprintf("check run non leggibili con questo token (403): controlli letti da %s", map[string]string{"actions": "GitHub Actions", "statuses": "stati del commit"}[via]))
 			}
 			inputs := make([]profile.CheckRunInput, 0, len(runs))
 			for _, x := range runs {
