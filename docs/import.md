@@ -64,6 +64,23 @@ Ogni elemento ha la chiave d'origine. Una seconda esecuzione sullo stesso proget
 
 Elimina gli elementi creati dall'import, tranne quelli modificati dopo (versione diversa da quella scritta), aggiornati da un import successivo o con commenti, ore o allegati aggiunti in Regia. Commenti e ore dell'import si eliminano anche dagli elementi che restano. Campi, opzioni, tipi di relazione, il membro «importato», lo spazio e il team si eliminano solo se nessuno li usa più. Gli aggiornamenti fatti a elementi che esistevano già non si annullano. Il report dell'annullamento dice cosa è stato eliminato e cosa è rimasto.
 
+## Ore dal timesheet (CSV)
+
+Le ore si importano da **Configurazione → Import → Costi**, scegliendo **Ore**. Il flusso è quello dei costi: profilo di mappatura salvato, prova senza scrivere, conferma e annullamento. Serve il permesso di scrittura della finanza.
+
+Campi della mappatura:
+
+- **Attività o elemento (chiave)**: obbligatoria. Le ore si collegano all'elemento con quella chiave, attività di piano o altro. Deve esistere ed essere visibile a chi importa.
+- **Persona (email)**: obbligatoria. Deve essere un membro dell'organizzazione.
+- **Data**: obbligatoria, nel formato scelto nel profilo.
+- **Ore** (anche decimali, con virgola o punto) **oppure Minuti**: una sola delle due colonne. Le ore diventano minuti; devono essere maggiori di zero e non più di 24 per riga.
+- **Tipo di attività**, **Testo**, **Capitalizzabile (sì/no)**: facoltativi.
+- **Riferimento**: facoltativo, per esempio il numero della riga nel timesheet d'origine.
+
+La prova elenca gli errori riga per riga: chiave inesistente o non visibile, persona non membro, data non valida, ore nulle o illeggibili, periodo chiuso o settimana già inviata o approvata. Le righe buone si importano ignorando quelle con errori.
+
+Le ore importate sono come quelle registrate a mano: stessa persona, stesso ruolo del team, costo calcolato se c'è la tariffa. Lo stesso file non duplica: ogni riga ha un riferimento (la colonna mappata o l'impronta dei suoi dati) e le righe già presenti si saltano. Due registrazioni identiche nello stesso file contano come una: per distinguerle si mappa il riferimento. L'annullamento elimina le ore di quell'esecuzione e i costi che ne derivano.
+
 ## Prestazioni
 
 Gli elementi sono scritti in blocco, in lotti, senza regole né passaggi di fase. Il test di volume (`TestImportVolume`) con 5.000 righe, ciascuna con un commento, una registrazione di ore e collegamenti, completa l'esecuzione in circa 8 secondi; con `REGIA_IMPORT_VOLUME=50000` le 50.000 righe richiedono circa 71 secondi di esecuzione (700 elementi al secondo), più 11 secondi di anteprima, e il server resta reattivo (una richiesta durante l'import risponde in 65 ms).

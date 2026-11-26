@@ -29,6 +29,7 @@ import { ProblemActions } from "./ProblemActions";
 import { tr } from "../i18n/core";
 import { loc } from "../i18n/format";
 import { crumbs } from "../crumbs";
+import { DevsecopsTabs } from "./portafoglio-ui";
 
 const SEV_MARK: Record<string, string> = { critical: "bg-danger", high: "bg-fg", medium: "bg-muted", low: "bg-hair", info: "bg-hair" };
 
@@ -636,6 +637,7 @@ export function VulnerabilitiesPage() {
           {d?.can_configure && <Link to="/configurazione/vulnerabilita" className="btn no-underline">{tr("governance.vulnerabilities.politica_e_sla")}</Link>}
         </>
       } />
+      <DevsecopsTabs />
       <div className="flex max-w-[1400px] flex-col gap-7 px-4 pb-24 md:px-7">
         <p className="m-0 max-w-3xl text-muted max-md:hidden">{tr("governance.vulnerabilities.le_vulnerabilita_che_le_pipeline")}</p>
         <ErrorNote error={dash.error} />

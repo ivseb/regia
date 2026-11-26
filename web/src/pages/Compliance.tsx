@@ -40,6 +40,7 @@ import { crumbs } from "../crumbs";
 import { ConditionBuilder } from "./processEditor/ConditionBuilder";
 import type { CondCount } from "../casaApi";
 import type { FactInfo } from "../api";
+import { GrcTabs } from "./portafoglio-ui";
 
 export type ComplianceTab = "panoramica" | "normative" | "applicazioni" | "controlli" | "mappatura" | "evidenze" | "cataloghi" | "regole";
 export const COMPLIANCE_TABS: ComplianceTab[] = ["panoramica", "normative", "applicazioni", "controlli", "mappatura", "evidenze", "cataloghi", "regole"];
@@ -78,6 +79,7 @@ export function Compliance({ search }: { search: ComplianceSearch }) {
           </>
         }
       />
+      <GrcTabs />
       <div role="tablist" aria-label={tr("governance.compliance.sezioni")} className="flex gap-6 overflow-x-auto border-b border-hair px-4 md:px-7">
         {COMPLIANCE_TABS.map((k) => (
           <Link

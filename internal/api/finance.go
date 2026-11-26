@@ -445,8 +445,12 @@ func (s *Server) deleteRate(w http.ResponseWriter, r *http.Request, p *auth.Prin
 
 func (s *Server) listImportProfiles(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	financeJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
-		items, err := s.fin.Profiles(r.Context(), tx)
-		return map[string]any{"items": items, "fields": finance.ImportFields()}, err
+		target := r.URL.Query().Get("target") // vuoto = costi; work_logs = ore
+		items, err := s.fin.Profiles(r.Context(), tx, target)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"items": items, "fields": finance.ImportFieldsFor(target)}, nil
 	})
 }
 
@@ -472,7 +476,7 @@ func (s *Server) deleteImportProfile(w http.ResponseWriter, r *http.Request, p *
 
 func (s *Server) listImports(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	financeJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
-		items, err := s.fin.Runs(r.Context(), tx)
+		items, err := s.fin.Runs(r.Context(), tx, r.URL.Query().Get("target"))
 		return map[string]any{"items": items}, err
 	})
 }

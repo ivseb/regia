@@ -34,6 +34,7 @@ import { tr } from "../i18n/core";
 import { Trans } from "../i18n/Trans";
 import { loc } from "../i18n/format";
 import { crumbs } from "../crumbs";
+import { DevsecopsTabs } from "./portafoglio-ui";
 
 // Fase 3: politica della pipeline e adozione guidata, caricate a parte.
 const PipelineSection = lazy(() => import("./PipelineAdherence").then((m) => ({ default: m.PipelineSection })));
@@ -521,6 +522,7 @@ export function DevsecopsPage() {
   return (
     <>
       <PageHeader path={crumbs("governance", "devsecops")} title={tr("governance.devsecops.devsecops")} />
+      <DevsecopsTabs />
       <div className="flex flex-col gap-8 px-4 pb-10 md:px-7">
         <p className="m-0 max-w-3xl text-muted">{tr("governance.devsecops.cosa_gira_in_produzione_con")}</p>
         <ErrorNote error={o.error} />

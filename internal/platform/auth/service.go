@@ -26,6 +26,8 @@ var (
 	ErrNotMember          = errors.New("non sei membro di questo tenant")
 	ErrRateLimited        = errors.New("troppi tentativi: riprova tra qualche minuto")
 	ErrPasswordDisabled   = errors.New("l'accesso con password è disattivato: usa l'accesso unico (SSO)")
+	// ErrTenantSuspended: l'organizzazione è sospesa dal superamministratore; i dati restano, l'accesso no.
+	ErrTenantSuspended = errors.New("l'organizzazione è sospesa")
 )
 
 type Service struct {
@@ -61,7 +63,13 @@ type Membership struct {
 	Name       string `json:"name"`
 	MemberID   string `json:"member_id"`
 	MemberType string `json:"member_type"`
+	// Status è lo stato dell'organizzazione: «active», «suspended» o «offboarding».
+	// Solo quelle attive si possono usare (Active).
+	Status string `json:"status"`
 }
+
+// Active dice se l'organizzazione è utilizzabile (non sospesa né in chiusura).
+func (m Membership) Active() bool { return m.Status == "active" }
 
 // Principal è chi sta facendo la richiesta, con il tenant attivo già verificato.
 type Principal struct {
@@ -144,6 +152,7 @@ func (s *Service) newSession(ctx context.Context, accountID, method string, mfa 
 		var first *string
 		if err := tx.QueryRow(ctx, `select m.tenant_id from account_memberships($1) m
 			left join accounts a on a.id = $1 and a.last_tenant_id = m.tenant_id
+			where m.status = 'active'
 			order by (a.id is null), m.name limit 1`, accountID).Scan(&first); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -207,15 +216,47 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 	}
 	if active != nil {
 		for _, m := range p.Tenants {
-			if m.TenantID == *active {
+			if m.TenantID != *active {
+				continue
+			}
+			if m.Active() {
 				if err := s.loadTenant(ctx, p, m); err != nil {
 					return nil, err
 				}
-				break
+			} else if err := s.fallbackTenant(ctx, p); err != nil {
+				return nil, err
 			}
+			break
 		}
 	}
 	return p, nil
+}
+
+// fallbackTenant: l'organizzazione attiva della sessione è stata sospesa. La sessione perde
+// subito l'accesso a quella e passa alla prima organizzazione attiva dell'account (per nome);
+// se non ce ne sono resta senza organizzazione attiva e l'interfaccia lo spiega.
+func (s *Service) fallbackTenant(ctx context.Context, p *Principal) error {
+	var next *Membership
+	for i := range p.Tenants {
+		if p.Tenants[i].Active() {
+			next = &p.Tenants[i]
+			break
+		}
+	}
+	var id any
+	if next != nil {
+		id = next.TenantID
+	}
+	if err := s.db.Global(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, "update sessions set active_tenant_id = $1 where id = $2", id, p.SessionID)
+		return err
+	}); err != nil {
+		return err
+	}
+	if next == nil {
+		return nil
+	}
+	return s.loadTenant(ctx, p, *next)
 }
 
 // loadTenant carica i permessi del membro nel tenant: ruoli assegnati direttamente
@@ -251,6 +292,9 @@ func (s *Service) SwitchTenant(ctx context.Context, p *Principal, tenantID strin
 	}
 	if target == nil {
 		return ErrNotMember
+	}
+	if !target.Active() {
+		return ErrTenantSuspended
 	}
 	err := s.db.Global(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "update sessions set active_tenant_id = $1 where id = $2", tenantID, p.SessionID); err != nil {
@@ -294,7 +338,7 @@ func (s *Service) PurgeExpired(ctx context.Context) (int64, error) {
 }
 
 func memberships(ctx context.Context, tx pgx.Tx, accountID string) ([]Membership, error) {
-	rows, err := tx.Query(ctx, "select tenant_id, slug, name, member_id, member_type from account_memberships($1)", accountID)
+	rows, err := tx.Query(ctx, "select tenant_id, slug, name, member_id, member_type, status from account_memberships($1)", accountID)
 	if err != nil {
 		return nil, err
 	}

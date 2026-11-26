@@ -15,6 +15,7 @@ import { tr } from "../i18n/core";
 import { Trans } from "../i18n/Trans";
 import { crumbs } from "../crumbs";
 import { EmptyState } from "../emptyState";
+import { GrcTabs } from "./portafoglio-ui";
 
 const RiskConfig = lazy(() => import("./RiskConfig"));
 
@@ -33,6 +34,7 @@ export function RisksPage({ tab }: { tab: RiskTab }) {
   return (
     <>
       <PageHeader path={crumbs("governance", "risksIncidents")} title={tr("governance.risks.rischi_e_incidenti")} />
+      <GrcTabs />
       <div role="tablist" aria-label={tr("governance.risks.sezione")} className="flex gap-5 overflow-x-auto border-b border-hair px-4 md:px-7">
         {tabs.map((t) => (
           <Link

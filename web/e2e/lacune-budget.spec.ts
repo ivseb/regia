@@ -139,3 +139,23 @@ test("a 375 px il collegamento si legge senza scorrimento orizzontale", async ({
   await expect(page.getByTestId("node-budgets")).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
+
+test("dalla scheda della richiesta si sceglie il nodo da cui attinge il budget e si scollega", async ({ page, playwright, baseURL }) => {
+  const req = (await apiAs(playwright, baseURL!, "finanza")).req;
+  const s = await setup(req);
+  await call(req, "POST", "/api/v1/finance/budgets", { element: s.key, fiscal_year_id: s.fyId, kind: "requested" });
+  await login(page, "finanza");
+  await page.goto(`/e/${s.key}?scheda=dettagli`);
+  const box = page.getByRole("region", { name: "Budget e nodo da cui attinge" });
+  const src = box.getByRole("region", { name: "Attinge da" });
+  await expect(src).toHaveAttribute("data-linked", "no");
+  await scegli(src.getByRole("combobox"), new RegExp(s.fyName));
+  await expect(src).toHaveAttribute("data-linked", "yes");
+  await expect(src.getByTestId("link-numbers").locator('[data-k="available"]')).toContainText(/3\.?000/);
+  await savedOnNode(req, s);
+
+  await src.getByRole("button", { name: "Scollega" }).click();
+  await src.getByRole("button", { name: "Sì, scollega" }).click();
+  await expect(src).toHaveAttribute("data-linked", "no");
+  await expect(box.getByRole("link", { name: "Apri in Finanza" })).toBeVisible();
+});

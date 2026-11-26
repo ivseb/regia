@@ -119,7 +119,8 @@ func (s *Server) provaEnv(ctx context.Context, tx pgx.Tx, p *auth.Principal, ip 
 	for _, id := range []string{env.MainID, env.SbxID} {
 		var found bool
 		for _, m := range p.Tenants {
-			if m.TenantID != id {
+			// Un'organizzazione sospesa non si usa, neanche come ambiente di prova collegato.
+			if m.TenantID != id || !m.Active() {
 				continue
 			}
 			found = true

@@ -3,7 +3,10 @@ import type { QDefinition, QEvaluation } from "./condition";
 import type { FieldView } from "./fieldsApi";
 import { errorText } from "./i18n/core";
 
-export type Membership = { tenant_id: string; slug: string; name: string; member_id: string; member_type: string };
+export type Membership = { tenant_id: string; slug: string; name: string; member_id: string; member_type: string;
+  /** Stato dell'organizzazione: solo «active» si può usare; «suspended» la sospende il superamministratore. */
+  status?: "active" | "suspended" | "offboarding";
+};
 
 export type LanguageInfo = {
   effective: "it" | "en";
@@ -1162,6 +1165,7 @@ export type ImportMapping = {
   decimal?: string;
   defaults?: Record<string, string>;
 };
+export type ImportTarget = "cost_entries" | "work_logs";
 export type ImportProfile = { id: string; name: string; target: string; mapping: ImportMapping; updated_at: string };
 export type ImportRowError = { row: number; field?: string; message: string };
 export type ImportPreviewRow = {
@@ -1176,9 +1180,14 @@ export type ImportPreviewRow = {
   description: string;
   source_ref: string;
   duplicate: boolean;
+  // Solo per le ore (target work_logs).
+  person?: string;
+  minutes?: number;
+  activity_type?: string;
 };
 export type ImportRun = {
   id: string;
+  target: ImportTarget;
   profile_id: string | null;
   profile: string | null;
   file_name: string;
@@ -1298,13 +1307,14 @@ export const financeApi = {
   updateRate: (id: string, r: RateInput) => call<Rate>("PATCH", `/finance/rates/${q(id)}`, r),
   deleteRate: (id: string) => call<void>("DELETE", `/finance/rates/${q(id)}`),
 
-  profiles: () => call<{ items: ImportProfile[]; fields: Record<string, string> }>("GET", "/finance/import-profiles"),
-  saveProfile: (id: string | null, name: string, mapping: ImportMapping) =>
+  profiles: (target: ImportTarget = "cost_entries") =>
+    call<{ items: ImportProfile[]; fields: Record<string, string> }>("GET", `/finance/import-profiles?target=${target}`),
+  saveProfile: (id: string | null, name: string, mapping: ImportMapping, target: ImportTarget = "cost_entries") =>
     id
       ? call<ImportProfile>("PUT", `/finance/import-profiles/${q(id)}`, { name, mapping })
-      : call<ImportProfile>("POST", "/finance/import-profiles", { name, mapping }),
+      : call<ImportProfile>("POST", "/finance/import-profiles", { name, mapping, target }),
   deleteProfile: (id: string) => call<void>("DELETE", `/finance/import-profiles/${q(id)}`),
-  imports: () => call<{ items: ImportRun[] }>("GET", "/finance/imports"),
+  imports: (target: ImportTarget = "cost_entries") => call<{ items: ImportRun[] }>("GET", `/finance/imports?target=${target}`),
   importRun: (id: string) => call<ImportRun>("GET", `/finance/imports/${q(id)}`),
   previewImport: (i: { profile_id?: string; mapping?: ImportMapping; file_name: string; csv: string }) =>
     call<ImportRun>("POST", "/finance/imports", i),

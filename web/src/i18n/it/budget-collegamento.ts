@@ -37,4 +37,8 @@ export default {
   "budget.link.col.total": "Totale",
   "budget.link.col.committed": "Impegnato",
   "budget.link.nodeTotal": "Impegnato dai budget: {amount} su {allocated}",
+  "budget.reqlink.title": "Budget e nodo da cui attinge",
+  "budget.reqlink.budget": "Budget {year} · v{version} · {kind}",
+  "budget.reqlink.open": "Apri in Finanza",
+  "budget.reqlink.empty": "Questa richiesta non ha ancora un budget: si crea in Finanza, e lì si sceglie anche il nodo da cui attinge.",
 } satisfies Source;

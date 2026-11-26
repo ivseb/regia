@@ -5,6 +5,7 @@ import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
 import { ErrorNote, SectionTitle } from "../ui";
 import { RequestBudget } from "./budget/RequestBudget";
+import { RequestBudgetSource } from "./budget/RequestBudgetSource";
 import { ConsumptionBar, money, pct } from "./finance-ui";
 
 // "Budget e costi" nel dettaglio della richiesta (demand.md §9-10): preventivo, budget
@@ -130,6 +131,7 @@ export function RequestFinance({ detail }: { detail: ElementDetail }) {
         </p>
       )}
       <RequestBudget detail={detail} />
+      {d.can_see_details && <RequestBudgetSource elementKey={key} />}
     </section>
   );
 }

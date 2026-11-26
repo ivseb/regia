@@ -5,6 +5,7 @@ import type { Source } from "../types";
 export default {
   "shell.menu.portfolio": "Portafoglio",
   "shell.menu.financeBudget": "Finanza e budget",
+  "shell.menu.overview": "Panoramica",
   "shell.menu.section": "Sezione {name}",
   "shell.menu.lists.path": "elenchi",
   "shell.menu.lists.title": "Elenchi",

@@ -11,10 +11,11 @@ import {
   type FinOverview,
   type ImportMapping,
   type ImportRun,
+  type ImportTarget,
   type LineInput,
   type Rate,
 } from "../api";
-import { fmtDate, fmtNumber } from "../i18n/format";
+import { fmtDate, fmtDuration, fmtNumber } from "../i18n/format";
 import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
 import { PageHeader } from "../shell";
@@ -843,11 +844,40 @@ function NewCost({ ov, richiesta }: { ov: FinOverview; richiesta?: string }) {
 
 const DATE_FORMATS = ["AAAA-MM-GG", "GG/MM/AAAA", "GG.MM.AAAA", "GG-MM-AAAA", "MM/GG/AAAA"];
 
+/** Import CSV: si sceglie che cosa si importa (costi od ore), poi lo stesso flusso. */
 export function ImportTab({ ov }: { ov: FinOverview }) {
   const t = useT();
+  const [target, setTarget] = useState<ImportTarget>("cost_entries");
+  return (
+    <>
+      <nav aria-label={t("import.ore.target.label")} className="flex flex-wrap items-center gap-2" data-testid="import-target">
+        <span className="label">{t("import.ore.target.label")}</span>
+        {(["cost_entries", "work_logs"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={target === k}
+            className={`btn ${target === k ? "border-accent bg-sel font-semibold" : ""}`}
+            onClick={() => setTarget(k)}
+          >
+            {t(k === "cost_entries" ? "import.ore.target.costs" : "import.ore.target.hours")}
+          </button>
+        ))}
+      </nav>
+      {target === "work_logs" && <p className="m-0 max-w-3xl text-[12.5px] text-muted">{t("import.ore.help")}</p>}
+      <ImportFlow key={target} ov={ov} target={target} />
+    </>
+  );
+}
+
+function ImportFlow({ ov, target }: { ov: FinOverview; target: ImportTarget }) {
+  const t = useT();
+  const hours = target === "work_logs";
   const cur = ov.settings.base_currency;
-  const profiles = useQuery({ queryKey: ["finance", "profiles"], queryFn: financeApi.profiles });
-  const runs = useQuery({ queryKey: ["finance", "imports"], queryFn: financeApi.imports });
+  const profiles = useQuery({ queryKey: ["finance", "profiles", target], queryFn: () => financeApi.profiles(target) });
+  const runs = useQuery({ queryKey: ["finance", "imports", target], queryFn: () => financeApi.imports(target) });
+  // Etichetta di un campo della mappatura: per le ore dal catalogo, per i costi dal server.
+  const fieldLabel = (k: string) => (hours ? t(`import.ore.field.${k}` as "import.ore.field.element") : ov.import_fields[k] ?? k);
   const [profileID, setProfileID] = useState("");
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
   const [run, setRun] = useState<ImportRun | null>(null);
@@ -906,7 +936,7 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
             {t("budget.fin.tryNoSave")}
           </button>
         </div>
-        {editing && <ProfileEditor fields={profiles.data?.fields ?? ov.import_fields} header={header} profile={profile} onSaved={(id) => { setProfileID(id); setEditing(false); }} />}
+        {editing && <ProfileEditor target={target} fields={profiles.data?.fields ?? ov.import_fields} fieldLabel={fieldLabel} header={header} profile={profile} onSaved={(id) => { setProfileID(id); setEditing(false); }} />}
         <ErrorNote error={preview.error} />
       </section>
 
@@ -933,7 +963,7 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
               {run.errors.slice(0, 50).map((e, i) => (
                 <tr key={i} className="border-b border-hair">
                   <Td mono>{e.row}</Td>
-                  <Td>{e.field ? ov.import_fields[e.field] ?? e.field : "—"}</Td>
+                  <Td>{e.field ? fieldLabel(e.field) : "—"}</Td>
                   <Td className="text-danger">{e.message}</Td>
                 </tr>
               ))}
@@ -942,6 +972,33 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
           {run.preview.length > 0 && (
             <>
               <h3 className="label m-0 text-muted">{t("budget.fin.previewFirst", { count: run.preview.length })}</h3>
+              {hours ? (
+                <Table
+                  head={
+                    <>
+                      <Th>{t("budget.fin.riga")}</Th>
+                      <Th>{t("budget.fin.data")}</Th>
+                      <Th>{t("import.ore.col.activity")}</Th>
+                      <Th>{t("import.ore.col.person")}</Th>
+                      <Th right>{t("import.ore.col.hours")}</Th>
+                      <Th hide="hidden md:table-cell">{t("import.ore.col.type")}</Th>
+                      <Th hide="hidden lg:table-cell">{t("budget.fin.descrizione")}</Th>
+                    </>
+                  }
+                >
+                  {run.preview.map((p) => (
+                    <tr key={p.row} className={`border-b border-hair ${p.duplicate ? "text-muted" : ""}`}>
+                      <Td mono>{p.row}</Td>
+                      <Td mono>{date(p.entry_date)}</Td>
+                      <Td mono>{p.element_key}{p.duplicate && <span className="ml-1.5 font-sans text-[11px]">{t("import.ore.alreadyImported")}</span>}</Td>
+                      <Td>{p.person}</Td>
+                      <Td right mono>{fmtDuration(p.minutes ?? 0)}</Td>
+                      <Td hide="hidden md:table-cell">{p.activity_type}</Td>
+                      <Td hide="hidden lg:table-cell"><span className="block max-w-72 break-words">{p.description || "—"}</span></Td>
+                    </tr>
+                  ))}
+                </Table>
+              ) : (
               <Table
                 head={
                   <>
@@ -967,6 +1024,7 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
                   </tr>
                 ))}
               </Table>
+              )}
             </>
           )}
           {run.status === "preview" && ov.can_write && (
@@ -1015,12 +1073,16 @@ export function ImportTab({ ov }: { ov: FinOverview }) {
 }
 
 function ProfileEditor({
+  target,
   fields,
+  fieldLabel,
   header,
   profile,
   onSaved,
 }: {
+  target: ImportTarget;
   fields: Record<string, string>;
+  fieldLabel: (k: string) => string;
   header: string[];
   profile?: { id: string; name: string; mapping: ImportMapping };
   onSaved: (id: string) => void;
@@ -1033,7 +1095,7 @@ function ProfileEditor({
   const cols = Array.from(new Set([...Object.keys(m.columns), ...header]));
   const invalidate = useInvalidate();
   const save = useMutation({
-    mutationFn: () => financeApi.saveProfile(asNew ? null : profile!.id, name, m),
+    mutationFn: () => financeApi.saveProfile(asNew ? null : profile!.id, name, m, target),
     onSuccess: (p) => { invalidate(); onSaved(p.id); },
   });
   const setCol = (c: string, f: string) => {
@@ -1075,11 +1137,17 @@ function ProfileEditor({
             <span className="min-w-0 font-mono text-[12.5px] [overflow-wrap:anywhere]" title={c}>{c}</span>
             <Select className="field" value={m.columns[c] ?? ""} onChange={(e) => setCol(c, e.target.value)}>
               <option value="">{t("budget.fin.nonImportare")}</option>
-              {Object.entries(fields).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.keys(fields).map((k) => <option key={k} value={k}>{fieldLabel(k)}</option>)}
             </Select>
           </label>
         ))}
       </div>
+      {target === "work_logs" ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={t("import.ore.defaultElement")}><input className="field font-mono" placeholder="PRJ-12" value={m.defaults?.element ?? ""} onChange={(e) => setDef("element", e.target.value.toUpperCase())} /></Field>
+          <Field label={t("import.ore.defaultMember")}><input className="field" type="email" value={m.defaults?.member ?? ""} onChange={(e) => setDef("member", e.target.value)} /></Field>
+        </div>
+      ) : (
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={t("budget.fin.elementoSeLaColonna")}><input className="field font-mono" placeholder="DEM-12" value={m.defaults?.element ?? ""} onChange={(e) => setDef("element", e.target.value.toUpperCase())} /></Field>
         <Field label={t("budget.fin.categoriaSeMancaCodice")}><input className="field font-mono" placeholder="CONS" value={m.defaults?.category ?? ""} onChange={(e) => setDef("category", e.target.value)} /></Field>
@@ -1090,6 +1158,7 @@ function ProfileEditor({
           </Select>
         </Field>
       </div>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         {profile && (
           <label className="flex items-center gap-2 text-[12.5px]">

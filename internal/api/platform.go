@@ -49,6 +49,69 @@ func (s *Server) platformAdmin(h func(http.ResponseWriter, *http.Request, *auth.
 func (s *Server) platformRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/platform/tenants", s.platformAdmin(s.platformTenants))
 	mux.HandleFunc("POST /api/v1/platform/tenants", s.platformAdmin(s.platformCreateTenant))
+	mux.HandleFunc("PATCH /api/v1/platform/tenants/{id}", s.platformAdmin(s.platformRenameTenant))
+	mux.HandleFunc("POST /api/v1/platform/tenants/{id}/suspend", s.platformAdmin(s.platformSetStatus("suspended")))
+	mux.HandleFunc("POST /api/v1/platform/tenants/{id}/reactivate", s.platformAdmin(s.platformSetStatus("active")))
+}
+
+// platformActor è chi agisce nell'audit del tenant: il superamministratore, con il suo membro
+// se ne fa parte (altrimenti solo l'account).
+func platformActor(p *auth.Principal, tenantID string) tenant.Actor {
+	a := tenant.Actor{AccountID: p.AccountID}
+	for _, m := range p.Tenants {
+		if m.TenantID == tenantID {
+			a.MemberID = m.MemberID
+		}
+	}
+	return a
+}
+
+// platformRenameTenant cambia il nome (non l'identificativo), con la stessa validazione della creazione.
+func (s *Server) platformRenameTenant(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || utf8.RuneCountInString(in.Name) > 120 {
+		problemField(w, r, http.StatusUnprocessableEntity, "validation.organizzazioni.name_invalid", "il nome è obbligatorio (massimo 120 caratteri)", "name")
+		return
+	}
+	id := r.PathValue("id")
+	err := tenant.Rename(r.Context(), s.db, id, in.Name, platformActor(p, id))
+	if errors.Is(err, tenant.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "platform.tenant_not_found", "organizzazione inesistente")
+		return
+	}
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "name": in.Name})
+}
+
+// platformSetStatus sospende («suspended») o riattiva («active») un'organizzazione. Quella in cui
+// sta lavorando il superamministratore non si sospende: resterebbe senza organizzazione attiva.
+func (s *Server) platformSetStatus(status string) func(http.ResponseWriter, *http.Request, *auth.Principal) {
+	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+		id := r.PathValue("id")
+		if status == "suspended" && p.TenantID == id {
+			writeProblem(w, r, http.StatusConflict, "platform.cannot_suspend_current", "non puoi sospendere l'organizzazione in cui stai lavorando")
+			return
+		}
+		err := tenant.SetStatus(r.Context(), s.db, id, status, platformActor(p, id))
+		if errors.Is(err, tenant.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "platform.tenant_not_found", "organizzazione inesistente")
+			return
+		}
+		if err != nil {
+			s.internal(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": id, "status": status})
+	}
 }
 
 func (s *Server) platformTenants(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
@@ -150,6 +213,6 @@ func (s *Server) inviteFirstAdmin(r *http.Request, p *auth.Principal, out tenant
 	// Il testo dell'email nomina la nuova organizzazione, non quella attiva.
 	pc := *p
 	pc.TenantID = out.TenantID
-	pc.Tenants = append(append([]auth.Membership{}, p.Tenants...), auth.Membership{TenantID: out.TenantID, Slug: in.Slug, Name: in.Name})
+	pc.Tenants = append(append([]auth.Membership{}, p.Tenants...), auth.Membership{TenantID: out.TenantID, Slug: in.Slug, Name: in.Name, Status: "active"})
 	return map[string]any{"email": in.AdminEmail, "link": s.linkView(c.Link), "emailed": s.mailLink(ctx, &pc, c.MemberID, in.AdminEmail, c.Link)}, nil
 }

@@ -78,7 +78,7 @@ export type TodoImpact = {
   weeks: number;
 };
 
-export type TodoWeek = { kind: "submit" | "approve"; week: string; minutes: number; member_id?: string; member?: string };
+export type TodoWeek = { kind: "submit" | "approve"; week: string; minutes: number; member_id?: string; member?: string; days?: number[] };
 export type TodoReport = { id: string; key: string; title: string; due: string; late: boolean; draft: boolean };
 export type TodoCounts = {
   decisions: number;

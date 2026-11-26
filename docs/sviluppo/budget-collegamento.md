@@ -9,6 +9,7 @@ Disegno: `replica/budget.md` §2 («Collegamento con i budget di progetto»). AP
   - in «Nuovo budget»: il nodo si sceglie prima di creare la bozza (`allocation_id` nella creazione). Le opzioni compaiono quando la chiave dell'elemento è scritta per intero.
 - **Numeri prima dell'invio:** stanziato del nodo, impegnato dagli altri budget approvati, disponibile, quanto il budget ne userebbe (le righe senza mese e quelle dei mesi del periodo del nodo, calcolate sulle righe in modifica) e quanto resterebbe. Se supera il disponibile compare l'avviso `link-exceeds`. Una previsione a finire non impegna e non avvisa. Il controllo vero resta quello del servizio, all'invio e all'approvazione.
 - **Solo lettura** senza `finance.write`: il nodo scelto e i suoi numeri; se il nodo è nascosto dalla RLS, «Nodo non visibile».
+- **Nella scheda della richiesta** (Dettagli → «Budget e costi», `web/src/pages/budget/RequestBudgetSource.tsx`): per chi ha `finance.read`, ogni budget in vigore dell'elemento (non sostituito) con esercizio, versione, tipo e stato, il campo «Attinge da» con gli stessi numeri e il link «Apri in Finanza». Collega e scollega chi ha `finance.write`, come nel dettaglio del budget. Il budget si crea sempre in Finanza.
 - **Dal lato del nodo:** nell'albero (`BudgetTree.tsx`), i nodi di un elemento hanno la scheda «Budget di progetto» (`NodeBudgets`): elemento con link, versione e tipo, stato (bozza, inviato, approvato), totale e impegnato.
 
 ## Dati
@@ -20,9 +21,9 @@ Disegno: `replica/budget.md` §2 («Collegamento con i budget di progetto»). AP
 ## Test
 
 - Go: `go test ./internal/itest -run 'TestBudgetOpzioniCollegamento|TestBudgetImpegno'` (opzioni, percorso per profilo, area estranea, esercizio estraneo, budget collegato e approvato, scollegamento).
-- e2e: `web/e2e/lacune-budget.spec.ts` (creazione con nodo, residuo e avviso, scollegamento con conferma e annullamento, ricollegamento, scheda del nodo, invio rifiutato oltre il nodo, 375 px).
+- e2e: `web/e2e/lacune-budget.spec.ts` (scelta e scollegamento dalla scheda della richiesta, creazione con nodo, residuo e avviso, scollegamento con conferma e annullamento, ricollegamento, scheda del nodo, invio rifiutato oltre il nodo, 375 px).
 
 ## Non fatto
 
-- «Attinge da» nella scheda della richiesta (`RequestBudget`) e nella pagina di un progetto che non sia la pagina Finanza.
+- «Attinge da» nella pagina di un progetto (fuori da Finanza e dalla scheda della richiesta).
 - Spostare un budget approvato da un nodo a un altro con un solo passaggio (si scollega e si ricollega; il servizio ricontrolla lo stanziamento).

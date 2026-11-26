@@ -9,4 +9,7 @@ export default {
   "errors.validation.organizzazioni.language_invalid": "Unsupported language.",
   "errors.validation.organizzazioni.currency_invalid": "Invalid currency: a three-letter code, for example EUR.",
   "errors.validation.organizzazioni.admin_email_invalid": "The other administrator's email address is not valid.",
+  "errors.platform.cannot_suspend_current": "You can't suspend the organization you are working in: enter another one first.",
+  "errors.platform.tenant_not_found": "This organization no longer exists.",
+  "errors.tenant.suspended": "The organization is suspended: contact the instance administrator.",
 } satisfies Translation<typeof it>;

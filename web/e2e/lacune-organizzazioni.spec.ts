@@ -1,7 +1,7 @@
 // Organizzazioni (tenant) dall'interfaccia: solo il superamministratore le crea, ci entra e vede come
 // metterci dentro le persone. L'account admin@demo.test lo è per il seed (scripts/dev-seed.sh).
 import { test, expect } from "@playwright/test";
-import { call, expectNoHorizontalScroll, login, scegli, uniq } from "./fixtures";
+import { PASSWORD, apiAs, call, expectNoHorizontalScroll, login, scegli, uniq } from "./fixtures";
 
 test("chi non è superamministratore non vede il link e riceve un rifiuto", async ({ page }) => {
   await login(page, "dm");
@@ -59,5 +59,74 @@ test("a 375 px la pagina Organizzazioni non scorre in orizzontale", async ({ pag
   await page.goto("/piattaforma/organizzazioni");
   await expect(page.getByRole("heading", { name: "Organizzazioni", level: 1 })).toBeVisible();
   await expect(page.getByTestId("organizzazioni-elenco")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});
+
+/** Crea un'organizzazione via API come superamministratore e vi invita una persona che ci entra solo lì. */
+async function orgConPersona(playwright: Parameters<typeof apiAs>[0], baseURL: string) {
+  const { req } = await apiAs(playwright, baseURL, "admin");
+  const nome = uniq("Org sosp");
+  const slug = `sosp-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+  const org = await call<{ tenant_id: string }>(req, "POST", "/api/v1/platform/tenants", { name: nome, slug });
+  await call(req, "POST", "/api/v1/me/tenant", { tenant_id: org.tenant_id });
+  const email = `${slug}@demo.test`;
+  const added = await call(req, "POST", "/api/v1/admin/members", { email, display_name: "Persona sospesa", member_type: "standard", mode: "invite", role_ids: [], group_ids: [] });
+  const token = added.link.path.split("/").pop();
+  await call(req, "POST", `/api/v1/auth/invitations/${token}/accept`, { display_name: "Persona sospesa", password: PASSWORD });
+  await req.dispose();
+  return { nome, slug, email };
+}
+
+test("rinomina, sospensione con conferma e riattivazione di un'organizzazione", async ({ page, browser, playwright, baseURL }) => {
+  const { nome, slug, email } = await orgConPersona(playwright, baseURL!);
+  await login(page, "admin");
+  await page.goto("/piattaforma/organizzazioni");
+  const riga = page.getByTestId(`org-${slug}`);
+  await expect(riga).toContainText(nome);
+  await expect(page.getByTestId(`org-stato-${slug}`)).toHaveText("Attiva");
+
+  // Rinomina in linea: l'identificativo non cambia.
+  const nuovo = uniq("Org rinominata");
+  await riga.getByRole("button", { name: "Rinomina" }).click();
+  await riga.getByRole("textbox").fill(nuovo);
+  await riga.getByRole("button", { name: "Salva" }).click();
+  await expect(riga).toContainText(nuovo);
+  await expect(riga).toContainText(slug);
+
+  // Sospendi chiede conferma e spiega l'effetto.
+  await expect(riga).toContainText("I membri non potranno più entrare finché non la riattivi");
+  await riga.getByRole("button", { name: "Sospendi" }).click();
+  await expect(riga.getByRole("button", { name: "Annulla" })).toBeVisible();
+  await riga.getByRole("button", { name: "Sì, sospendi" }).click();
+  await expect(page.getByTestId(`org-stato-${slug}`)).toHaveText("Sospesa");
+  await expect(riga.getByRole("button", { name: "Entra", exact: true })).toHaveCount(0);
+
+  // Chi è solo lì vede il messaggio chiaro, non un errore generico.
+  const ctx = await browser.newContext({ baseURL: baseURL! });
+  const altra = await ctx.newPage();
+  const r = await altra.request.post("/api/v1/auth/login", { data: { email, password: PASSWORD } });
+  expect(r.ok()).toBeTruthy();
+  await altra.goto("/");
+  const msg = altra.getByTestId("organizzazione-sospesa");
+  await expect(msg).toContainText(`L'organizzazione «${nuovo}» è sospesa. Rivolgiti all'amministratore dell'istanza.`);
+
+  // Riattivazione: la persona rientra con un nuovo accesso.
+  await riga.getByRole("button", { name: "Riattiva" }).click();
+  await expect(page.getByTestId(`org-stato-${slug}`)).toHaveText("Attiva");
+  const r2 = await altra.request.post("/api/v1/auth/login", { data: { email, password: PASSWORD } });
+  expect(r2.ok()).toBeTruthy();
+  await altra.goto("/");
+  await expect(altra.getByTestId("organizzazione-sospesa")).toHaveCount(0);
+  await ctx.close();
+});
+
+test("a 375 px la rinomina in linea non fa scorrere in orizzontale", async ({ page, playwright, baseURL }) => {
+  const { slug } = await orgConPersona(playwright, baseURL!);
+  await page.setViewportSize({ width: 375, height: 800 });
+  await login(page, "admin");
+  await page.goto("/piattaforma/organizzazioni");
+  const riga = page.getByTestId(`org-${slug}`);
+  await riga.getByRole("button", { name: "Rinomina" }).click();
+  await expect(riga.getByRole("button", { name: "Salva" })).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

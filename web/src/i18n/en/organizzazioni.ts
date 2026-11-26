@@ -40,5 +40,25 @@ export default {
   "organizzazioni.elenco.title": "Organizations on this instance",
   "organizzazioni.elenco.persone": {"one": "{count} person", "other": "{count} people"},
   "organizzazioni.elenco.attiva": "You are here",
+  "organizzazioni.stato.attiva": "Active",
+  "organizzazioni.stato.sospesa": "Suspended",
+  "organizzazioni.stato.etichetta": "Status",
+  "organizzazioni.rinomina": "Rename",
+  "organizzazioni.rinomina.nome": "Name of the organization {name}",
+  "organizzazioni.rinomina.salva": "Save",
+  "organizzazioni.rinomina.annulla": "Cancel",
+  "organizzazioni.sospendi": "Suspend",
+  "organizzazioni.sospendi.sicuro": "Yes, suspend",
+  "organizzazioni.sospendi.effetto": "Members will not be able to enter until you reactivate it. The data stays: nothing is deleted.",
+  "organizzazioni.sospendi.stessa": "You can't suspend the organization you are working in: enter another one.",
+  "organizzazioni.riattiva": "Reactivate",
+  "organizzazioni.sospesaTra": "{name} (suspended)",
+
+  "organizzazioni.sospesa.title": "Organization suspended",
+  "organizzazioni.sospesa.testo": {
+    "one": "The organization “{name}” is suspended. Contact the instance administrator.",
+    "other": "The organizations {name} are suspended. Contact the instance administrator.",
+  },
+
   "organizzazioni.elenco.nonMembro": "You are not a member",
 } satisfies Translation<typeof it>;

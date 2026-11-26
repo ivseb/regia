@@ -42,4 +42,24 @@ export default {
   "organizzazioni.elenco.persone": {"one": "{count} persona", "other": "{count} persone"},
   "organizzazioni.elenco.attiva": "Sei qui",
   "organizzazioni.elenco.nonMembro": "Non ne fai parte",
+
+  "organizzazioni.stato.attiva": "Attiva",
+  "organizzazioni.stato.sospesa": "Sospesa",
+  "organizzazioni.stato.etichetta": "Stato",
+  "organizzazioni.rinomina": "Rinomina",
+  "organizzazioni.rinomina.nome": "Nome dell'organizzazione {name}",
+  "organizzazioni.rinomina.salva": "Salva",
+  "organizzazioni.rinomina.annulla": "Annulla",
+  "organizzazioni.sospendi": "Sospendi",
+  "organizzazioni.sospendi.sicuro": "Sì, sospendi",
+  "organizzazioni.sospendi.effetto": "I membri non potranno più entrare finché non la riattivi. I dati restano: non viene cancellato niente.",
+  "organizzazioni.sospendi.stessa": "Non puoi sospendere l'organizzazione in cui stai lavorando: entra in un'altra.",
+  "organizzazioni.riattiva": "Riattiva",
+  "organizzazioni.sospesaTra": "{name} (sospesa)",
+
+  "organizzazioni.sospesa.title": "Organizzazione sospesa",
+  "organizzazioni.sospesa.testo": {
+    "one": "L'organizzazione «{name}» è sospesa. Rivolgiti all'amministratore dell'istanza.",
+    "other": "Le organizzazioni {name} sono sospese. Rivolgiti all'amministratore dell'istanza.",
+  },
 } satisfies Source;

@@ -12,11 +12,11 @@ test("l'amministratore ha un menu corto: indici, schede e azioni fuori dal menu"
   const nav = page.getByRole("navigation", { name: NAV });
   await expect(nav.getByRole("link", { name: "Cruscotto", exact: true })).toBeVisible();
   // Prima erano circa 59 voci; ora le pagine sorelle e le impostazioni sono dietro una voce sola.
-  expect(await nav.locator(".nav-voce").count()).toBeLessThanOrEqual(26);
-  for (const name of ["Portafoglio", "Finanza e budget", "Elenchi", "Configurazione"]) {
+  expect(await nav.locator(".nav-voce").count()).toBeLessThan(20);
+  for (const name of ["Portafoglio", "Finanza e budget", "DevSecOps", "Rischi e conformità", "Elenchi", "Configurazione"]) {
     await expect(nav.getByRole("link", { name, exact: true }), name).toBeVisible();
   }
-  for (const name of ["Graduatoria", "Cabina di portafoglio", "Persone e accessi", "Webhook", "Nuova richiesta", "Nuovo progetto"]) {
+  for (const name of ["Graduatoria", "Cabina di portafoglio", "Persone e accessi", "Webhook", "Nuova richiesta", "Nuovo progetto", "Metriche di consegna", "Vulnerabilità", "Conformità", "Privacy (DPO)", "Spazio dell'auditor"]) {
     await expect(nav.getByRole("link", { name, exact: true }), name).toHaveCount(0);
   }
   // Le azioni sono nella testata delle pagine.
@@ -42,6 +42,26 @@ test("l'amministratore ha un menu corto: indici, schede e azioni fuori dal menu"
   await page.getByRole("navigation", { name: "Finanza e budget" }).getByRole("link", { name: "Budget", exact: true }).click();
   await expect(page).toHaveURL(/\/budget/);
   await expect(nav.getByRole("link", { name: "Finanza e budget", exact: true })).toHaveAttribute("aria-current", "page");
+
+  // DevSecOps: quattro schede; Panoramica non resta attiva sulle sottopagine.
+  await nav.getByRole("link", { name: "DevSecOps", exact: true }).click();
+  await expect(page).toHaveURL(/\/devsecops$/);
+  const dso = page.getByRole("navigation", { name: "DevSecOps" });
+  await expect(dso.getByRole("link")).toHaveCount(4);
+  await dso.getByRole("link", { name: "Metriche di consegna" }).click();
+  await expect(page).toHaveURL(/\/devsecops\/metriche/);
+  await expect(dso.getByRole("link", { name: "Metriche di consegna" })).toHaveAttribute("aria-current", "page");
+  await expect(dso.getByRole("link", { name: "Panoramica" })).not.toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "DevSecOps", exact: true })).toHaveAttribute("aria-current", "page");
+
+  // Rischi e conformità: le schede che i permessi lasciano (l'amministratore le vede tutte).
+  await nav.getByRole("link", { name: "Rischi e conformità", exact: true }).click();
+  await expect(page).toHaveURL(/\/rischi/);
+  const grc = page.getByRole("navigation", { name: "Rischi e conformità" });
+  await expect(grc.getByRole("link")).toHaveCount(4);
+  await grc.getByRole("link", { name: "Privacy" }).click();
+  await expect(page).toHaveURL(/\/privacy/);
+  await expect(nav.getByRole("link", { name: "Rischi e conformità", exact: true })).toHaveAttribute("aria-current", "page");
 
   // Configurazione: l'indice porta alle pagine uscite dal menu; la voce resta attiva dentro.
   await nav.getByRole("link", { name: "Configurazione", exact: true }).click();
@@ -114,11 +134,13 @@ test.describe("telefono (375 px)", () => {
     await page.goto("/richieste");
     await page.locator("header").first().getByRole("button", { name: "Menu", exact: true }).click();
     const nav = page.getByRole("navigation", { name: NAV });
-    for (const name of ["Delivery", "Sezione DevSecOps"]) {
+    for (const name of ["Delivery"]) {
       const box = await nav.getByRole("button", { name, exact: true }).boundingBox();
       expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(44);
     }
-    const box = await nav.getByRole("link", { name: "Configurazione", exact: true }).boundingBox();
-    expect(box!.height).toBeGreaterThanOrEqual(44);
+    for (const name of ["Configurazione", "DevSecOps", "Rischi e conformità"]) {
+      const box = await nav.getByRole("link", { name, exact: true }).boundingBox();
+      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(44);
+    }
   });
 });
