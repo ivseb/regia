@@ -24,7 +24,8 @@ import {
   type ServiceRow,
   type Trend,
 } from "../devsecopsApi";
-import { PageHeader } from "../shell";
+import { PageHeader, useMe } from "../shell";
+import { enterpriseOn } from "../modules";
 import { ModuleChip } from "../moduleIcon";
 import { Criticality, ErrorNote, SectionTitle, ago, Loading } from "../ui";
 import { useNarrow } from "./timeline";
@@ -39,6 +40,11 @@ const PipelineSection = lazy(() => import("./PipelineAdherence").then((m) => ({ 
 
 // ---------------------------------------------------------------------
 // Pezzi comuni
+
+/** Parti da azienda (change, approvazioni, asset logici): solo con demand o GRC accesi. */
+function useEnterprise(): boolean {
+  return enterpriseOn(useMe().data);
+}
 
 function when(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleDateString(loc(), { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
@@ -170,6 +176,7 @@ function Released({ r }: { r: Release }) {
 
 export function ProductionPanel({ refKey }: { refKey: string }) {
   const panel = useQuery({ queryKey: ["dso-panel", refKey], queryFn: () => dsoApi.panel(refKey) });
+  const enterprise = useEnterprise();
   const p = panel.data;
   if (panel.isPending) return <Loading className="m-0 text-muted" />;
   if (!p) return <ErrorNote error={panel.error} />;
@@ -189,7 +196,7 @@ export function ProductionPanel({ refKey }: { refKey: string }) {
       <Kpis k={p.kpis} />
       <ProductionTable panel={p} />
       <Environments services={p.services} envs={p.environments} />
-      <Changes groups={p.changes} />
+      {enterprise && <Changes groups={p.changes} />}
       <Suspense fallback={null}><PipelineSection refKey={refKey} /></Suspense>
       {p.can_configure && (
         <div className="flex flex-col gap-2">
@@ -203,6 +210,7 @@ export function ProductionPanel({ refKey }: { refKey: string }) {
 
 function ProductionTable({ panel }: { panel: Panel }) {
   const narrow = useNarrow();
+  const enterprise = useEnterprise();
   const multiApp = panel.applications.length > 1;
   const active = panel.services.filter((s) => s.on_pipeline);
   const pending = panel.services.filter((s) => !s.on_pipeline);
@@ -211,7 +219,7 @@ function ProductionTable({ panel }: { panel: Panel }) {
       <SectionTitle aside={<span className="text-[12px] text-muted">{tr("governance.devsecops.sulla_pipeline_da_portare", { length: active.length, length2: pending.length })}</span>}>{tr("governance.devsecops.produzione")}</SectionTitle>
       {narrow ? (
         <ul className="m-0 flex list-none flex-col p-0">
-          {[...active, ...pending].map((s) => <ServiceCard key={s.id} s={s} multiApp={multiApp} />)}
+          {[...active, ...pending].map((s) => <ServiceCard key={s.id} s={s} multiApp={multiApp} enterprise={enterprise} />)}
         </ul>
       ) : (
         <div className="overflow-x-auto">
@@ -221,7 +229,7 @@ function ProductionTable({ panel }: { panel: Panel }) {
                 <th scope="col" className="border-b-2 border-rule pr-3">{tr("governance.devsecops.servizio")}</th>
                 <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.compliance.versione")}</th>
                 <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.devsecops.rilasciato")}</th>
-                <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.devsecops.change")}</th>
+                {enterprise && <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.devsecops.change")}</th>}
                 <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.devsecops.cve_oggi")}</th>
                 <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.devsecops.al_rilascio")}</th>
                 <th scope="col" className="border-b-2 border-rule px-3">{tr("governance.compliance.controlli")}</th>
@@ -229,14 +237,14 @@ function ProductionTable({ panel }: { panel: Panel }) {
               </tr>
             </thead>
             <tbody>
-              {active.map((s) => <ServiceTr key={s.id} s={s} multiApp={multiApp} />)}
+              {active.map((s) => <ServiceTr key={s.id} s={s} multiApp={multiApp} enterprise={enterprise} />)}
               {pending.map((s) => (
                 <tr key={s.id} className="border-b border-hair text-muted">
                   <td className="py-2 pr-3">
                     <span className="font-medium">{s.name}</span>
                     {multiApp && s.application && <span className="block text-[12px]">{s.application}</span>}
                   </td>
-                  <td colSpan={7} className="px-3 py-2 text-[12.5px]">{tr("governance.devsecops.non_ancora_sulla_pipeline")}{s.repository ? ` · ${s.repository}` : ""}</td>
+                  <td colSpan={enterprise ? 7 : 6} className="px-3 py-2 text-[12.5px]">{tr("governance.devsecops.non_ancora_sulla_pipeline")}{s.repository ? ` · ${s.repository}` : ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -263,7 +271,7 @@ function ServiceName({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
   );
 }
 
-function ServiceTr({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
+function ServiceTr({ s, multiApp, enterprise }: { s: ServiceRow; multiApp: boolean; enterprise: boolean }) {
   const [open, setOpen] = useState(false);
   const r = s.release;
   return (
@@ -283,7 +291,7 @@ function ServiceTr({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
           {r?.image && <span className="block max-w-[180px] [overflow-wrap:anywhere] text-[11px] text-muted" title={`${r.image}${r.digest ? "@" + r.digest : ""}`}>{r.digest?.slice(0, 19) ?? r.image}</span>}
         </td>
         <td className="px-3 py-2">{r ? <Released r={r} /> : <span className="text-muted">{s.prod_since ? when(s.prod_since) : "—"}</span>}</td>
-        <td className="px-3 py-2">{r ? <ChangeLink r={r} /> : <span className="text-muted">—</span>}</td>
+        {enterprise && <td className="px-3 py-2">{r ? <ChangeLink r={r} /> : <span className="text-muted">—</span>}</td>}
         <td className="px-3 py-2"><Cves c={s.cves_today} layers /></td>
         <td className="px-3 py-2"><Cves c={s.cves_at_release} /></td>
         <td className="px-3 py-2">{r ? <ChecksBadge status={r.checks_status} checks={r.checks} /> : <span className="text-muted">—</span>}</td>
@@ -291,7 +299,7 @@ function ServiceTr({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
       </tr>
       {open && (
         <tr className="border-b border-hair bg-sel/30">
-          <td colSpan={8} className="px-3 py-3">
+          <td colSpan={enterprise ? 8 : 7} className="px-3 py-3">
             <History id={s.id} />
           </td>
         </tr>
@@ -300,7 +308,7 @@ function ServiceTr({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
   );
 }
 
-function ServiceCard({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
+function ServiceCard({ s, multiApp, enterprise }: { s: ServiceRow; multiApp: boolean; enterprise: boolean }) {
   const [open, setOpen] = useState(false);
   const r = s.release;
   if (!s.on_pipeline) {
@@ -324,7 +332,7 @@ function ServiceCard({ s, multiApp }: { s: ServiceRow; multiApp: boolean }) {
       </div>
       <dl className="m-0 flex flex-col">
         {row(tr("governance.devsecops.rilasciato"), r ? <Released r={r} /> : "—")}
-        {row(tr("governance.devsecops.change"), r ? <ChangeLink r={r} /> : "—")}
+        {enterprise && row(tr("governance.devsecops.change"), r ? <ChangeLink r={r} /> : "—")}
         {row(tr("governance.devsecops.cve_oggi"), <Cves c={s.cves_today} layers />)}
         {row(tr("governance.devsecops.al_rilascio"), <Cves c={s.cves_at_release} />)}
         {row(tr("governance.compliance.controlli"), r ? <ChecksBadge status={r.checks_status} checks={r.checks} /> : "—")}
@@ -507,6 +515,7 @@ function PlannedService({ panel }: { panel: Panel }) {
 
 export function DevsecopsPage() {
   const o = useQuery({ queryKey: ["dso-overview"], queryFn: dsoApi.overview });
+  const enterprise = useEnterprise();
   const d = o.data;
   const narrow = useNarrow();
   return (
@@ -524,9 +533,12 @@ export function DevsecopsPage() {
                 <span className="font-semibold">{d.unmapped_services}</span>{" "}{tr("governance.devsecops.servizi_senza_applicazione_del_catalogo")}{" "}<Link to="/configurazione/devsecops">{tr("governance.devsecops.associali")}</Link>.
               </p>
             )}
-            <AssetsTable assets={d.unassigned.services > 0 ? [...d.assets, d.unassigned] : d.assets} narrow={narrow} />
+            {/* Senza demand né GRC gli asset logici non servono: niente riga «Senza asset», e la tabella solo se ce ne sono. */}
+            {(enterprise || d.assets.length > 0) && (
+              <AssetsTable assets={enterprise && d.unassigned.services > 0 ? [...d.assets, d.unassigned] : d.assets} narrow={narrow} />
+            )}
             <CriticalTable rows={d.critical} narrow={narrow} />
-            <LatestReleases rels={d.releases} />
+            <LatestReleases rels={d.releases} enterprise={enterprise} />
             <GateRecent />
           </>
         )}
@@ -623,7 +635,7 @@ function CriticalTable({ rows, narrow }: { rows: Overview["critical"]; narrow: b
   );
 }
 
-function LatestReleases({ rels }: { rels: Release[] }) {
+function LatestReleases({ rels, enterprise }: { rels: Release[]; enterprise: boolean }) {
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={tr("governance.devsecops.ultimi_rilasci")}>
       <SectionTitle>{tr("governance.devsecops.ultimi_rilasci")}</SectionTitle>
@@ -637,8 +649,9 @@ function LatestReleases({ rels }: { rels: Release[] }) {
               {r.application && <span className="block text-[12px] text-muted">{r.application}</span>}
             </span>
             <span className="text-right text-[12px] text-muted tabular md:order-last">{ago(r.at)}</span>
-            <span className="min-w-0 text-[12.5px]"><ChangeLink r={r} /></span>
-            <span className="min-w-0 text-[12.5px]">{r.approved_by ? tr("governance.devsecops.approvato_da", { approved_by: r.approved_by }) : <span className="text-muted">{tr("governance.devsecops.approvazione_non_dichiarata")}</span>}</span>
+            {/* Change e approvazione sono parole da azienda: senza demand né GRC si mostrano solo se il rilascio le dichiara. */}
+            <span className="min-w-0 text-[12.5px]">{(enterprise || r.change || r.change_number) && <ChangeLink r={r} />}</span>
+            <span className="min-w-0 text-[12.5px]">{r.approved_by ? tr("governance.devsecops.approvato_da", { approved_by: r.approved_by }) : enterprise && <span className="text-muted">{tr("governance.devsecops.approvazione_non_dichiarata")}</span>}</span>
           </li>
         ))}
       </ul>
