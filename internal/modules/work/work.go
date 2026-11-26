@@ -47,9 +47,6 @@ const (
 	permArch = "architecture.write"
 )
 
-// itemTypes sono gli elementi che stanno sulla board e nel backlog.
-var itemTypes = []string{TypeStory, TypeTask, TypeBug}
-
 // workTypes sono i tipi del modulo, ammessi in ogni spazio di team.
 var workTypes = []struct{ key, name, ext string }{
 	{TypeEpic, "Epic", ""},
@@ -74,9 +71,9 @@ type Service struct {
 // partenza, campo di query "sprint" e la reazione ai passaggi degli epic.
 func Register(eng *engine.Service) *Service {
 	s := &Service{eng: eng}
-	for _, t := range []string{TypeEpic, TypeStory, TypeTask, TypeBug} {
-		eng.Facts(t, s.itemFacts)
-	}
+	// Fatti dell'elemento di lavoro: per modulo, così valgono anche per i tipi creati dall'editor.
+	eng.FactsModule("work", s.itemFacts)
+	eng.Facts(TypeEpic, s.itemFacts)
 	eng.Facts(TypeSprint, s.sprintFacts)
 	eng.Facts(ImpactType, s.deliveryFacts)
 	eng.Facts(RequestType, s.deliveryFacts)
@@ -118,9 +115,7 @@ func describe(eng *engine.Service) {
 		{Key: "sprint", Name: "Sprint", Kind: "text"},
 		{Key: "ore_registrate", Name: "Ore registrate", Kind: "number"},
 	}
-	for _, t := range []string{TypeStory, TypeTask, TypeBug} {
-		eng.DescribeFacts(t, item...)
-	}
+	eng.DescribeFactsModule("work", item...)
 	eng.DescribeFacts(TypeEpic, append(item, engine.FactInfo{Key: "avanzamento", Name: "Avanzamento (% di story chiuse)", Kind: "number", Example: "100"})...)
 	eng.DescribeFacts(TypeSprint,
 		engine.FactInfo{Key: "inizio", Name: "Data di inizio", Kind: "date"},

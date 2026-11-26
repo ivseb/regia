@@ -22,7 +22,7 @@ import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
 import { loc } from "../i18n/format";
 import { useTypeNames } from "../typesApi";
-import { fmtPoints, workApi, type Backlog as BacklogData, type BacklogItem, type Burndown, type SprintView } from "../workApi";
+import { fmtPoints, workApi, type Backlog as BacklogData, type BacklogItem, type Burndown, type CreateType, type SprintView } from "../workApi";
 import { crumbs } from "../crumbs";
 
 export type BacklogSearch = { spazio?: string; q?: string };
@@ -233,7 +233,7 @@ export function Backlog({ search, onSearch }: { search: BacklogSearch; onSearch:
                 </div>
                 {s.goal && <p className="m-0 text-[12.5px] text-muted">{t("lavoro.backlog.goal", { goal: s.goal })}</p>}
                 <ItemList list={s.id} items={lists.get(s.id) ?? []} d={d} drop={drop} dnd={dnd} narrow={narrow} destinations={destinations} onMove={moveTo} />
-                {d.can_work && s.category !== "done" && <QuickAdd spaceKey={current} sprint={s.key} target={s.title} footer />}
+                {d.can_work && s.category !== "done" && <QuickAdd spaceKey={current} sprint={s.key} target={s.title} footer types={d.create_types} />}
               </section>
             ))}
             <section aria-label={t("lavoro.backlog.name")} className="flex flex-col gap-1.5">
@@ -243,7 +243,7 @@ export function Backlog({ search, onSearch }: { search: BacklogSearch; onSearch:
                   {lists.get(BACKLOG)?.length ?? 0}
                   {d.more && d.backlog_total ? ` / ${d.backlog_total}` : ""}
                 </span>
-                {d.can_work && <QuickAdd spaceKey={current} target={t("dafare.backlog.quickTop")} />}
+                {d.can_work && <QuickAdd spaceKey={current} target={t("dafare.backlog.quickTop")} types={d.create_types} />}
               </div>
               <ItemList list={BACKLOG} items={lists.get(BACKLOG) ?? []} d={d} drop={drop} dnd={dnd} narrow={narrow} destinations={destinations} onMove={moveTo} virtual />
               {d.more && (
@@ -260,7 +260,7 @@ export function Backlog({ search, onSearch }: { search: BacklogSearch; onSearch:
       )}
       {d?.can_work && <BulkBar ids={[...selection.sel]} space={current} onClear={selection.clear} />}
       {creating && d && (
-        <NewCard spaceKey={current} b={{ epics: d.epics, sprint: null }} sprint={undefined} sprints={d.sprints.filter((s) => s.category !== "done")} onClose={() => setCreating(false)} onCreated={() => refresh()} />
+        <NewCard spaceKey={current} b={{ epics: d.epics, sprint: null, create_types: d.create_types }} sprint={undefined} sprints={d.sprints.filter((s) => s.category !== "done")} onClose={() => setCreating(false)} onCreated={() => refresh()} />
       )}
       {newSprint && <SprintDialog spaceKey={current} onClose={() => setNewSprint(false)} />}
       {editing && <SprintDialog spaceKey={current} sprint={editing} onClose={() => setEditing(null)} />}
@@ -463,12 +463,15 @@ const Row = memo(function Row({
  * Creazione rapida in linea (ondata 2): tipo, titolo e Invio. In testa al backlog crea nel backlog; in fondo a
  * ogni sprint (`sprint`) crea già dentro lo sprint, senza trascinare l'elemento dopo.
  */
-function QuickAdd({ spaceKey, sprint, target, footer }: { spaceKey: string; sprint?: string; target: string; footer?: boolean }) {
+function QuickAdd({ spaceKey, sprint, target, footer, types }: { spaceKey: string; sprint?: string; target: string; footer?: boolean; types: CreateType[] }) {
   const t = useT();
   const tn = useTypeNames();
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
-  const [type, setType] = useState("story");
+  // Il rapido propone i tipi della board senza l'epic (che non sta negli sprint); il primo è quello di partenza.
+  const quick = types.filter((c) => c.key !== "epic");
+  const [picked, setType] = useState("");
+  const type = quick.some((c) => c.key === picked) ? picked : (quick[0]?.key ?? "story");
   const [done, setDone] = useState("");
   const add = useMutation({
     mutationFn: () => workApi.createItem(spaceKey, { type, title: title.trim(), sprint }),
@@ -487,12 +490,11 @@ function QuickAdd({ spaceKey, sprint, target, footer }: { spaceKey: string; spri
       }}
     >
       <Select aria-label={t("lavoro.backlog.type")} className="field w-auto py-1 text-[12.5px]" value={type} onChange={(e) => setType(e.target.value)}>
-        {/* i18n-ok: nome del tipo, riserva se la configurazione non è arrivata */}
-        <option value="story">{tn.name("story", "Story")}</option>
-        {/* i18n-ok: nome del tipo, riserva se la configurazione non è arrivata */}
-        <option value="bug">{tn.name("bug", "Bug")}</option>
-        {/* i18n-ok: nome del tipo, riserva se la configurazione non è arrivata */}
-        <option value="task">{tn.name("task", "Task")}</option>
+        {quick.map((c) => (
+          <option key={c.key} value={c.key}>
+            {tn.name(c.key, c.name)}
+          </option>
+        ))}
       </Select>
       <input
         aria-label={t("dafare.backlog.quickAria", { target })}

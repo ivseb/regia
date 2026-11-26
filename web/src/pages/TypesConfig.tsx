@@ -348,23 +348,27 @@ function TypeForm({ t, onClose }: { t: TypeConfig; onClose: () => void }) {
           )}
         </div>
       </section>
-      {!t.is_system && (
-        <section className="flex flex-col gap-2">
-          <SectionTitle>{t.archived ? tr("configurazione.types.tipoArchiviato") : tr("configurazione.common.archivia")}</SectionTitle>
-          <p className="m-0 text-[12.5px] text-muted">
-            {t.archived
-              ? tr("configurazione.types.ilTipoNonCompare")
-              : tr("configurazione.types.ilTipoSparisceDai")}
-          </p>
-          <ErrorNote error={archive.error} />
-          <div>
-            <button className={`btn ${t.archived ? "" : "btn-danger"}`} disabled={archive.isPending} onClick={() => archive.mutate(!t.archived)}>
-              {t.archived ? tr("configurazione.types.riattivaIlTipo") : tr("configurazione.types.archiviaIlTipo")}
-            </button>
-          </div>
-        </section>
-      )}
-      {t.is_system && <p className="m-0 text-[12px] text-muted">{tr("configurazione.types.unTipoDiSistema")}</p>}
+      {(() => {
+        // Un tipo di sistema si archivia solo se non ha elementi (epic e sprint, per esempio, dove non servono).
+        const blocked = t.is_system && !t.archived && t.elements > 0;
+        return (
+          <section className="flex flex-col gap-2">
+            <SectionTitle>{t.archived ? tr("configurazione.types.tipoArchiviato") : tr("configurazione.common.archivia")}</SectionTitle>
+            <p className="m-0 text-[12.5px] text-muted">
+              {t.archived
+                ? tr("configurazione.types.ilTipoNonCompare")
+                : tr("configurazione.types.ilTipoSparisceDai")}
+            </p>
+            {t.is_system && <p className="m-0 text-[12px] text-muted">{blocked ? tr("configurazione.tipiLavoro.sistemaConElementi", { count: t.elements }) : tr("configurazione.tipiLavoro.sistema")}</p>}
+            <ErrorNote error={archive.error} />
+            <div>
+              <button className={`btn ${t.archived ? "" : "btn-danger"}`} disabled={archive.isPending || blocked} onClick={() => archive.mutate(!t.archived)}>
+                {t.archived ? tr("configurazione.types.riattivaIlTipo") : tr("configurazione.types.archiviaIlTipo")}
+              </button>
+            </div>
+          </section>
+        );
+      })()}
     </>
   );
 }

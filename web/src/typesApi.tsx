@@ -164,3 +164,23 @@ export function useTypeNames() {
   const create = useCallback((key: string, fallback = key) => newLabel(name(key, fallback)), [name]);
   return { name, plural, lower, create, byKey, items: q.data?.items ?? [], ready: q.isSuccess };
 }
+
+const DEFAULT_WORK = ["epic", "story", "task", "bug"];
+const WORK_ORDER = ["story", "task", "bug", "epic"];
+
+/**
+ * I tipi del lavoro vengono dalla configurazione: quelli del modulo «work», sprint escluso.
+ * `keys` sono tutti (per riconoscere un elemento di lavoro anche se il tipo è archiviato), `creatable`
+ * solo quelli non archiviati, nell'ordine dei tipi di sistema e poi per nome. Finché la configurazione
+ * non è arrivata valgono i quattro di sempre.
+ */
+export function useWorkTypes() {
+  const tn = useTypeNames();
+  return useMemo(() => {
+    if (!tn.ready) return { ready: false, keys: DEFAULT_WORK, creatable: WORK_ORDER, isWork: (k: string) => DEFAULT_WORK.includes(k) };
+    const rank = (k: string) => (WORK_ORDER.includes(k) ? WORK_ORDER.indexOf(k) : 99);
+    const work = tn.items.filter((t) => t.module === "work" && t.key !== "sprint").sort((a, b) => rank(a.key) - rank(b.key) || a.name.localeCompare(b.name));
+    const keys = work.map((t) => t.key);
+    return { ready: true, keys, creatable: work.filter((t) => !t.archived).map((t) => t.key), isWork: (k: string) => keys.includes(k) };
+  }, [tn.items, tn.ready]);
+}

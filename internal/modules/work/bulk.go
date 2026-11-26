@@ -351,8 +351,10 @@ func (s *Service) bulkApply(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 		return s.bulkLabels(ctx, tx, actor, el, c)
 
 	case BulkSprint:
-		if el.TypeKey != TypeStory && el.TypeKey != TypeTask && el.TypeKey != TypeBug {
-			return nil, "", engine.InvalidCode("validation.work.bulk_sprint_types", "sprint", "solo story, task e bug si pianificano in uno sprint")
+		if ok, err := matchesTypes(ctx, tx, el.TypeID, el.TypeKey, []string{anyItem}); err != nil {
+			return nil, "", err
+		} else if !ok {
+			return nil, "", engine.InvalidCode("validation.work.bulk_sprint_types", "sprint", "solo gli elementi di lavoro (non epic né sprint) si pianificano in uno sprint")
 		}
 		target := strings.TrimSpace(c.Value)
 		if strings.EqualFold(target, "backlog") {
@@ -737,9 +739,12 @@ func (s *Service) BulkContext(ctx context.Context, tx pgx.Tx, actor engine.Actor
 	}
 	seen := map[string]bool{}
 	fieldIdx := map[string]int{}
-	types := []string{TypeStory, TypeTask, TypeBug, TypeEpic}
-	if requests {
-		types = []string{RequestType}
+	types := []string{RequestType}
+	if !requests {
+		var err error
+		if types, err = workItemTypes(ctx, tx, true); err != nil {
+			return nil, err
+		}
 	}
 	for _, tk := range types {
 		t, err := engine.LoadType(ctx, tx, tk)

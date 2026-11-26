@@ -71,6 +71,9 @@ export type Card = {
   tags?: Tag[];
 };
 
+/** Tipo che «Nuovo elemento» propone: nome, tipi ammessi come genitore e se ha il campo Punti. */
+export type CreateType = { key: string; name: string; color?: string; parents: string[]; points: boolean };
+
 export type Board = {
   space: Ref;
   team: string | null;
@@ -82,6 +85,8 @@ export type Board = {
   members: Record<string, string>;
   epics: Record<string, Ref>;
   priorities: Option[];
+  /** I tipi della board che si possono creare, nell'ordine della board. */
+  create_types: CreateType[];
   sprints: SprintRef[];
   sprint: SprintRef | null;
   can_manage: boolean;
@@ -127,6 +132,7 @@ export type Backlog = {
   can_manage: boolean;
   can_work: boolean;
   truncated: boolean;
+  create_types: CreateType[];
   /** Solo con la paginazione: totale del backlog (senza sprint) e se dopo le voci caricate ce ne sono altre. */
   backlog_total?: number;
   more?: boolean;

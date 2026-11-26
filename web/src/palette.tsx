@@ -13,7 +13,7 @@ import { MODULE_TYPES, moduleOn, pathVisible, type ModuleKey } from "./modules";
 import { buildNav } from "./nav";
 import { createKinds, useCurrentKey, useKindLabel, type CreateKind, type PaletteStart } from "./shortcuts";
 import { tr } from "./i18n/core";
-import { useTypeNames } from "./typesApi";
+import { useTypeNames, useWorkTypes } from "./typesApi";
 import { useT } from "./i18n/react";
 import { lookup } from "./i18n/core";
 
@@ -21,7 +21,6 @@ const RECENT_KEY = "regia.palette.recenti";
 // Tipi cercati dalla palette, nell'ordine in cui compaiono i gruppi dei risultati.
 const ALL_TYPES = ["business_request", "impact", "epic", "story", "task", "bug", "application", "logical_asset", "page", "capability", "risk", "incident", "ict_provider", "control", "evidence"];
 // Elementi di lavoro: ai quali si può assegnare con «Assegna a me».
-const WORK_TYPES = ["epic", "story", "task", "bug"];
 const KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,19}-[1-9][0-9]{0,17}$/;
 
 function readRecent(): string[] {
@@ -110,6 +109,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
   const me = useQuery({ queryKey: ["me"], queryFn: api.me }).data;
   const perms = me?.active_tenant?.permissions ?? [];
   const tn = useTypeNames();
+  const workTypes = useWorkTypes();
   const t = useT();
   const kindLabel = useKindLabel();
   const say = notify ?? (() => {});
@@ -264,7 +264,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
         }
       }
       if (only === "phase") return out;
-      if (WORK_TYPES.includes(d.element.type) && canWrite && match(t("tastiera.cmd.assignMe"), t("tastiera.kw.assign"))) {
+      if (workTypes.isWork(d.element.type) && canWrite && match(t("tastiera.cmd.assignMe"), t("tastiera.kw.assign"))) {
         out.push({ id: "assign-me", group: t("palette.group.actions"), label: t("tastiera.cmd.assignMe"), keyText: key, run: () => void assign(key) });
       }
       if (match(t("tastiera.cmd.copyLink"), t("tastiera.kw.copy"))) {
@@ -286,7 +286,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     }
     // Comandi: «+ Crea» per ogni tipo permesso e l'elenco delle scorciatoie.
     const cmd = t("tastiera.group.commands");
-    const kinds = createKinds(me);
+    const kinds = createKinds(me, workTypes.creatable);
     if (onCreate && kinds.length > 0) {
       if (match(t("tastiera.cmd.create"), t("tastiera.kw.create"))) {
         out.push({ id: "cmd-create", group: cmd, label: t("tastiera.cmd.create"), detail: t("tastiera.cmd.createDetail"), run: () => { onCreate(); onClose(); } });
@@ -307,7 +307,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     if (q.length >= 2) {
       for (const el of found.data?.items ?? []) {
         const more: Act[] = [];
-        if (WORK_TYPES.includes(el.type) && canWrite) more.push({ id: "assign", label: t("tastiera.act.assign"), run: () => void assign(el.key) });
+        if (workTypes.isWork(el.type) && canWrite) more.push({ id: "assign", label: t("tastiera.act.assign"), run: () => void assign(el.key) });
         more.push({ id: "copy", label: t("tastiera.act.copy"), run: () => void copyKeyLink(el.key) });
         out.push({
           id: `el-${el.id}`,
@@ -413,7 +413,7 @@ function Palette({ onClose, start, notify, onCreate, onHelp }: Omit<PaletteProps
     }
     return out;
     // go, move, follow, assign e openElement dipendono solo da valori già elencati.
-  }, [text, detail.data, watch.data, found.data, vulns.data, people.data, units.data, current, recent, perms.join(","), me, tn.byKey, navConfig, only]);
+  }, [text, detail.data, watch.data, found.data, vulns.data, people.data, units.data, current, recent, perms.join(","), me, tn.byKey, workTypes, navConfig, only]);
 
   const enabled = items.filter((i) => !i.disabled);
   const cur = enabled.length ? enabled[Math.min(active, enabled.length - 1)] : undefined;

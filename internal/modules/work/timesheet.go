@@ -427,10 +427,10 @@ func (s *Service) GetTimesheet(ctx context.Context, tx pgx.Tx, actor engine.Acto
 		select e.id::text, sp.key || '-' || e.number, e.title, t.key, coalesce(o.name, '')
 		from elements e
 		join spaces sp on sp.tenant_id = e.tenant_id and sp.id = e.space_id
-		join element_types t on t.tenant_id = e.tenant_id and t.id = e.type_id and t.key = any($2)
+		join element_types t on t.tenant_id = e.tenant_id and t.id = e.type_id and t.module = 'work' and t.key <> 'sprint'
 		left join options o on o.tenant_id = e.tenant_id and o.id = e.state_id
 		where e.assignee_id = $1 and e.deleted_at is null and not e.is_draft and coalesce(o.category, '') not in ('done', 'cancelled')
-		order by (coalesce(o.category, '') = 'in_progress') desc, e.updated_at desc limit 40`, memberID, []string{TypeEpic, TypeStory, TypeTask, TypeBug})
+		order by (coalesce(o.category, '') = 'in_progress') desc, e.updated_at desc limit 40`, memberID)
 	if err != nil {
 		return nil, err
 	}

@@ -11,10 +11,9 @@ import { ErrorNote } from "../ui";
 import { ProgressBar, TimeLogForm } from "./work-ui";
 import { fmtMinutes, workApi } from "../workApi";
 import { useT } from "../i18n/react";
+import { useWorkTypes } from "../typesApi";
 import { loc } from "../i18n/format";
 
-const WORK_TYPES = ["epic", "story", "task", "bug"];
-const DELIVERY_TYPES = ["business_request", "impact", ...WORK_TYPES];
 
 function Side({ title, aside, open = true, children }: { title: string; aside?: ReactNode; open?: boolean; children: ReactNode }) {
   return (
@@ -35,11 +34,12 @@ function Side({ title, aside, open = true, children }: { title: string; aside?: 
 export function WorkSidebar({ detail, narrow }: { detail: ElementDetail; narrow: boolean }) {
   const el = detail.element;
   const key = el.key || el.id;
-  if (!DELIVERY_TYPES.includes(el.type)) return null;
+  const workTypes = useWorkTypes();
+  if (!["business_request", "impact"].includes(el.type) && !workTypes.isWork(el.type)) return null;
   return (
     <>
       <DeliveryBlock refKey={key} detail={detail} open={!narrow} />
-      {WORK_TYPES.includes(el.type) && <TimeBlock refKey={key} open={!narrow} />}
+      {workTypes.isWork(el.type) && <TimeBlock refKey={key} open={!narrow} />}
     </>
   );
 }

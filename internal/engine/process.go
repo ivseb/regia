@@ -19,6 +19,12 @@ func (s *Service) Facts(typeKey string, fn FactsFunc) {
 	s.hooks.Facts[typeKey] = append(s.hooks.Facts[typeKey], fn)
 }
 
+// FactsModule registra il fornitore di fatti per tutti i tipi di un modulo che non ne hanno di
+// propri (registrati per chiave con Facts): vale anche per i tipi creati dopo dall'editor.
+func (s *Service) FactsModule(module string, fn FactsFunc) {
+	s.hooks.ModuleFacts[module] = append(s.hooks.ModuleFacts[module], fn)
+}
+
 // ElementFacts raccoglie i fatti su cui si valutano condizioni, gate e regole:
 //   - tipo, stato, categoria, spazio;
 //   - i campi personalizzati, per chiave (opzioni, persone e gruppi per nome, elementi per
@@ -62,7 +68,14 @@ func (s *Service) ElementFacts(ctx context.Context, tx pgx.Tx, el *Element) (Fac
 	for k, v := range roles {
 		f.Set("ruolo."+k, v...)
 	}
-	for _, fn := range s.hooks.Facts[el.TypeKey] {
+	fns := s.hooks.Facts[el.TypeKey]
+	if len(fns) == 0 && len(s.hooks.ModuleFacts) > 0 {
+		var module string
+		if err := tx.QueryRow(ctx, "select module from element_types where id = $1", el.TypeID).Scan(&module); err == nil {
+			fns = s.hooks.ModuleFacts[module]
+		}
+	}
+	for _, fn := range fns {
 		if err := fn(ctx, tx, el, f); err != nil {
 			return nil, err
 		}
