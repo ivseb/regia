@@ -27,10 +27,10 @@ func TestTenantModules(t *testing.T) {
 	admin := login(t, e.srv.URL, "admin@"+e.slug+".test", testPassword)
 	utente := e.member("utente", tenant.MemberInput{Roles: []string{"viewer"}})
 
-	// Di partenza: sei moduli, tutti accesi, anche in /me.
+	// Di partenza: sette moduli, tutti accesi, anche in /me.
 	got := admin.do("GET", "/api/v1/tenant/modules", nil, http.StatusOK)
 	items, _ := got["items"].([]any)
-	if len(items) != 6 {
+	if len(items) != 7 {
 		t.Fatalf("moduli: %v", got)
 	}
 	for _, it := range items {
