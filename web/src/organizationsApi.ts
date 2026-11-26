@@ -9,6 +9,7 @@ export type OrgRow = {
   base_currency: string;
   members: number;
   created_at: string;
+  status: "active" | "suspended" | "offboarding";
 };
 
 export type NewOrg = { name: string; slug: string; language: "it" | "en"; base_currency: string; admin_email?: string };
@@ -25,4 +26,7 @@ export type NewOrgResult = {
 export const organizationsApi = {
   list: () => call<{ items: OrgRow[] }>("GET", "/platform/tenants"),
   create: (body: NewOrg) => call<NewOrgResult>("POST", "/platform/tenants", body),
+  rename: (id: string, name: string) => call<{ id: string; name: string }>("PATCH", `/platform/tenants/${id}`, { name }),
+  suspend: (id: string) => call<{ id: string; status: string }>("POST", `/platform/tenants/${id}/suspend`),
+  reactivate: (id: string) => call<{ id: string; status: string }>("POST", `/platform/tenants/${id}/reactivate`),
 };

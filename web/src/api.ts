@@ -3,7 +3,10 @@ import type { QDefinition, QEvaluation } from "./condition";
 import type { FieldView } from "./fieldsApi";
 import { errorText } from "./i18n/core";
 
-export type Membership = { tenant_id: string; slug: string; name: string; member_id: string; member_type: string };
+export type Membership = { tenant_id: string; slug: string; name: string; member_id: string; member_type: string;
+  /** Stato dell'organizzazione: solo «active» si può usare; «suspended» la sospende il superamministratore. */
+  status?: "active" | "suspended" | "offboarding";
+};
 
 export type LanguageInfo = {
   effective: "it" | "en";

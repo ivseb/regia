@@ -8,6 +8,7 @@ import { api } from "../api";
 import { organizationsApi, type NewOrgResult, type OrgRow } from "../organizationsApi";
 import { Select } from "../select";
 import { PageHeader, useMe } from "../shell";
+import { ConfirmButton } from "./adminUi";
 import { ErrorNote, Loading, SectionTitle, date } from "../ui";
 import { useT, useLang } from "../i18n/react";
 import { LANGUAGES, isLang } from "../i18n/languages";
@@ -73,27 +74,98 @@ export function OrganizationsPage() {
 
 function Row({ org, member }: { org: OrgRow; member: boolean }) {
   const t = useT();
+  const qc = useQueryClient();
   const enter = useEnter("/configurazione/avvio");
   const me = useMe();
   const current = me.data?.active_tenant?.tenant_id === org.id;
+  const suspended = org.status !== "active";
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(org.name);
+  const nameId = useId();
+  // Dopo ogni modifica si ricarica l'elenco e il profilo (il selettore dell'organizzazione ne dipende).
+  const done = () => {
+    qc.invalidateQueries({ queryKey: ["platform-tenants"] });
+    qc.invalidateQueries({ queryKey: ["me"] });
+  };
+  const rename = useMutation({
+    mutationFn: () => organizationsApi.rename(org.id, name),
+    onSuccess: () => {
+      setEditing(false);
+      done();
+    },
+  });
+  const suspend = useMutation({ mutationFn: () => organizationsApi.suspend(org.id), onSuccess: done });
+  const reactivate = useMutation({ mutationFn: () => organizationsApi.reactivate(org.id), onSuccess: done });
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hair py-3" data-testid={`org-${org.slug}`}>
-      <div className="flex min-w-0 flex-1 basis-56 flex-col">
-        <span className="min-w-0 [overflow-wrap:anywhere] font-semibold">{org.name}</span>
-        <span className="font-mono text-[12px] text-muted">{org.slug}</span>
+    <li className="flex flex-col gap-2 border-b border-hair py-3" data-testid={`org-${org.slug}`}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="flex min-w-0 flex-1 basis-56 flex-col">
+          {editing ? (
+            <form
+              className="flex flex-wrap items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                rename.mutate();
+              }}
+            >
+              <input
+                id={nameId}
+                className="field min-w-0 flex-1 basis-48"
+                aria-label={t("organizzazioni.rinomina.nome", { name: org.name })}
+                required
+                maxLength={120}
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <button type="submit" className="btn btn-primary" disabled={rename.isPending || !name.trim()}>{t("organizzazioni.rinomina.salva")}</button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setEditing(false);
+                  setName(org.name);
+                  rename.reset();
+                }}
+              >
+                {t("organizzazioni.rinomina.annulla")}
+              </button>
+            </form>
+          ) : (
+            <span className="min-w-0 [overflow-wrap:anywhere] font-semibold">{org.name}</span>
+          )}
+          <span className="font-mono text-[12px] text-muted">{org.slug}</span>
+        </div>
+        <span className={`text-[12.5px] ${suspended ? "font-semibold text-fg" : "text-muted"}`} data-testid={`org-stato-${org.slug}`} aria-label={t("organizzazioni.stato.etichetta")}>
+          {suspended ? t("organizzazioni.stato.sospesa") : t("organizzazioni.stato.attiva")}
+        </span>
+        <span className="text-[12.5px] text-muted">
+          {LANGUAGES.find((l) => l.key === org.language)?.name} · {org.base_currency} · {t("organizzazioni.elenco.persone", { count: org.members })} · {date(org.created_at)}
+        </span>
       </div>
-      <span className="text-[12.5px] text-muted">
-        {LANGUAGES.find((l) => l.key === org.language)?.name} · {org.base_currency} · {t("organizzazioni.elenco.persone", { count: org.members })} · {date(org.created_at)}
-      </span>
-      {current ? (
-        <span className="text-[12.5px] font-semibold">{t("organizzazioni.elenco.attiva")}</span>
-      ) : member ? (
-        <button className="btn" disabled={enter.isPending} onClick={() => enter.mutate(org.id)}>
-          {t("organizzazioni.entra")}
-        </button>
-      ) : (
-        <span className="text-[12.5px] text-muted">{t("organizzazioni.elenco.nonMembro")}</span>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {current ? (
+          <span className="text-[12.5px] font-semibold">{t("organizzazioni.elenco.attiva")}</span>
+        ) : member && !suspended ? (
+          <button className="btn" disabled={enter.isPending} onClick={() => enter.mutate(org.id)}>
+            {t("organizzazioni.entra")}
+          </button>
+        ) : !member ? (
+          <span className="text-[12.5px] text-muted">{t("organizzazioni.elenco.nonMembro")}</span>
+        ) : null}
+        {!editing && (
+          <button className="btn" onClick={() => setEditing(true)}>{t("organizzazioni.rinomina")}</button>
+        )}
+        {suspended ? (
+          <button className="btn" disabled={reactivate.isPending} onClick={() => reactivate.mutate()}>{t("organizzazioni.riattiva")}</button>
+        ) : current ? (
+          <span className="text-[12.5px] text-muted">{t("organizzazioni.sospendi.stessa")}</span>
+        ) : (
+          <ConfirmButton label={t("organizzazioni.sospendi")} confirm={t("organizzazioni.sospendi.sicuro")} danger pending={suspend.isPending} onConfirm={() => suspend.mutate()} />
+        )}
+      </div>
+      {!suspended && !current && <span className="text-[12.5px] text-muted">{t("organizzazioni.sospendi.effetto")}</span>}
+      <ErrorNote error={rename.error ?? suspend.error ?? reactivate.error ?? enter.error} />
     </li>
   );
 }

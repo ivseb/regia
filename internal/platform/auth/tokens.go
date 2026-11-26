@@ -199,6 +199,7 @@ func (s *Service) AuthenticateToken(ctx context.Context, raw string) (*Principal
 		return nil, err
 	}
 	// Un token non porta mai i poteri di amministratore di piattaforma, e vede solo il suo tenant.
+	m.Status = "active" // api_token_use restituisce solo token di organizzazioni attive
 	p.Tenants = []Membership{m}
 	if err := s.loadTenant(ctx, p, m); err != nil {
 		return nil, err

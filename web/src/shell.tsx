@@ -18,6 +18,7 @@ import { useT } from "./i18n/react";
 import { Logo, SourceLink } from "./brand";
 import { AvvioStrip } from "./pages/AvvioStrip";
 import { ProvaBar } from "./pages/ProvaBar";
+import { OrganizationSuspended } from "./pages/OrganizationSuspended";
 import { tr } from "./i18n/core";
 import type { Key } from "./i18n/core";
 
@@ -86,6 +87,8 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
   const canCreate = createKinds(me).length > 0;
   const openCreate = useCallback((kind?: CreateKind) => setCreating({ kind }), []);
   const tenantName = me.tenants.find((t) => t.tenant_id === me.active_tenant?.tenant_id)?.name ?? me.tenants[0]?.name ?? "Regia";
+  // Organizzazioni sospese: se l'account non ne ha di attive, la pagina lo dice invece di un errore generico.
+  const suspendedOrgs = me.tenants.filter((o) => o.status && o.status !== "active");
   const switchTenant = useMutation({
     mutationFn: api.switchTenant,
     onSuccess: (m) => {
@@ -186,7 +189,9 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
               onChange={(e) => switchTenant.mutate(e.target.value)}
             >
               {me.tenants.map((t) => (
-                <option key={t.tenant_id} value={t.tenant_id}>{t.name}</option>
+                <option key={t.tenant_id} value={t.tenant_id} disabled={!!t.status && t.status !== "active"}>
+                  {t.status && t.status !== "active" ? tr("organizzazioni.sospesaTra", { name: t.name }) : t.name}
+                </option>
               ))}
             </Select>
           ) : (
@@ -245,7 +250,14 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
       </nav>
       <main id="contenuto" tabIndex={-1} data-modulo={uiModuleOfPath(path)} className={`flex min-w-0 flex-1 flex-col outline-none ${canCreate ? "max-md:pb-20" : ""}`}>
         {!me.active_tenant ? (
-          <p className="p-8 text-muted">{t("shell.noActiveOrg")}</p>
+          // Le pagine di piattaforma restano raggiungibili al superamministratore anche senza organizzazione attiva.
+          me.is_platform_admin && path.startsWith("/piattaforma/") ? (
+            <PageEnter path={path}>{children}</PageEnter>
+          ) : suspendedOrgs.length > 0 ? (
+            <OrganizationSuspended names={suspendedOrgs.map((o) => o.name)} />
+          ) : (
+            <p className="p-8 text-muted">{t("shell.noActiveOrg")}</p>
+          )
         ) : pathOn(me, path) ? (
           <>
             <ProvaBar />

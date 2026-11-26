@@ -642,6 +642,10 @@ func (s *Server) switchTenant(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		writeProblem(w, r, http.StatusForbidden, "tenant.not_member", err.Error())
 		return
 	}
+	if errors.Is(err, auth.ErrTenantSuspended) {
+		writeProblem(w, r, http.StatusForbidden, "tenant.suspended", err.Error())
+		return
+	}
 	if err != nil {
 		s.internal(w, r, err)
 		return
