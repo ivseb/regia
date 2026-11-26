@@ -31,6 +31,7 @@ Richieste di esempio in varie fasi dello stage-gate: `scripts/dev-demo-data.sh h
 - [Cabina di portafoglio](sviluppo/cabina-portafoglio.md): graduatoria, budget dal plafond, capacità e roadmap insieme, scenari, pacchetto della seduta e verbale.
 - [Ambiente di prova](sviluppo/ambiente-prova.md): tenant di prova collegato, differenze e promozione selettiva.
 - [Primo avvio guidato](sviluppo/primo-avvio.md): «Inizia da qui», modelli per tipo di azienda (banca/assicurazione), cosa è applicato e ripristino, stati vuoti.
+- [Modello «Persona sola / home lab»](sviluppo/modello-persona-sola.md): in un passo moduli, tipi Attività/Bug/Idea, flusso a quattro fasi, solo la priorità e una board kanban senza sprint con la chiave scelta.
 - [Regole a frase](sviluppo/regole-frase.md): «Quando… solo se… allora…» nell'editor dei processi e «Quando si apre» nelle valutazioni.
 - [Catalogo del portale](sviluppo/catalogo-portale.md): voci di catalogo, editor visivo del modulo, instradamento, richieste simili e una bozza per voce.
 - [Percorso della richiesta](sviluppo/percorso-richiesta.md): dove siamo, chi è coinvolto, catena richiesta → impatti → epic → story, cosa succede dopo, «Cosa faccio adesso» e termini spiegati.
@@ -39,10 +40,12 @@ Richieste di esempio in varie fasi dello stage-gate: `scripts/dev-demo-data.sh h
 - [Versioni in vigore](sviluppo/versioni-vigore.md): data di entrata in vigore e di fine, deprecazione, regola di transizione per fase con anteprima, guide allegate; componente riusabile per gli altri moduli.
 - [Organizzazioni](sviluppo/organizzazioni.md): il superamministratore dell'istanza crea organizzazioni dall'interfaccia e ci entra; comando `regia platform-admin`.
 - [Board per team](sviluppo/board-team.md): colonne proprie con più fasi, WIP, corsie, modelli Scrum/Kanban/Supporto.
+- [Tipi del lavoro](sviluppo/tipi-lavoro.md): board, backlog e «Il mio lavoro» per ogni tipo del modulo work, «Nuovo elemento» con i tipi e i campi della board, tipi di sistema archiviabili senza elementi.
 - [Lavoro](sviluppo/lavoro.md): pianificazione e tempo, commenti e notifiche, work management, import, viste salvate, «Da fare», etichette nelle liste (`etichetta:`) e board paginata con tutti gli sprint.
 - [Timesheet nel motore delle approvazioni](sviluppo/timesheet-approvazioni.md): settimana inviata come richiesta `timesheet` in «Le mie approvazioni», deleghe, notifiche di invio ed esito.
 - [Requisiti e gate di rilascio](sviluppo/requisiti.md): requisiti, verifica, deroghe, gate; requisiti veri dalle regole dei questionari (origine `questionnaire`).
 - [DevSecOps](sviluppo/devsecops.md): vulnerabilità, connettori GitHub, GitLab e Gitea ([guida Gitea](devsecops-gitea.md)), gate, politica della pipeline, DORA.
+- [Commit collegati agli elementi](sviluppo/commit-elementi.md): commit e PR unite di GitHub e Gitea con le chiavi degli spazi (`HL-12`), blocco «Codice» nella scheda, lead time DORA dal primo commit.
 - [Knowledge](sviluppo/knowledge.md): documenti della knowledge base.
 - [Editor Knowledge a blocchi](sviluppo/knowledge-blocchi.md): blocchi sopra il Markdown, «/», maniglia, pannello «evidenza di…», nota clean-room.
 - [Rischi, conformità e crisi](sviluppo/grc.md): rischi, fornitori ICT, incidenti, conformità, vista di crisi.

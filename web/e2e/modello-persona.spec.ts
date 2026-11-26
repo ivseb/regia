@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import { call, login } from "./fixtures";
 
-test("persona sola: un passo da «Inizia da qui» alla board con una card Attività", async ({ page }) => {
+test("persona sola: un passo da «Inizia da qui» alla board con Attività e Idea", async ({ page }) => {
   await login(page, "admin");
   const id = Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
   const slug = `persona-${id}`;
@@ -54,6 +54,18 @@ test("persona sola: un passo da «Inizia da qui» alla board con una card Attivi
   const card = page.getByRole("article", { name: /Prima attività del laboratorio$/ });
   await expect(card).toBeVisible();
   await expect(page.getByRole("group", { name: "Da fare: 1 elemento" })).toBeVisible();
+
+  // Anche Idea va sulla board; Story ed Epic (archiviati) e i Punti (tolti) non si propongono.
+  await page.getByRole("button", { name: "Nuovo elemento" }).click();
+  const d2 = page.getByRole("dialog");
+  await expect(d2.getByRole("radio", { name: "Story" })).toHaveCount(0);
+  await expect(d2.getByRole("radio", { name: "Epic" })).toHaveCount(0);
+  await d2.getByRole("radio", { name: "Idea" }).click();
+  await expect(d2.getByRole("textbox", { name: /Punti/ })).toHaveCount(0);
+  await d2.getByRole("textbox", { name: /Titolo/ }).fill("Prima idea del laboratorio");
+  await d2.getByRole("button", { name: "Crea" }).click();
+  await expect(page.getByRole("article", { name: /Prima idea del laboratorio$/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Da fare: 2 elementi" })).toBeVisible();
 
   // Riapplicarlo non duplica niente (via API: anteprima senza oggetti nuovi).
   const dopo = await call(page.request, "GET", `/api/v1/avvio/modelli/persona_sola?board_key=${chiave}&team_name=${encodeURIComponent("Home lab")}`);

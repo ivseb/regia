@@ -142,14 +142,14 @@ func TestGiteaConnector(t *testing.T) {
 		t.Fatalf("scoperta: %v", res)
 	}
 	repos := map[string]map[string]any{}
-	for _, it := range admin.do("GET", gtAPI+"/integrations/"+id+"/repos", nil, http.StatusOK)["items"].([]any) {
+	for _, it := range admin.do("GET", gtAPI+"/integrations/"+id+"/repositories", nil, http.StatusOK)["items"].([]any) {
 		r := it.(map[string]any)
 		repos[r["full_name"].(string)] = r
 	}
 	if repos["acme/ordini"]["status"] != "suggested" || repos["acme/strumenti"]["status"] != "none" {
 		t.Fatalf("proposte: %v", repos)
 	}
-	admin.do("POST", gtAPI+"/integrations/"+id+"/repos/accept", map[string]any{"ids": []string{repos["acme/ordini"]["id"].(string)}}, http.StatusOK)
+	admin.do("POST", gtAPI+"/integrations/"+id+"/repositories/accept", map[string]any{"ids": []string{repos["acme/ordini"]["id"].(string)}}, http.StatusOK)
 	ing.take()
 
 	sync := func() map[string]any {
