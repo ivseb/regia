@@ -48,6 +48,7 @@ func (s *Service) List(ctx context.Context, tx pgx.Tx, actor engine.Actor, inclu
 		return nil, err
 	}
 	out := make([]Summary, 0, len(ids))
+	rd := s.reader(actor)
 	for _, id := range ids {
 		el, err := s.eng.Get(ctx, tx, actor, id)
 		if err != nil {
@@ -60,6 +61,16 @@ func (s *Service) List(ctx context.Context, tx pgx.Tx, actor engine.Actor, inclu
 		n, err := s.numbersOf(ctx, tx, actor, p, false)
 		if err != nil {
 			return nil, err
+		}
+		// Nell'elenco serve solo il titolo della prossima milestone: si controlla quella, non tutto il piano.
+		if nm := n.NextMilestone; nm != nil {
+			ok, err := rd.can(ctx, tx, nm.ID)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				nm.Title, nm.Team, nm.Restricted = "", nil, true
+			}
 		}
 		sm := Summary{ID: el.ID, Key: el.Key, Title: el.Title, State: el.State, StateCategory: el.StateCategory,
 			Template: p.Project.Template, Requests: len(p.Project.Requests), Progress: n.Progress, Signal: n.Signal,

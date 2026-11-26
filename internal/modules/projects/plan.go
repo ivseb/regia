@@ -37,6 +37,8 @@ type RequestRef struct {
 	Key   string `json:"key"`
 	Title string `json:"title"`
 	State string `json:"state"`
+	// Restricted: richiesta che l'attore non può leggere (senza titolo né stato).
+	Restricted bool `json:"restricted,omitempty"`
 }
 
 // Ref è un riferimento leggibile.
@@ -89,8 +91,10 @@ type Item struct {
 	Progress      float64        `json:"progress"`        // 0..100
 	ProgressFrom  string         `json:"progress_source"` // epics | activities | declared | state | none
 	Capacity      float64        `json:"team_capacity"`
-	declared      *float64       // ultima percentuale dichiarata (work package senza epic)
-	epicProgress  *work.Progress // avanzamento degli epic (work package agile)
+	// Restricted: l'attore non può leggere la voce; restano date, avanzamento e dipendenze.
+	Restricted   bool           `json:"restricted,omitempty"`
+	declared     *float64       // ultima percentuale dichiarata (work package senza epic)
+	epicProgress *work.Progress // avanzamento degli epic (work package agile)
 }
 
 // Plan è il piano del progetto.
@@ -121,6 +125,9 @@ func (s *Service) GetPlan(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 	}
 	p, err := s.loadPlan(ctx, tx, el)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.limitPlan(ctx, tx, actor, p, nil); err != nil {
 		return nil, err
 	}
 	if p.CanEdit, err = canPlan(ctx, tx, actor, el.ID); err != nil {
@@ -226,7 +233,11 @@ func (s *Service) loadPlan(ctx context.Context, tx pgx.Tx, el *engine.Element) (
 	if err != nil {
 		return nil, err
 	}
-	if h.Requests, err = pgx.CollectRows(rows, pgx.RowToStructByPos[RequestRef]); err != nil {
+	if h.Requests, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (RequestRef, error) {
+		var rq RequestRef
+		err := r.Scan(&rq.ID, &rq.Key, &rq.Title, &rq.State)
+		return rq, err
+	}); err != nil {
 		return nil, err
 	}
 	var reg, desired *time.Time

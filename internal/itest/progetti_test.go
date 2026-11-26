@@ -336,4 +336,34 @@ func TestProjects(t *testing.T) {
 	}
 	// Permessi: il referente del team (sola lettura) non modifica il piano.
 	lead.do("POST", "/api/v1/projects/"+hk+"/items", map[string]any{"kind": "milestone", "title": "X"}, http.StatusForbidden)
+
+	// Visibilità per elemento: lo spazio del team diventa riservato. Chi non ci ha un ruolo vede
+	// ancora il work package e i numeri del progetto, ma non l'epic che sta nello spazio riservato.
+	if err := d.InTenant(ctx, ten.TenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `update spaces set settings = settings || '{"access":"restricted"}' where key = $1`, space)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	epicsOf := func(c *user) []any {
+		for _, it := range c.do("GET", "/api/v1/projects/"+projKey+"/plan", nil, http.StatusOK)["items"].([]any) {
+			if m := it.(map[string]any); m["id"] == wpFE["id"] {
+				return m["epics"].([]any)
+			}
+		}
+		t.Fatal("work package del frontend assente dal piano")
+		return nil
+	}
+	if n := len(epicsOf(admin)); n != 1 {
+		t.Fatalf("epic per l'amministratore: %d", n)
+	}
+	if n := len(epicsOf(sponsor)); n != 0 {
+		t.Fatalf("epic nello spazio riservato visibile allo sponsor: %d", n)
+	}
+	if v := sponsor.do("GET", "/api/v1/plan-items/"+wpFE["id"].(string), nil, http.StatusOK); len(v["epics"].([]any)) != 0 || v["progress"] != 50.0 {
+		t.Fatalf("voce vista dallo sponsor: epic %v avanzamento %v", v["epics"], v["progress"])
+	}
+	if ov := sponsor.do("GET", "/api/v1/projects/"+projKey+"/overview", nil, http.StatusOK)["numbers"].(map[string]any); ov["progress"] != 33.3 {
+		t.Fatalf("avanzamento visto dallo sponsor: %v", ov["progress"])
+	}
 }

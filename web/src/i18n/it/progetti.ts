@@ -3,6 +3,7 @@
 import type { Source } from "../types";
 
 export default {
+  "progetti.restricted": "Voce riservata",
   "progetti.tab.overview": "Panoramica",
   "progetti.tab.workPackages": "Work package",
   "progetti.tab.milestones": "Milestone",

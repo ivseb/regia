@@ -233,6 +233,8 @@ type ItemRef struct {
 	Team     *string `json:"team"`
 	Progress float64 `json:"progress"`
 	State    string  `json:"state"`
+	// Restricted: voce che l'attore non può leggere (senza titolo né team).
+	Restricted bool `json:"restricted,omitempty"`
 }
 
 // Blocked è una voce che aspetta un predecessore non chiuso (waiting) o che non rispetta
@@ -254,7 +256,7 @@ type Budget struct {
 }
 
 func ref(it *Item) ItemRef {
-	return ItemRef{ID: it.ID, Key: it.Key, Title: it.Title, Kind: it.Kind, Team: it.Team, Progress: it.Progress, State: it.State, Date: it.End}
+	return ItemRef{ID: it.ID, Key: it.Key, Title: it.Title, Kind: it.Kind, Team: it.Team, Progress: it.Progress, State: it.State, Date: it.End, Restricted: it.Restricted}
 }
 
 func parse(s *string) *time.Time {
@@ -443,6 +445,9 @@ func (s *Service) Numbers(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := s.limitPlan(ctx, tx, actor, p, nil); err != nil {
+		return nil, nil, err
+	}
 	if p.CanEdit, err = canPlan(ctx, tx, actor, el.ID); err != nil {
 		return nil, nil, err
 	}
@@ -497,6 +502,9 @@ func (s *Service) numbersOf(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 		err := r.Scan(&ir.ID, &ir.Key, &ir.Title, &ir.State)
 		return ir, err
 	}); err != nil {
+		return nil, err
+	}
+	if n.Risks, err = limitRefs(ctx, tx, s.reader(actor), n.Risks); err != nil {
 		return nil, err
 	}
 	if withBudget && s.Budget != nil && len(reqIDs) > 0 {

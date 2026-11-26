@@ -691,6 +691,9 @@ func (s *Service) ItemView(ctx context.Context, tx pgx.Tx, actor engine.Actor, i
 	if err != nil {
 		return nil, err
 	}
+	if err := s.limitPlan(ctx, tx, actor, p, nil); err != nil {
+		return nil, err
+	}
 	out := &ItemView{Project: Ref{ID: proj.ID, Key: proj.Key, Title: proj.Title}}
 	for _, it := range p.Items {
 		if it.ID == el.ID {

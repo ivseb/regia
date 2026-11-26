@@ -4,6 +4,7 @@
 // dipendenze fs/ss/ff con ritardo in giorni lavorativi. I numeri (avanzamento pesato, ritardi,
 // dipendenze bloccate, budget) li calcola il server con una sola funzione: qui si mostrano.
 import { call, type Element } from "./api";
+import { tr } from "./i18n/core";
 
 const q = encodeURIComponent;
 
@@ -15,7 +16,7 @@ export type Signal = "green" | "amber" | "red" | "none";
 export type GateStatus = "open" | "pending" | "approved" | "rejected";
 
 export type Ref = { id: string; key: string; title: string };
-export type RequestRef = Ref & { state: string };
+export type RequestRef = Ref & { state: string; restricted?: boolean };
 
 export type ProjectHead = {
   id: string;
@@ -80,6 +81,8 @@ export type PlanItem = {
   progress: number;
   progress_source: "epics" | "activities" | "declared" | "state" | "none";
   team_capacity: number;
+  /** L'attore non può leggere la voce: restano date, avanzamento e dipendenze. */
+  restricted?: boolean;
 };
 
 export type ProjectPlan = {
@@ -100,6 +103,7 @@ export type ItemRef = {
   team: string | null;
   progress: number;
   state: string;
+  restricted?: boolean;
 };
 
 export type Blocked = { item: ItemRef; waits_on: ItemRef; reason: "waiting" | "violated"; dep_kind: DepKind };
@@ -229,11 +233,28 @@ export type ItemPatch = Partial<{
   contractual: boolean;
 }>;
 
+// Le voci che l'attore non può leggere arrivano senza titolo: qui prendono un'etichetta.
+function veil<T extends { title: string; restricted?: boolean }>(x: T): T {
+  return x.restricted ? { ...x, title: tr("progetti.restricted") } : x;
+}
+const veilHead = (h: ProjectHead): ProjectHead => ({ ...h, requests: h.requests.map(veil) });
+const veilNumbers = (n: Numbers): Numbers => ({
+  ...n,
+  late: n.late.map(veil),
+  blocked: n.blocked.map((b) => ({ ...b, item: veil(b.item), waits_on: veil(b.waits_on) })),
+  next_milestone: n.next_milestone && veil(n.next_milestone),
+});
+
 export const projectsApi = {
-  list: (closed = false) => call<{ items: ProjectSummary[] }>("GET", `/projects${closed ? "?closed=true" : ""}`),
+  list: (closed = false) =>
+    call<{ items: ProjectSummary[] }>("GET", `/projects${closed ? "?closed=true" : ""}`).then((r) => ({
+      items: r.items.map((p) => ({ ...p, next_milestone: p.next_milestone && veil(p.next_milestone) })),
+    })),
   create: (p: NewProject) => call<Element>("POST", "/projects", p),
-  plan: (ref: string) => call<ProjectPlan>("GET", `/projects/${q(ref)}/plan`),
-  overview: (ref: string) => call<Overview>("GET", `/projects/${q(ref)}/overview`),
+  plan: (ref: string) =>
+    call<ProjectPlan>("GET", `/projects/${q(ref)}/plan`).then((p) => ({ ...p, project: veilHead(p.project), items: p.items.map(veil) })),
+  overview: (ref: string) =>
+    call<Overview>("GET", `/projects/${q(ref)}/overview`).then((o) => ({ ...o, project: veilHead(o.project), numbers: veilNumbers(o.numbers) })),
   autoPlan: (ref: string, replan = false, from?: string) => call<{ changes: Change[] }>("POST", `/projects/${q(ref)}/plan/auto`, { replan, ...(from ? { from } : {}) }),
   createItem: (ref: string, it: NewItem) => call<PlanItemView>("POST", `/projects/${q(ref)}/items`, it),
   createPhase: (ref: string, p: { name: string; gate_enabled?: boolean; ordinal?: number }) => call<Phase>("POST", `/projects/${q(ref)}/phases`, p),
