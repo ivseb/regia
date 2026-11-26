@@ -1,6 +1,7 @@
 // Budget di progetto collegato a un nodo dell'albero (replica/budget.md §2, «Collegamento con i budget di progetto»):
 // il campo «Attinge da» nel budget di un elemento, con il residuo del nodo e quanto il budget ne userebbe,
 // e l'elenco dei budget che attingono da un nodo nel suo pannello.
+import { useId } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { budgetApi, type AllocationNode, type BudgetKind, type ElementAllocation } from "../../api";
@@ -37,6 +38,7 @@ export function BudgetSource({ cur, canWrite, lines, kind, budget, element, fisc
   const t = useT();
   const qc = useQueryClient();
   const edit = !!budget;
+  const labelId = useId();
   const opts = useQuery({
     queryKey: ["budget", "element-allocations", budget?.id ?? element ?? "", fiscalYear ?? ""],
     queryFn: () => (budget ? budgetApi.elementAllocations({ budget_id: budget.id }) : budgetApi.elementAllocations({ element_id: element, fiscal_year_id: fiscalYear })),
@@ -65,10 +67,10 @@ export function BudgetSource({ cur, canWrite, lines, kind, budget, element, fisc
   return (
     <section className="flex flex-col gap-2" aria-label={t("budget.link.label")} data-linked={selectedId ? "yes" : "no"}>
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="label text-muted" id="budget-link-label">{t("budget.link.label")}</span>
+        <span className="label text-muted" id={labelId}>{t("budget.link.label")}</span>
         {editable ? (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 flex-1 sm:max-w-md" aria-labelledby="budget-link-label">
+            <div className="min-w-0 flex-1 sm:max-w-md" aria-labelledby={labelId}>
               <OptionSelect
                 value={selectedId}
                 onChange={(v) => {

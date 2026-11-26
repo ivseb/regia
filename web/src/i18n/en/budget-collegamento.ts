@@ -35,4 +35,8 @@ export default {
   "budget.link.col.total": "Total",
   "budget.link.col.committed": "Committed",
   "budget.link.nodeTotal": "Committed by budgets: {amount} of {allocated}",
+  "budget.reqlink.title": "Budget and the node it draws from",
+  "budget.reqlink.budget": "Budget {year} · v{version} · {kind}",
+  "budget.reqlink.open": "Open in Finance",
+  "budget.reqlink.empty": "This request has no budget yet: create it in Finance, where you also choose the node it draws from.",
 } satisfies Translation<typeof it>;
