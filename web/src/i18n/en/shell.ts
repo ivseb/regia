@@ -41,7 +41,6 @@ export default {
   "shell.nav.requests": "Requests",
   "shell.nav.section.demand": "Demand",
   "shell.nav.section.delivery": "Delivery",
-  "shell.nav.section.governance": "Governance",
   "shell.nav.section.lists": "Lists",
   "shell.nav.section.config": "Configuration",
   "shell.nav.portal": "Portal for {type}",

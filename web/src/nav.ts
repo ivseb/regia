@@ -5,9 +5,12 @@ import { tr } from "./i18n/core";
 import { pathVisible } from "./modules";
 import { LISTS } from "./views/lists";
 import { newLabel } from "./typesApi";
+import type { IconKey, UiModule } from "./moduleIcon";
 
-export type NavItem = { to?: string; label: string; count?: number; countLabel?: string; match?: string; more?: boolean; soon?: boolean };
-export type NavSection = { label: string; color: string; items: NavItem[] };
+/** `hot`: il numero chiede un'azione (pillola piena nel colore del modulo). */
+export type NavItem = { to?: string; label: string; count?: number; countLabel?: string; match?: string; more?: boolean; soon?: boolean; hot?: boolean };
+/** Ogni sezione ha un modulo (colore, replica/mockup/interfaccia-colori.html) e un'icona; senza icona quella del modulo. */
+export type NavSection = { label: string; module: UiModule; icon?: IconKey; items: NavItem[] };
 
 /** Numeri accanto alle voci (code di lavoro dell'utente). */
 export type NavCounts = {
@@ -52,12 +55,13 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
     { to: "/delivery/backlog", label: tr("shell.nav.backlog") },
     { to: "/delivery/mio-lavoro", label: tr("shell.nav.mywork") },
     // Una sola voce: Timesheet, Report e Team sono schede dentro «Tempo» (pages/tempo-ui.tsx).
-    { to: has("element.write") ? "/tempo" : "/tempo/report", label: tr("shell.nav.time"), count: c.timePending, countLabel: tr("shell.nav.toApprove"), match: "/tempo" },
+    { to: has("element.write") ? "/tempo" : "/tempo/report", label: tr("shell.nav.time"), count: c.timePending, countLabel: tr("shell.nav.toApprove"), match: "/tempo", hot: true },
   ];
 
-  // «Governance» è il nome della sezione e delle sue pagine (replica/design.md, «Vocabolario e lingua»).
+  // L'ex sezione «Governance» è divisa per modulo: rischi e conformità, DevSecOps, documenti, architettura.
+  // «Governance» resta il nome della pagina di demand (replica/design.md, «Vocabolario e lingua»).
   const readEl = has("element.read");
-  const governance: NavItem[] = [
+  const grc: NavItem[] = [
     // Spazio dell'auditor (ondata 3, C6): per chi ha il permesso di audit.
     ...(has("grc.audit") ? [{ to: "/audit-spazio", label: tr("shell.nav.auditSpace") }] : []),
     ...(readEl ? [{ to: "/rischi", label: tr("shell.nav.risks") }] : []),
@@ -65,17 +69,17 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
     ...(has("grc.read", "grc.admin") ? [{ to: "/conformita", label: tr("shell.nav.compliance") }] : []),
     // Vista DPO (ondata 3): con privacy.read o privacy.write.
     ...(has("privacy.read", "privacy.write") ? [{ to: "/privacy", label: tr("shell.nav.privacy") }] : []),
-    ...(readEl
-      ? [
-          { to: "/devsecops", label: tr("shell.nav.devsecops") },
-          { to: "/devsecops/aderenza", label: tr("shell.nav.adherence") },
-          { to: "/devsecops/metriche", label: tr("shell.nav.metrics") },
-          { to: "/devsecops/vulnerabilita", label: tr("shell.nav.vulns") },
-        ]
-      : []),
-    { to: "/architettura", label: tr("shell.nav.architecture") },
-    { to: "/documenti", label: tr("shell.nav.documents") },
   ];
+  const devsecops: NavItem[] = readEl
+    ? [
+        { to: "/devsecops", label: tr("shell.nav.devsecops") },
+        { to: "/devsecops/aderenza", label: tr("shell.nav.adherence") },
+        { to: "/devsecops/metriche", label: tr("shell.nav.metrics") },
+        { to: "/devsecops/vulnerabilita", label: tr("shell.nav.vulns") },
+      ]
+    : [];
+  const documents: NavItem[] = [{ to: "/documenti", label: tr("shell.nav.documents") }];
+  const architecture: NavItem[] = [{ to: "/architettura", label: tr("shell.nav.architecture") }];
 
   // Elenchi con filtri visuali, viste salvate e raggruppamento (piano, passo 16).
   const lists: NavItem[] = readEl
@@ -135,17 +139,21 @@ export function buildNav(me: Me, c: NavCounts, names: NavNames = DEFAULT_NAMES):
   if (config.length > 0) config.unshift({ to: "/configurazione", label: tr("casa.nav.config") });
   // Menu personale: «Da fare» è la prima voce (ondata 2, proposta 1), poi le Attività (gli avvisi).
   const personal: NavItem[] = [
-    { to: "/da-fare", label: tr("dafare.nav.todo"), count: c.todo, more: c.todoMore },
+    { to: "/da-fare", label: tr("dafare.nav.todo"), count: c.todo, more: c.todoMore, hot: true },
     { to: "/notifiche", label: tr("dafare.nav.activity"), count: c.activity },
   ];
 
   const sections: NavSection[] = [
-    { label: tr("dafare.nav.section"), color: "bg-accent", items: personal },
-    { label: tr("shell.nav.section.demand"), color: "bg-accent", items: demand },
-    { label: tr("shell.nav.section.delivery"), color: "bg-ok", items: delivery },
-    { label: tr("shell.nav.section.governance"), color: "bg-flag", items: governance },
-    { label: tr("shell.nav.section.lists"), color: "bg-muted", items: lists },
-    { label: tr("shell.nav.section.config"), color: "bg-fg", items: config },
+    { label: tr("dafare.nav.section"), module: "budget", icon: "star", items: personal },
+    { label: tr("shell.nav.section.demand"), module: "demand", items: demand },
+    { label: tr("shell.nav.section.delivery"), module: "work", items: delivery },
+    { label: tr("shell.colori.section.grc"), module: "grc", items: grc },
+    // Quando la prima voce ha il nome della sezione, la testata stessa è il collegamento (shell.tsx).
+    { label: tr("shell.nav.devsecops"), module: "devsecops", items: devsecops },
+    { label: tr("shell.nav.documents"), module: "knowledge", items: documents },
+    { label: tr("shell.nav.architecture"), module: "arch", items: architecture },
+    { label: tr("shell.nav.section.lists"), module: "platform", icon: "list", items: lists },
+    { label: tr("shell.nav.section.config"), module: "platform", icon: "settings", items: config },
   ];
   // Un modulo spento o fuori dal profilo di menu non lascia voci; le sezioni vuote spariscono.
   return sections

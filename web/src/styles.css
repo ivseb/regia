@@ -40,6 +40,18 @@
   --color-ok: var(--ok);
   --color-danger: var(--danger);
   --color-field: var(--field);
+  --color-side: var(--side);
+  --color-chip-ink: var(--chip-ink);
+  --color-m-demand: var(--m-demand);
+  --color-m-work: var(--m-work);
+  --color-m-budget: var(--m-budget);
+  --color-m-knowledge: var(--m-knowledge);
+  --color-m-devsecops: var(--m-devsecops);
+  --color-m-grc: var(--m-grc);
+  --color-m-arch: var(--m-arch);
+  --color-m-platform: var(--m-platform);
+  /* Il colore del modulo della pagina o del blocco (classi .m-*, attributo data-modulo). */
+  --color-mc: var(--mc);
   --font-sans: var(--ui-sans);
   --font-mono: var(--ui-mono);
 }
@@ -112,3 +124,81 @@
 
 /* Ondata 2 (tastiera): la riga evidenziata con j/k nelle liste. */
 [data-riga-attiva] { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ------------------------------------------------------------------------------------------
+   Colori dei moduli e movimento (replica/mockup/interfaccia-colori.html).
+   Le tinte servono solo per fondi, bordi e icone: il testo piccolo resta in --fg o --muted.
+   --mc è il colore del modulo corrente: lo impostano le classi .m-* e data-modulo (shell.tsx). */
+:root { --tint: 11%; --ease: cubic-bezier(.2, .7, .2, 1); --mc: var(--m-platform); }
+[data-theme="dark"] { --tint: 16%; }
+.m-demand, [data-modulo="demand"] { --mc: var(--m-demand); }
+.m-work, [data-modulo="work"] { --mc: var(--m-work); }
+.m-budget, [data-modulo="budget"] { --mc: var(--m-budget); }
+.m-knowledge, [data-modulo="knowledge"] { --mc: var(--m-knowledge); }
+.m-devsecops, [data-modulo="devsecops"] { --mc: var(--m-devsecops); }
+.m-grc, [data-modulo="grc"] { --mc: var(--m-grc); }
+.m-arch, [data-modulo="arch"] { --mc: var(--m-arch); }
+.m-platform, [data-modulo="platform"] { --mc: var(--m-platform); }
+
+@layer components {
+  /* Quadratino colorato con l'icona del modulo (moduleIcon.tsx). */
+  .ichip { display: inline-grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0; background: var(--mc); color: var(--chip-ink); }
+  .ichip svg { width: 14px; height: 14px; }
+  .ichip-sm { width: 18px; height: 18px; }
+  .ichip-sm svg { width: 11px; height: 11px; }
+  /* Tinta tenue del colore corrente: fondi di chip, pillole, righe attive. */
+  .tinta { background: color-mix(in srgb, var(--mc) var(--tint), transparent); }
+
+  /* Barra laterale: voce con barretta del modulo quando è attiva, contatori a pillola. */
+  .nav-voce { position: relative; transition: background .15s; }
+  .nav-voce:hover { background: color-mix(in srgb, var(--mc) 8%, transparent); }
+  .nav-voce.nav-attiva { background: color-mix(in srgb, var(--mc) var(--tint), transparent); font-weight: 700; }
+  .nav-voce.nav-attiva::before { content: ""; position: absolute; left: 10px; top: 6px; bottom: 6px; width: 3px; background: var(--mc); }
+  .nav-testa.nav-attiva::before { display: none; }
+  .nav-conta { margin-left: auto; padding: 0 6px; font-family: var(--font-mono); font-size: 11px; background: color-mix(in srgb, var(--mc) var(--tint), transparent); }
+  .nav-conta.urgente { background: var(--mc); color: var(--chip-ink); font-weight: 700; }
+
+  /* Fase dello stage-gate come chip tinta: --pc è il colore della fase, il testo resta --fg. */
+  .chip-fase { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+    background: color-mix(in srgb, var(--pc, var(--mc)) var(--tint), transparent); box-shadow: inset 3px 0 0 var(--pc, var(--mc)); color: var(--fg); }
+  .gates { display: inline-flex; gap: 2px; }
+  .gates > i { width: 7px; height: 7px; background: color-mix(in srgb, var(--muted) 35%, transparent); }
+  .gates > i.d { background: var(--pc, var(--mc)); }
+  /* Avatar tondo con le iniziali, colore stabile ricavato dal nome (tinte.ts). */
+  .avatar { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; font-size: 10.5px; font-weight: 700; background: var(--mc); color: var(--chip-ink); }
+  /* Mini-barra (punteggio, avanzamento): --sc è il colore. */
+  .mini-barra { position: relative; display: inline-block; width: 46px; height: 6px; background: var(--hair); }
+  .mini-barra > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--sc, var(--mc)); }
+
+  /* Card sollevabile (board, riquadri): ombra piena del suo colore al passaggio del mouse. */
+  .solleva { transition: transform .18s var(--ease), box-shadow .18s var(--ease); }
+  .solleva:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--sc, var(--mc)); }
+}
+
+/* Movimento: ingresso, sollevamento, righe evidenziate, avvisi. Tutto spento con prefers-reduced-motion. */
+@keyframes entra { from { opacity: 0; transform: translateY(6px); } }
+@keyframes disegna { from { stroke-dashoffset: 200; } to { stroke-dashoffset: 0; } }
+@keyframes cresce { from { transform: scaleX(0); } }
+@keyframes avviso { from { opacity: 0; transform: translateY(16px); } }
+@layer components {
+  .entra { animation: entra .35s var(--ease) both; }
+  .disegna { stroke-dasharray: 200; animation: disegna 1.2s var(--ease) .2s both; }
+  .cresce { transform-origin: left; animation: cresce .9s var(--ease) both; }
+  .avviso-entra { animation: avviso .4s var(--ease) both; }
+  .btn { transition: transform .15s var(--ease), box-shadow .15s var(--ease), background-color .15s, color .15s, border-color .15s; }
+  .btn:not(:disabled, .btn-quiet):hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--rule); }
+  .btn-primary:not(:disabled):hover { box-shadow: 3px 3px 0 var(--fg); }
+  .btn:active { transform: none; box-shadow: none; }
+}
+@layer base {
+  tbody tr { transition: background-color .12s; }
+  tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+}
+/* Scheda attiva sottolineata nel colore del modulo della pagina (le schede usano role="tab"). */
+@layer utilities {
+  [role="tab"][aria-selected="true"].border-b-2 { border-bottom-color: var(--mc); border-bottom-width: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entra, .disegna, .cresce, .avviso-entra { animation: none; }
+  .btn:hover, .solleva:hover { transform: none; }
+}

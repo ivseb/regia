@@ -1,7 +1,10 @@
 // Verifica i temi di web/src/themes.css (replica/design.md, "Temi e font"):
 // - ogni tema definisce le stesse variabili di Atlante, in chiaro e in scuro;
 // - il contrasto WCAG 2.x delle coppie testo/fondo è almeno AA (4,5:1), AAA (7:1) per
-//   i temi ad alto contrasto; i bordi dei controlli almeno 3:1 (criterio 1.4.11).
+//   i temi ad alto contrasto; i bordi dei controlli almeno 3:1 (criterio 1.4.11);
+// - i colori dei moduli (--m-*) almeno 3:1 su fondo e barra laterale (--side), 4,5:1 per i temi
+//   ad alto contrasto; --chip-ink (icone e testo breve in grassetto sui fondi pieni: contatori,
+//   iniziali, targhette) almeno 4,5:1 su ciascuno.
 // Esce con codice 1 se qualcosa non va. Gira prima della build del frontend.
 // Uso: node scripts/check-contrast.mjs [percorso di themes.css] [--quiet]
 import { readFileSync } from "node:fs";
@@ -17,7 +20,11 @@ const file = args.find((a) => !a.startsWith("--")) ?? resolve(here, "../web/src/
 const AAA_THEMES = new Set(["contrasto"]);
 const BASE = "atlante";
 
-// [primo piano, fondo, tipo]: "text" = testo (AA 4,5 / AAA 7), "ui" = componenti (3:1).
+// [primo piano, fondo, tipo]: "text" = testo (AA 4,5 / AAA 7), "ui" = componenti (3:1),
+// "label" = testo breve in grassetto su un fondo pieno (4,5:1 in tutti i temi).
+// Colori dei moduli: servono per fondi, bordi e icone (componenti grafici, 1.4.11).
+const MODULES = ["demand", "work", "budget", "knowledge", "devsecops", "grc", "arch", "platform"];
+
 const PAIRS = [
   ["fg", "bg", "text"],
   ["muted", "bg", "text"],
@@ -33,6 +40,11 @@ const PAIRS = [
   ["accent-fg", "accent", "text"],
   ["bg", "rule", "text"], // etichetta "QUERY" su fondo --rule (Requests.tsx)
   ["rule", "field", "ui"],
+  ...MODULES.flatMap((m) => [
+    [`m-${m}`, "bg", "ui"],
+    [`m-${m}`, "side", "ui"],
+    ["chip-ink", `m-${m}`, "label"],
+  ]),
 ];
 
 function parse(css) {
@@ -96,8 +108,9 @@ for (const [name, t] of Object.entries(themes)) {
         errors.push(`${name} ${mode}: ${e.message}`);
         continue;
       }
-      const min = kind === "ui" ? 3 : aaa ? 7 : 4.5;
-      const level = kind === "ui" ? (ratio >= 3 ? "ok" : "NO") : ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "NO";
+      // Nei temi ad alto contrasto anche i componenti grafici chiedono 4,5:1.
+      const min = kind === "label" ? 4.5 : kind === "ui" ? (aaa ? 4.5 : 3) : aaa ? 7 : 4.5;
+      const level = kind !== "text" ? (ratio >= min ? "ok" : "NO") : ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "NO";
       rows.push({ tema: name, modo: mode === "dark" ? "scuro" : "chiaro", coppia: `${fg} su ${bg}`, rapporto: ratio.toFixed(2), livello: level });
       if (ratio < min) {
         errors.push(`${name} ${mode === "dark" ? "scuro" : "chiaro"}: ${fg} su ${bg} = ${ratio.toFixed(2)}:1, minimo ${min}:1`);

@@ -32,6 +32,17 @@
   --ok: #0f7a55;
   --danger: #b42318;
   --field: #ffffff;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #f6f6f9;
+  --chip-ink: #ffffff;
+  --m-demand: #2b3ff2;
+  --m-work: #d0442a;
+  --m-budget: #a06900;
+  --m-knowledge: #0a8078;
+  --m-devsecops: #17804a;
+  --m-grc: #c81e5a;
+  --m-arch: #7344d4;
+  --m-platform: #5b6474;
   --radius: 0px;
   --rule-strong: 2px;
   --focus-w: 2px;
@@ -55,6 +66,17 @@
   --ok: #5fc3a2;
   --danger: #ea8b82;
   --field: #1c1f25;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #1b1e24;
+  --chip-ink: #14161b;
+  --m-demand: #8d99e8;
+  --m-work: #e59a80;
+  --m-budget: #d4b264;
+  --m-knowledge: #62c0b6;
+  --m-devsecops: #73bf93;
+  --m-grc: #e290aa;
+  --m-arch: #b39ce4;
+  --m-platform: #9aa3b0;
 }
 
 /* ---------------------------------------------------------------- Petrolio */
@@ -74,6 +96,17 @@
   --ok: #2c673c;
   --danger: #a0261b;
   --field: #fffdf9;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #f2eee6;
+  --chip-ink: #faf7f1;
+  --m-demand: #2e4a8c;
+  --m-work: #b0461c;
+  --m-budget: #8a6200;
+  --m-knowledge: #0b5550;
+  --m-devsecops: #2c673c;
+  --m-grc: #a3264f;
+  --m-arch: #5f3f9e;
+  --m-platform: #5c5f66;
   --radius: 0px;
   --rule-strong: 1px;
   --focus-w: 2px;
@@ -95,6 +128,17 @@
   --ok: #82cc97;
   --danger: #f2877b;
   --field: #181b19;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #171a18;
+  --chip-ink: #0e1413;
+  --m-demand: #8fa6dc;
+  --m-work: #e79a72;
+  --m-budget: #d2b066;
+  --m-knowledge: #6cc3b5;
+  --m-devsecops: #82cc97;
+  --m-grc: #e391ac;
+  --m-arch: #b5a0e0;
+  --m-platform: #a49e91;
 }
 
 /* ---------------------------------------------------------------- Nebbia */
@@ -114,6 +158,17 @@
   --ok: #1b6c4c;
   --danger: #b0261e;
   --field: #ffffff;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #e9edf1;
+  --chip-ink: #ffffff;
+  --m-demand: #2d5282;
+  --m-work: #b0441d;
+  --m-budget: #855e00;
+  --m-knowledge: #12706a;
+  --m-devsecops: #1b6c4c;
+  --m-grc: #ad2653;
+  --m-arch: #6040b0;
+  --m-platform: #56616e;
   --radius: 6px;
   --rule-strong: 2px;
   --focus-w: 2px;
@@ -135,6 +190,17 @@
   --ok: #72d3a9;
   --danger: #f59389;
   --field: #222830;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #20262e;
+  --chip-ink: #1b2027;
+  --m-demand: #9dbae6;
+  --m-work: #eea27e;
+  --m-budget: #d6b46a;
+  --m-knowledge: #6cc8bd;
+  --m-devsecops: #72d3a9;
+  --m-grc: #ec98b2;
+  --m-arch: #bba4ec;
+  --m-platform: #a1acb9;
 }
 
 /* ---------------------------------------------------------------- Contrasto */
@@ -154,6 +220,17 @@
   --ok: #005c36;
   --danger: #a0000d;
   --field: #ffffff;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #f2f2f2;
+  --chip-ink: #ffffff;
+  --m-demand: #0030b0;
+  --m-work: #a63000;
+  --m-budget: #7a5000;
+  --m-knowledge: #00605a;
+  --m-devsecops: #005c36;
+  --m-grc: #a0003c;
+  --m-arch: #5a1fb0;
+  --m-platform: #3d434d;
   --radius: 0px;
   --rule-strong: 3px;
   --focus-w: 3px;
@@ -175,4 +252,15 @@
   --ok: #5eeb9b;
   --danger: #ff9a9a;
   --field: #0a0a0a;
+  /* Moduli: fondi, bordi e icone (mai testo piccolo); --chip-ink è l'icona sui quadrati colorati. */
+  --side: #0d0d0d;
+  --chip-ink: #000000;
+  --m-demand: #8fb0ff;
+  --m-work: #ffa07a;
+  --m-budget: #ffd257;
+  --m-knowledge: #5fe0d0;
+  --m-devsecops: #5eeb9b;
+  --m-grc: #ff9ac0;
+  --m-arch: #c9a8ff;
+  --m-platform: #c8ccd4;
 }

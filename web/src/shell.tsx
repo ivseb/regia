@@ -10,7 +10,8 @@ import { ErrorNote } from "./ui";
 import { useLiveUpdates } from "./live";
 import { createKinds, SHORTCUT, useCurrentKey, useKeyboardShortcuts, usePaletteShortcut, type CreateKind, type ItemAction, type PaletteStart } from "./shortcuts";
 import { FavoriteViews } from "./views/FavoriteViews";
-import { buildNav, type NavItem } from "./nav";
+import { buildNav, type NavItem, type NavSection } from "./nav";
+import { Avatar, ModuleChip, uiModuleOfPath } from "./moduleIcon";
 import { useTypeNames } from "./typesApi";
 import { moduleOfPath, moduleOn, pathOn, type ModuleKey } from "./modules";
 import { useT } from "./i18n/react";
@@ -160,7 +161,7 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
       <nav
         id="menu-principale"
         aria-label={t("shell.mainNav")}
-        className={`${menuOpen ? "fixed inset-x-0 top-[49px] bottom-0 z-50 flex overflow-y-auto bg-bg" : "hidden"} flex-col gap-6 border-r border-rule px-4 py-5 md:sticky md:top-0 md:flex md:h-screen md:w-[248px] md:shrink-0 md:overflow-y-auto`}
+        className={`${menuOpen ? "fixed inset-x-0 top-[49px] bottom-0 z-50 flex overflow-y-auto bg-side" : "hidden"} flex-col gap-5 border-r border-hair bg-side px-3 py-4 md:sticky md:top-0 md:flex md:h-screen md:w-[248px] md:shrink-0 md:overflow-y-auto`}
       >
         <div className="flex items-center gap-2.5">
           <Logo />
@@ -209,45 +210,13 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
         </div>
         <FavoriteViews enabled={!!me.active_tenant} />
         {sections.map((sec) => (
-          <div key={sec.label} className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2 pb-1.5">
-              <span className={`size-2 ${sec.color}`} aria-hidden="true" />
-              <span className="text-[12px] font-semibold">{sec.label}</span>
-            </div>
-            {sec.items.map((it) =>
-              it.to ? (
-                <Link
-                  key={it.label}
-                  to={it.to}
-                  activeOptions={{ exact: !it.match && it.to !== "/processi" && it.to !== "/configurazione/valutazioni" && it.to !== "/configurazione/campi" && it.to !== "/configurazione/tipi" && it.to !== "/configurazione/requisiti" && it.to !== "/documenti" && it.to !== "/architettura", includeSearch: false }}
-                  className="flex min-h-11 items-center gap-2 py-1 pl-4 text-fg no-underline hover:text-accent md:min-h-0"
-                  activeProps={{ className: "font-semibold !text-accent" }}
-                >
-                  <span className="flex-1">{it.label}</span>
-                  {!!it.count && (
-                    <span className="font-mono text-[11px] tabular">
-                      {it.count}
-                      {it.more ? "+" : ""}
-                      {it.countLabel ? ` ${it.countLabel}` : ""}
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <span key={it.label} className="flex items-center gap-2 py-1 pl-4 text-muted" aria-disabled="true">
-                  <span className="flex-1">{it.label}</span>
-                  <span className="font-mono text-[10.5px]">{t("shell.soon")}</span>
-                </span>
-              ),
-            )}
-          </div>
+          <NavGroup key={sec.label} sec={sec} />
         ))}
         <div className="mt-auto flex flex-col gap-3 border-t border-hair pt-4">
           <ThemeSwitch />
           <div className="flex items-center gap-2.5">
             <Link to="/profilo" title={t("shell.profileLink")} className="flex min-w-0 flex-1 items-center gap-2.5 text-fg no-underline hover:text-accent">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-fg">
-              {me.display_name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}
-            </span>
+            <Avatar name={me.display_name} className="size-7 text-[11px]" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-semibold">{me.display_name}</span>
               <span className="truncate text-[12px] text-muted">{me.email}</span>
@@ -260,14 +229,14 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
           <SourceLink className="text-muted" />
         </div>
       </nav>
-      <main id="contenuto" tabIndex={-1} className={`flex min-w-0 flex-1 flex-col outline-none ${canCreate ? "max-md:pb-20" : ""}`}>
+      <main id="contenuto" tabIndex={-1} data-modulo={uiModuleOfPath(path)} className={`flex min-w-0 flex-1 flex-col outline-none ${canCreate ? "max-md:pb-20" : ""}`}>
         {!me.active_tenant ? (
           <p className="p-8 text-muted">{t("shell.noActiveOrg")}</p>
         ) : pathOn(me, path) ? (
           <>
             <ProvaBar />
             <AvvioStrip me={me} />
-            {children}
+            <PageEnter path={path}>{children}</PageEnter>
           </>
         ) : (
           <ModuleOff module={moduleOfPath(path)!} />
@@ -311,8 +280,89 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
         </Suspense>
       )}
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-4 bottom-20 z-[80] flex justify-center md:bottom-6">
-        {notice && <span className="pointer-events-auto border-[1.5px] border-rule bg-bg px-3 py-2 text-[13px] shadow-none">{notice}</span>}
+        {notice && (
+          <span key={notice} className="avviso-entra pointer-events-auto flex items-center gap-2.5 bg-fg px-3.5 py-2.5 text-[13px] font-semibold text-bg shadow-[5px_5px_0_var(--m-devsecops)]">
+            <span className="size-2.5 shrink-0 bg-m-devsecops" aria-hidden="true" />
+            {notice}
+          </span>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Percorsi le cui voci restano attive anche nelle sottopagine. */
+const NAV_PREFIX = new Set(["/processi", "/configurazione/valutazioni", "/configurazione/campi", "/configurazione/tipi", "/configurazione/requisiti", "/documenti", "/architettura"]);
+
+/**
+ * Sezione della barra laterale: quadratino del modulo con l'icona, voci con la barretta del colore del
+ * modulo quando sono attive, contatori a pillola (pieni se chiedono un'azione). Una sezione con una sola
+ * voce dallo stesso nome (Documenti, Architettura) è un collegamento unico.
+ */
+function NavGroup({ sec }: { sec: NavSection }) {
+  const t = useT();
+  // La prima voce con il nome della sezione (DevSecOps, Documenti, Architettura) diventa la testata.
+  const head = sec.items[0]?.to && sec.items[0].label === sec.label ? sec.items[0] : null;
+  const rest = head ? sec.items.slice(1) : sec.items;
+  const activeOptions = (it: NavItem) => ({ exact: !it.match && !NAV_PREFIX.has(it.to!), includeSearch: false });
+  return (
+    <div className={`m-${sec.module} flex flex-col gap-0.5`}>
+      {head ? (
+        <Link
+          to={head.to!}
+          activeOptions={activeOptions(head)}
+          className="nav-voce nav-testa -mx-1 flex min-h-11 items-center gap-2 px-1 py-1 text-[12.5px] font-bold text-fg no-underline md:min-h-0"
+          activeProps={{ className: "nav-attiva" }}
+        >
+          <ModuleChip module={sec.module} icon={sec.icon} />
+          <span className="flex-1">{sec.label}</span>
+        </Link>
+      ) : (
+        <div className="flex items-center gap-2 pb-1">
+          <ModuleChip module={sec.module} icon={sec.icon} />
+          <span className="text-[12.5px] font-bold">{sec.label}</span>
+        </div>
+      )}
+      {rest.map((it) =>
+        it.to ? (
+          <Link
+            key={it.label}
+            to={it.to}
+            activeOptions={activeOptions(it)}
+            className="nav-voce flex min-h-11 items-center gap-2 py-1 pr-2 pl-[30px] text-fg no-underline md:min-h-0"
+            activeProps={{ className: "nav-attiva" }}
+          >
+            <span className="flex-1">{it.label}</span>
+            {!!it.count && (
+              <span className={`nav-conta tabular ${it.hot ? "urgente" : ""}`}>
+                {it.count}
+                {it.more ? "+" : ""}
+                {it.countLabel ? ` ${it.countLabel}` : ""}
+              </span>
+            )}
+          </Link>
+        ) : (
+          <span key={it.label} className="flex items-center gap-2 py-1 pl-[30px] text-muted" aria-disabled="true">
+            <span className="flex-1">{it.label}</span>
+            <span className="font-mono text-[10.5px]">{t("shell.soon")}</span>
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Ingresso della pagina (6 px, 0,25 s) a ogni cambio di percorso, senza rimontare la pagina. */
+function PageEnter({ path, children }: { path: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el?.animate || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 250, easing: "cubic-bezier(.2,.7,.2,1)" });
+  }, [path]);
+  return (
+    <div ref={ref} className="flex min-w-0 flex-1 flex-col">
+      {children}
     </div>
   );
 }
@@ -404,11 +454,17 @@ function ThemeSwitch() {
 
 /** Intestazione di pagina: percorso in mono, titolo grande, azioni a destra. */
 export function PageHeader({ path, title, actions }: { path: string; title: string; actions?: ReactNode }) {
+  // Il modulo viene dal percorso della pagina: icona nel percorso e striscia sotto il titolo nel suo colore.
+  const module = uiModuleOfPath(useRouterState({ select: (s) => s.location.pathname }));
   return (
-    <header className="flex flex-wrap items-end gap-4 px-4 md:px-7 pt-6 pb-4">
+    <header className={`m-${module} flex flex-wrap items-end gap-4 px-4 md:px-7 pt-6 pb-4`}>
       <div className="flex flex-col gap-1">
-        <span className="font-mono text-[11.5px] text-muted">{path}</span>
+        <span className="flex items-center gap-2 font-mono text-[11.5px] text-muted">
+          <ModuleChip module={module} size="sm" />
+          {path}
+        </span>
         <h1 className="m-0 text-[34px] leading-[1.05] font-bold tracking-[-0.025em]">{title}</h1>
+        <span className="mt-2 block h-1 w-14 bg-mc" aria-hidden="true" />
       </div>
       {actions && <div className="ml-auto flex gap-2">{actions}</div>}
     </header>
