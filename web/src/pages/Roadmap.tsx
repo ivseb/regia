@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type RequestWindow } from "../api";
@@ -12,7 +12,8 @@ import { phaseTint } from "../tinte";
 import { crumbs } from "../crumbs";
 import { moduleOn } from "../modules";
 import { projectKeys, projectsApi } from "../projectsApi";
-import { Roadmap as ProjectsRoadmap } from "./progetti/ProgramOverview";
+// La roadmap dei progetti sta con il programma: si carica a parte, come la sua pagina.
+const ProjectsRoadmap = lazy(() => import("./progetti/ProgramOverview").then((m) => ({ default: m.Roadmap })));
 
 // Roadmap di portafoglio: ogni richiesta è una barra sulla sua finestra (l'inviluppo dei
 // suoi impatti pianificati, o la finestra impostata a mano). Dentro la barra i segmenti
@@ -77,7 +78,9 @@ export function Roadmap() {
             {pf.data && projects.length === 0 ? (
               <p className="m-0 text-[13px] text-muted">{t("progetti.passo6.roadmap.noProjects")}</p>
             ) : (
-              <ProjectsRoadmap projects={projects} />
+              <Suspense fallback={null}>
+                <ProjectsRoadmap projects={projects} />
+              </Suspense>
             )}
           </section>
         )}
