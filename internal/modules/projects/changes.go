@@ -28,17 +28,26 @@ import (
 // resta «da inviare» con il motivo, e il PM la invia quando ha sistemato.
 
 // Deviation è uno scostamento oltre le tolleranze registrato nella change request. Kind è
-// milestone o project (la fine del progetto); i titoli si leggono dal piano a chi può.
+// milestone o project (la fine del progetto), scope_added o scope_removed (passo 5: voce aggiunta
+// o tolta rispetto alla baseline), budget (passo 5: costo oltre la tolleranza, in Pct); i titoli
+// si leggono dal piano a chi può.
 type Deviation struct {
-	ItemID      string  `json:"id"`
-	Kind        string  `json:"kind"`
-	Key         string  `json:"key"`
-	Title       string  `json:"title"`
-	BaselineEnd *string `json:"baseline_end"`
-	End         *string `json:"end"`
-	Days        int     `json:"days"`
-	Restricted  bool    `json:"restricted,omitempty"`
+	ItemID      string   `json:"id"`
+	Kind        string   `json:"kind"`
+	Key         string   `json:"key"`
+	Title       string   `json:"title"`
+	BaselineEnd *string  `json:"baseline_end"`
+	End         *string  `json:"end"`
+	Days        int      `json:"days"`
+	Pct         *float64 `json:"pct,omitempty"`
+	Restricted  bool     `json:"restricted,omitempty"`
 }
+
+const (
+	DevScopeAdded   = "scope_added"
+	DevScopeRemoved = "scope_removed"
+	DevBudget       = "budget"
+)
 
 // Blocker è il motivo per cui l'approvazione non è partita (codice di errore e parametri).
 type Blocker struct {
@@ -64,13 +73,15 @@ type ChangeRequest struct {
 	Blocked           *Blocker    `json:"blocked"`
 	Deviations        []Deviation `json:"deviations"`
 	// BudgetPct: scostamento del budget alla nascita, solo a chi vede il budget.
-	BudgetPct  *float64  `json:"budget_pct"`
-	Tolerance  Tolerance `json:"tolerance"`
-	CreatedAt  string    `json:"created_at"`
-	CreatedBy  *string   `json:"created_by"`
-	DecidedAt  *string   `json:"decided_at"`
-	CanSubmit  bool      `json:"can_submit"`
-	Restricted bool      `json:"restricted,omitempty"`
+	BudgetPct *float64  `json:"budget_pct"`
+	Tolerance Tolerance `json:"tolerance"`
+	CreatedAt string    `json:"created_at"`
+	CreatedBy *string   `json:"created_by"`
+	DecidedAt *string   `json:"decided_at"`
+	CanSubmit bool      `json:"can_submit"`
+	// CanWithdraw: chi pianifica ritira la change request da inviare o in approvazione (passo 5).
+	CanWithdraw bool `json:"can_withdraw"`
+	Restricted  bool `json:"restricted,omitempty"`
 }
 
 // ChangeRequestInput apre una change request a mano.
@@ -93,7 +104,27 @@ func deviationsOf(p *Plan, n *Numbers) []Deviation {
 	if n.EndOverTolerance && n.VarianceDays != nil {
 		out = append(out, Deviation{ItemID: p.Project.ID, Kind: "project", BaselineEnd: n.BaselineEnd, End: n.End, Days: *n.VarianceDays})
 	}
+	for _, r := range n.ScopeAdded {
+		it := byID[r.ID]
+		out = append(out, Deviation{ItemID: r.ID, Kind: DevScopeAdded, End: it.End})
+	}
+	for _, r := range n.ScopeRemoved {
+		out = append(out, Deviation{ItemID: r.ID, Kind: DevScopeRemoved, BaselineEnd: r.Date})
+	}
 	return out
+}
+
+// budgetDeviation: il costo del progetto oltre la tolleranza sul budget della baseline (nil se
+// dentro, se manca un termine di confronto o se la baseline non ha budget).
+func budgetDeviation(p *Plan, cur *Budget) *Deviation {
+	if p.Baseline == nil {
+		return nil
+	}
+	pct := budgetVariance(p.Baseline.budget, cur)
+	if pct == nil || *pct <= p.Tolerance.BudgetPct {
+		return nil
+	}
+	return &Deviation{ItemID: p.Project.ID, Kind: DevBudget, Pct: pct}
 }
 
 // openChangeRequest dice se il progetto ha già una change request da inviare o in approvazione.
@@ -125,11 +156,67 @@ func (s *Service) checkTolerances(ctx context.Context, tx pgx.Tx, actor engine.A
 	}
 	n := computeNumbers(p, today())
 	devs := deviationsOf(p, &n)
+	// Il budget cambia nel modulo della finanza (BudgetChanged) ma conta come le date (passo 5).
+	cur, err := s.budgetSnapshot(ctx, tx, p)
+	if err != nil {
+		return err
+	}
+	if d := budgetDeviation(p, cur); d != nil {
+		devs = append(devs, *d)
+	}
 	if len(devs) == 0 {
 		return nil
 	}
 	_, err = s.newChangeRequest(ctx, tx, actor, proj, p, "tolerance", "", "", devs)
 	return err
+}
+
+// BudgetChanged: il budget in vigore di un elemento è cambiato (versione approvata, previsione
+// pubblicata, trasferimento). Se l'elemento è un progetto, o una richiesta confluita in un progetto,
+// si ricontrollano le tolleranze di quel progetto: il budget oltre la tolleranza apre da solo la
+// change request, come una milestone fuori tolleranza (passo 5).
+func (s *Service) BudgetChanged(ctx context.Context, tx pgx.Tx, actor engine.Actor, elementID string) error {
+	if ok, err := installed(ctx, tx); err != nil || !ok {
+		return err
+	}
+	rows, err := tx.Query(ctx, `select e.id::text from elements e join element_types t on t.tenant_id = e.tenant_id and t.id = e.type_id
+		where e.id = $1 and t.key = $2 and e.deleted_at is null
+		union select project_id::text from project_requests where request_id = $1`, elementID, TypeProject)
+	if err != nil {
+		return err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.checkTolerances(ctx, tx, sysActor(actor), id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// crTitle è il titolo della change request automatica, secondo cosa è uscito dalla baseline.
+func crTitle(devs []Deviation) string {
+	var dates, scope, budget bool
+	for _, d := range devs {
+		switch d.Kind {
+		case DevScopeAdded, DevScopeRemoved:
+			scope = true
+		case DevBudget:
+			budget = true
+		default:
+			dates = true
+		}
+	}
+	switch {
+	case scope && !dates && !budget:
+		return "Variazione del perimetro"
+	case budget && !dates && !scope:
+		return "Budget oltre la tolleranza"
+	}
+	return "Scostamento oltre le tolleranze"
 }
 
 // newChangeRequest crea la change request con il piano proposto e prova ad avviarne l'approvazione.
@@ -147,7 +234,7 @@ func (s *Service) newChangeRequest(ctx context.Context, tx pgx.Tx, actor engine.
 	if title == "" {
 		title = "Variazione del piano"
 		if origin == "tolerance" {
-			title = "Scostamento oltre le tolleranze"
+			title = crTitle(devs)
 		}
 	}
 	el, err := s.eng.Create(ctx, tx, sysActor(actor), engine.CreateInput{SpaceKey: SpaceKey, TypeKey: TypeChangeRequest, Title: title,
@@ -328,7 +415,9 @@ func (s *Service) SubmitChangeRequest(ctx context.Context, tx pgx.Tx, actor engi
 	return s.ChangeRequest(ctx, tx, actor, el.ID)
 }
 
-// WithdrawChangeRequest ritira la change request da inviare.
+// WithdrawChangeRequest ritira la change request da inviare o in approvazione (passo 5): in
+// approvazione si annulla anche la richiesta nel motore delle approvazioni, e chi doveva decidere
+// non la trova più in «Da approvare». La baseline resta quella in vigore.
 func (s *Service) WithdrawChangeRequest(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) (*ChangeRequest, error) {
 	el, proj, err := s.crProject(ctx, tx, actor, ref)
 	if err != nil {
@@ -337,17 +426,42 @@ func (s *Service) WithdrawChangeRequest(ctx context.Context, tx pgx.Tx, actor en
 	if ok, err := canPlan(ctx, tx, actor, proj.ID); err != nil || !ok {
 		return nil, firstErr(err, engine.ErrForbidden)
 	}
-	tag, err := tx.Exec(ctx, "update ext_change_request set status = 'withdrawn', decided_at = now() where element_id = $1 and status = 'draft'", el.ID)
-	if err != nil {
+	var status string
+	var reqID *string
+	if err := tx.QueryRow(ctx, "select status, approval_request_id::text from ext_change_request where element_id = $1 for update", el.ID).
+		Scan(&status, &reqID); err != nil {
 		return nil, err
 	}
-	if tag.RowsAffected() == 0 {
-		return nil, engine.InvalidCode("validation.projects.cr_status", "status", "si ritira solo una change request da inviare")
+	if status != "draft" && status != "pending" {
+		return nil, engine.InvalidCode("validation.projects.cr_withdraw", "status", "si ritira solo una change request da inviare o in approvazione")
+	}
+	if _, err := tx.Exec(ctx, "update ext_change_request set status = 'withdrawn', decided_at = now() where element_id = $1", el.ID); err != nil {
+		return nil, err
+	}
+	if status == "pending" && reqID != nil {
+		tag, err := tx.Exec(ctx, "update approval_requests set status = 'cancelled', closed_at = now() where id = $1 and status = 'pending'", *reqID)
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() > 0 {
+			if _, err := tx.Exec(ctx, "update approval_steps set decision = 'skipped' where request_id = $1 and decision = 'pending'", *reqID); err != nil {
+				return nil, err
+			}
+			if _, err := tx.Exec(ctx, "select approval_refresh_assignees($1)", *reqID); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := forceState(ctx, tx, el.ID, TypeChangeRequest, "Ritirata"); err != nil {
 		return nil, err
 	}
-	if err := engine.AddActivity(ctx, tx, proj.ID, actor.MemberID, "plan", "change_request_withdrawn", map[string]any{"change_request": el.Key}, nil); err != nil {
+	if err := engine.AddActivity(ctx, tx, proj.ID, actor.MemberID, "plan", "change_request_withdrawn",
+		map[string]any{"change_request": el.Key, "was": status}, nil); err != nil {
+		return nil, err
+	}
+	if err := audit.Append(ctx, tx, audit.Event{Action: "plan.change_request.withdraw", EntityType: TypeChangeRequest, EntityID: el.ID,
+		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
+		Payload: map[string]any{"project_id": proj.ID, "status": status, "approval_request_id": reqID}}); err != nil {
 		return nil, err
 	}
 	return s.ChangeRequest(ctx, tx, actor, el.ID)
@@ -519,7 +633,7 @@ func (s *Service) changeRequests(ctx context.Context, tx pgx.Tx, actor engine.Ac
 			d := &c.Deviations[i]
 			kt := keys[d.ItemID]
 			d.Key, d.Title = kt[0], kt[1]
-			if d.Kind == TypeMilestone {
+			if d.Kind == TypeMilestone || d.Kind == DevScopeAdded || d.Kind == DevScopeRemoved {
 				if ok, err := r.can(ctx, tx, d.ItemID); err != nil {
 					return nil, err
 				} else if !ok {
@@ -531,6 +645,16 @@ func (s *Service) changeRequests(ctx context.Context, tx pgx.Tx, actor engine.Ac
 			c.BudgetPct = nil
 		}
 		c.CanSubmit = canPlanIt && c.Status == "draft"
+		c.CanWithdraw = canPlanIt && (c.Status == "draft" || c.Status == "pending")
+		if !budgetOK {
+			devs := c.Deviations[:0]
+			for _, d := range c.Deviations {
+				if d.Kind != DevBudget {
+					devs = append(devs, d)
+				}
+			}
+			c.Deviations = devs
+		}
 		kept = append(kept, c)
 	}
 	return kept, nil

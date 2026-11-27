@@ -89,9 +89,11 @@ var processFiles = []string{"program_standard.json", "project_standard.json", "w
 	"plan_activity_standard.json", "milestone_standard.json", "change_request_standard.json",
 	"progress_claim_standard.json", "deliverable_standard.json"}
 
-// BudgetFunc restituisce il budget delle richieste confluite nel progetto (il budget resta
-// sulla richiesta fino al passo 5): la imposta il server con il modulo finance.
-type BudgetFunc func(ctx context.Context, tx pgx.Tx, actor engine.Actor, requestIDs []string) (*Budget, error)
+// BudgetFunc restituisce il budget del progetto (passo 5): i budget del progetto e delle richieste
+// confluite, con consuntivo e impegnato di tutta la discendenza. Non controlla chi guarda (lo fa
+// budgetVisible); restituisce nil se non c'è niente da mostrare. La imposta il server con il modulo
+// finance.
+type BudgetFunc func(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID string, requestIDs []string) (*Budget, error)
 
 // EpicFunc crea (se manca) l'epic di un work package agile: la imposta il server con il
 // modulo del lavoro (create_epic degli impatti).
@@ -293,6 +295,15 @@ func (s *Service) afterTransition(ctx context.Context, tx pgx.Tx, ev engine.Tran
 				where element_id = $1`, el.ID, el.StateCategory == "done"); err != nil {
 				return err
 			}
+		}
+		// Un work package o una milestone annullati escono dal perimetro della baseline (passo 5).
+		if el.StateCategory == "cancelled" && el.TypeKey != TypeActivity {
+			if projectID, _, err := itemProject(ctx, tx, el.ID); err == nil {
+				return s.checkTolerances(ctx, tx, sysActor(ev.Actor), projectID)
+			} else if !errors.Is(err, engine.ErrNotFound) {
+				return err
+			}
+			return nil
 		}
 		if ev.System || (el.StateCategory != "in_progress" && el.StateCategory != "done") {
 			return nil

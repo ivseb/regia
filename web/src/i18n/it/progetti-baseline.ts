@@ -46,7 +46,7 @@ export default {
   "progetti.baseline.span": "dal {from} al {to}",
   "progetti.baseline.by": "fissata il {date} da {who}",
   "progetti.baseline.settings.title": "Tolleranze della baseline",
-  "progetti.baseline.settings.help": "Quando una modifica del piano porta una milestone o la fine del progetto oltre i giorni indicati rispetto alla baseline, nasce da sola una change request da approvare. Il budget oltre la percentuale fa diventare rosso il semaforo.",
+  "progetti.baseline.settings.help": "Quando una modifica del piano porta una milestone o la fine del progetto oltre i giorni indicati rispetto alla baseline, nasce da sola una change request da approvare. Lo stesso quando il budget previsto supera la percentuale o quando si aggiungono o tolgono work package e milestone (passo 5). Un singolo progetto può avere tolleranze proprie, dalla scheda «Piano».",
   "progetti.baseline.settings.days": "Giorni lavorativi su milestone e fine",
   "progetti.baseline.settings.budget": "Percentuale sul budget",
 } satisfies Source;

@@ -74,6 +74,12 @@ func (s *Service) CreateItem(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 			return nil, err
 		}
 	}
+	// Una voce nuova dopo la baseline è uno scostamento di perimetro (passo 5).
+	if in.Kind == TypeWorkPackage || in.Kind == TypeMilestone {
+		if err := s.checkTolerances(ctx, tx, actor, p.ID); err != nil {
+			return nil, err
+		}
+	}
 	return s.ItemView(ctx, tx, actor, el.ID)
 }
 
@@ -498,8 +504,15 @@ func (s *Service) DeleteItem(ctx context.Context, tx pgx.Tx, actor engine.Actor,
 	if err := engine.AddActivity(ctx, tx, projectID, actor.MemberID, "plan", "item_removed", map[string]any{"item": el.Key}, nil); err != nil {
 		return err
 	}
-	return audit.Append(ctx, tx, audit.Event{Action: "plan.item.delete", EntityType: el.TypeKey, EntityID: el.ID,
-		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP})
+	if err := audit.Append(ctx, tx, audit.Event{Action: "plan.item.delete", EntityType: el.TypeKey, EntityID: el.ID,
+		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP}); err != nil {
+		return err
+	}
+	// Una voce della baseline tolta dal piano è uno scostamento di perimetro (passo 5).
+	if el.TypeKey == TypeWorkPackage || el.TypeKey == TypeMilestone {
+		return s.checkTolerances(ctx, tx, actor, projectID)
+	}
+	return nil
 }
 
 // Schedule sposta o ridimensiona una voce; con cascade chi ne dipende slitta in avanti.

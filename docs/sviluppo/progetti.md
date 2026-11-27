@@ -1,13 +1,14 @@
-# Progetti: piano del PM, modi di consegna, Panoramica, baseline, fornitori, programmi
+# Progetti: piano del PM, modi di consegna, Panoramica, baseline, fornitori, programmi, budget e status report
 
-Passi 1, 2, 3 e 4 di `replica/progetti.md`. La richiesta dice perché e quanto, il progetto come, quando e chi, l'epic cosa fa un team. Le due viste si toccano nel work package.
+Passi 1, 2, 3, 4 e 5 di `replica/progetti.md`. La richiesta dice perché e quanto, il progetto come, quando e chi, l'epic cosa fa un team. Le due viste si toccano nel work package.
 
 - Backend: `internal/modules/projects` (modulo `projects`), motore del Gantt in `internal/modules/planning/graph.go`, epic dei work package in `internal/modules/work/epic.go`.
 - API: `internal/api/projects.go`.
-- Migrazioni: `migrations/0077_progetti.sql`, `migrations/0078_progetti_baseline.sql` (passo 3), `migrations/0079_progetti_fornitori.sql` (passo 4).
+- Migrazioni: `migrations/0077_progetti.sql`, `migrations/0078_progetti_baseline.sql` (passo 3), `migrations/0079_progetti_fornitori.sql` (passo 4). Il passo 5 non ha migrazioni: usa `budgets`, `status_reports` ed `ext_project` come sono.
 - Interfaccia: `web/src/projectsApi.ts`, `web/src/pages/progetti/` (passo 4: `SupplierPanel.tsx`, `ProgramOverview.tsx`), schede in `web/src/pages/ElementPage.tsx`.
 - Testi: area `progetti` (`progetti.ts` schede, `progetti-pm.ts` Panoramica, tabelle ed elenco, `progetti-piano.ts` Gantt, `progetti-voci.ts` scheda della voce e impostazioni, `progetti-baseline.ts` baseline, tolleranze e change request, `progetti-fornitori.ts` SAL, deliverable e conflitti, `progetti-programmi.ts` programmi, `lavoro-progetti.ts` notifiche) ed `errors-progetti.ts`.
-- Test: `internal/itest/progetti_test.go`, `internal/itest/progetti_baseline_test.go`, `internal/itest/progetti_fornitori_test.go`, `internal/modules/projects/baseline_test.go`, `internal/modules/projects/supplier_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts` (passo 4: `progetti-fornitori.spec.ts`).
+- Passo 5: `internal/modules/projects/incoming.go` («In arrivo dai progetti»), `tolerance.go` (tolleranze del progetto), `internal/modules/report/project.go` (status report del progetto), `finance.ProjectTotals`; interfaccia `web/src/pages/progetti/IncomingWork.tsx`, Panoramica (`BudgetBlock`, `ReportsBlock`), `StatusReportsTab kind="project"`, testi in `progetti-passo5.ts`.
+- Test: `internal/itest/progetti_passo5_test.go` (passo 5), `web/e2e/progetti-passo5.spec.ts`, `internal/itest/progetti_test.go`, `internal/itest/progetti_baseline_test.go`, `internal/itest/progetti_fornitori_test.go`, `internal/modules/projects/baseline_test.go`, `internal/modules/projects/supplier_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts` (passo 4: `progetti-fornitori.spec.ts`).
 
 ## Dati
 
@@ -115,8 +116,9 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 - **Dipendenze bloccate:** `waiting` se la voce doveva partire e il predecessore non è chiuso, `violated` se le date non rispettano la dipendenza.
 - **Fornitori e componenti condivisi:** SAL da accettare (`claims_pending`), conflitti con altri progetti (`conflicts`, con i limiti di visibilità del piano).
 - **Altro:** change request da inviare o in approvazione (figlie del progetto), rischi collegati al progetto o alle sue richieste, ruoli obbligatori mancanti, margine sulla scadenza normativa (o desiderata) delle richieste.
-- **Budget:** quello delle richieste confluite (`finance.RequestTotals`, solo aggregati), finché il passo 5 non lo sposta sul progetto.
-- **Semaforo:** rosso con una milestone in ritardo, la previsione oltre la scadenza o uno scostamento oltre le tolleranze (date o budget); giallo con work package in ritardo, dipendenze bloccate, conflitti con altri progetti o ruoli mancanti.
+- **Budget (passo 5):** il budget del progetto, vedi «Budget del progetto» sotto.
+- **Perimetro (passo 5):** work package e milestone nati dopo la baseline in vigore (`scope_added`) e quelli della baseline poi annullati o tolti dal piano (`scope_removed`). Le attività no: sono il dettaglio di un work package a cascata.
+- **Semaforo:** rosso con una milestone in ritardo, la previsione oltre la scadenza o uno scostamento oltre le tolleranze (date o budget); giallo con work package in ritardo, dipendenze bloccate, conflitti con altri progetti, perimetro cambiato (`scope_changed`) o ruoli mancanti.
 
 ## Cancelli di fase
 
@@ -129,10 +131,15 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 - **Baseline:** `POST /projects/{ref}/baselines {note}` fissa la prima (chi pianifica il progetto); con una baseline già presente risponde `validation.projects.baseline_exists`. Le successive nascono solo da una change request approvata. `GET /projects/{ref}/baselines` le elenca, `GET /plan-baselines/{id}` ne dà le voci.
   - Immutabili: un trigger (`plan_baseline_immutable`) rifiuta `update` e `delete` diretti; passano solo quelli a cascata da un vincolo (cancellazione del tenant o degli elementi, copia dell'ambiente di prova).
   - Il piano (`GET /projects/{ref}/plan`) porta `baseline` (in vigore), `tolerance` e, per voce, `in_baseline`, `baseline_start`, `baseline_end`, `variance_days`. Il Gantt le disegna in trasparenza sotto le barre.
-- **Tolleranze:** del tenant in `project_settings` (Configurazione → Progetti; predefinite +10 giorni lavorativi, +5% sul budget), sovrascrivibili per progetto in `ext_project` (per ora senza interfaccia).
-- **Change request automatica:** dopo ogni spostamento salvato (`saveChanges`: trascinamento, cascata, pianificazione automatica), se c'è una baseline, nessuna change request aperta e una milestone non chiusa o la fine del progetto sono oltre la tolleranza in giorni, nasce un elemento `change_request` figlio del progetto con il piano proposto (la fotografia del piano) e gli scostamenti. Il budget oltre la tolleranza fa solo diventare rosso il semaforo: la change request la apre il PM.
+- **Tolleranze:** del tenant in `project_settings` (Configurazione → Progetti; predefinite +10 giorni lavorativi, +5% sul budget), sovrascrivibili per progetto in `ext_project` (passo 5: `PUT /projects/{ref}/tolerance {days, budget_pct}`, `null` torna a quella del tenant, dalla scheda «Piano»). Le tolleranze del progetto le cambiano l'amministratore, il governo del portafoglio (`portfolio.admin`) e chi ha sul progetto il ruolo `pmo` o `sponsor`, non il PM: il piano porta `project_tolerance` e `can_edit_tolerance`. Dopo il salvataggio si ricontrolla il piano.
+- **Change request automatica:** se c'è una baseline e nessuna change request aperta, nasce un elemento `change_request` figlio del progetto con il piano proposto (la fotografia del piano) e gli scostamenti quando:
+  - una milestone non chiusa o la fine del progetto vanno oltre la tolleranza in giorni, dopo ogni spostamento salvato (`saveChanges`: trascinamento, cascata, pianificazione automatica);
+  - (passo 5) il costo del progetto (previsione, altrimenti approvato) supera la tolleranza sul budget della baseline: il controllo parte da `finance.Service.Changed`, chiamata quando si approva una versione di budget, si pubblica una previsione o si approva un trasferimento, sul progetto o su una sua richiesta (`projects.BudgetChanged`). Scostamento `budget` con `pct`;
+  - (passo 5) si aggiunge o si toglie un work package o una milestone rispetto alla baseline: creazione, cancellazione, passaggio a una fase annullata. Scostamenti `scope_added` e `scope_removed`;
+  - (passo 5) si salvano tolleranze del progetto più strette.
+  - Il titolo dice cosa è uscito: «Scostamento oltre le tolleranze», «Budget oltre la tolleranza», «Variazione del perimetro».
 - **A mano:** `POST /projects/{ref}/change-requests {title?, reason}`; una sola aperta per progetto (`validation.projects.cr_open`).
-- **Approvazione:** come il cancello di fase, nel motore delle approvazioni (soggetto `change_request` sul progetto, politica «Change request»). Se non parte (nessuna politica, manca lo sponsor), la change request resta «Da inviare» con codice e messaggio in `blocked`, e lo spostamento va comunque a buon fine. `POST /change-requests/{id}/submit {reason?}` la invia, `POST /change-requests/{id}/withdraw` la ritira.
+- **Approvazione:** come il cancello di fase, nel motore delle approvazioni (soggetto `change_request` sul progetto, politica «Change request»). Se non parte (nessuna politica, manca lo sponsor), la change request resta «Da inviare» con codice e messaggio in `blocked`, e lo spostamento va comunque a buon fine. `POST /change-requests/{id}/submit {reason?}` la invia, `POST /change-requests/{id}/withdraw` la ritira: da inviare oppure (passo 5) in approvazione. In approvazione si annulla anche la richiesta nel motore delle approvazioni (`cancelled`, passi `skipped`), che sparisce dalla posta di chi doveva decidere; la baseline resta. La change request porta `can_withdraw`. Errore `validation.projects.cr_withdraw` se non è più ritirabile.
   - Esito con `OnClose`: approvata, il piano proposto diventa la baseline successiva (e si ricontrolla il piano attuale, che può essersi mosso intanto); respinta, la baseline resta; rimandata, torna da inviare.
   - Le fasi del processo di partenza (`change_request_standard.json`: Da inviare, In approvazione, Approvata, Respinta, Ritirata) le muove il modulo; a mano si può solo ritirare.
 - **Visibilità:** baseline e change request seguono quella del singolo elemento come il piano: le voci che l'attore non legge arrivano senza titolo, le change request che non legge non compaiono, il budget della baseline compare solo a chi vede quello del progetto.
@@ -174,11 +181,34 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 | `GET /programs/{ref}` | numeri aggregati, progetti con numeri e milestone, `can_edit` |
 | `PUT /projects/{ref}/program` | mette il progetto nel programma (`""` lo toglie) |
 
-## Punti di aggancio per il passo 5
+## Budget del progetto (passo 5)
 
-- **Budget e status report:** restano sulla richiesta. `BudgetFunc` del servizio è il punto da spostare sul progetto.
-- **«In arrivo dai progetti»:** non ancora; i work package proposti sono quelli nella fase «Proposto».
+- Il budget del progetto è costruito sulla finanza: i budget con `element_id` del progetto (si creano in Finanza con la chiave del progetto, «Attinge da» compreso) più quelli delle richieste confluite; consuntivo e impegnato vengono da `cost_rollups` sull'unione delle famiglie (`finance_family`) di progetto e richieste, contati una volta sola. Lo calcola `finance.ProjectTotals`, che il server passa al modulo come `BudgetFunc(ctx, tx, actor, projectID, requestIDs)`.
+- `Numbers.budget`: previsto (`approved_cents`), in approvazione (`pending_cents`), impegnato, speso, previsione a finire, consumo, e l'elenco delle versioni in vigore (`budgets`, con la chiave dell'elemento). `budget_visible` dice se l'attore vede il budget anche quando non c'è ancora.
+- **Chi lo vede:** `finance.read`, chi pianifica il progetto, chi ha sul progetto un ruolo tra sponsor, business owner, PMO, program manager e responsabile operations, il program manager o lo sponsor del programma, chi legge una delle richieste confluite (lo stesso criterio di prima). Il team e il contatto del fornitore no.
+- **Panoramica:** blocco «Budget e costi» con i numeri, le versioni, «Apri in Finanza» e, per chi ha `finance.read`, il campo «Attinge da» di ogni budget (`RequestBudgetSource` sull'elemento del progetto).
+- **Programma:** il budget di ogni progetto nella tabella (`ProgramProject.budget`, solo a chi lo vede) e la somma nei numeri del programma, come prima.
+- La baseline fotografa il budget del progetto così calcolato (prima solo quello delle richieste).
+
+## Status report del progetto (passo 5)
+
+- È lo status report della richiesta (`status_reports`, `internal/modules/report`): bozza, invio, presa visione, confronto, export. La fotografia (`data`) per il progetto viene dai numeri del progetto: il server collega `report.ProjectSnapshot` a `projects.Numbers` (`projectStatusSnapshot` in `internal/api/projects.go`), con gli occhi dell'autore. `data.project` porta semaforo e motivi, avanzamento, work package e milestone, baseline e scostamenti, perimetro, ritardi, voci oltre la tolleranza, bloccate, SAL da accettare, conflitti, change request aperte, rischi e ruoli mancanti; `schedule.planned_pct` è l'avanzamento atteso (`projects.PlannedPct`).
+- **Semafori proposti** (`suggestProject`): tempi da milestone in ritardo, scadenza superata, tolleranze e avanzamento contro atteso; costi dalla tolleranza sul budget e poi dalle regole della richiesta; perimetro dalle voci aggiunte o tolte e dalle change request in corso; rischi da rischi aperti, conflitti e ruoli mancanti. Sintesi, fatte, prossime, rischi e decisioni sono precompilati (`prefillProjectText`); il PM corregge e commenta.
+- **Chi:** scrivono il PM, il PMO e chi ha `element.write`; prendono visione sponsor e PMO; all'invio avvisa chi segue il progetto (gli stakeholder, quindi lo sponsor), notifica `report` evento `submitted`.
+- **Visibilità alla lettura** (`redactProject`): le voci che chi legge non può leggere arrivano senza titolo; chi non vede il budget del progetto riceve `cost.hidden` senza importi.
+- **API:** `GET|POST /projects/{ref}/status-reports`, `GET .../prefill`, `PUT .../schedule`, e il singolo report su `/project-reports/{id}` (`PATCH`, `DELETE`, `/refresh`, `/submit`, `/acknowledge`, `/compare`, `/export.md`), prefisso del modulo dei progetti: funziona anche con la domanda spenta. Gli stessi handler della richiesta.
+- **Promemoria:** il report è atteso per i progetti in una fase `in_progress`; le richieste confluite in un progetto non lo chiedono più (lo chiede il progetto).
+- **Interfaccia:** scheda «Stato» del progetto (`StatusReportsTab kind="project"`), con i numeri del progetto nel blocco dei dati; in Panoramica il blocco «Status report» con gli ultimi tre inviati, la bozza in corso e la prossima scadenza.
+
+## «In arrivo dai progetti» (passo 5)
+
+- `GET /projects/incoming?team=<id>|space=<chiave>&weeks=8` (da 1 a 52): work package con quel team e attività di quei work package, aperti, di progetti aperti, con date che toccano le prossime settimane. Il work package nella fase iniziale è `proposed` (da accettare); quello agile accettato porta i suoi epic. Le voci che l'attore non legge non compaiono e si contano in `restricted`; il progetto e il work package non leggibili restano senza titolo.
+- **Interfaccia:** nel backlog del team (colonna a destra), con la finestra di 4, 8 o 12 settimane, se il modulo dei progetti è acceso e lo spazio è di un team.
+
+## Ancora aperto
+
 - **Carico del componente in Architettura:** i conflitti stanno nel piano e nella notifica; la scheda dell'applicazione non mostra ancora i progetti che la toccano (`conflictsOf` e l'indice su `ext_work_package.application_id` sono il punto di partenza).
+- **Riepilogo sulla richiesta:** la scheda «Stato» della richiesta confluita mostra ancora i suoi report; non rimanda a quelli del progetto.
 
 ## Nota sulla visibilità
 

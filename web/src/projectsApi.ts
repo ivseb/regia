@@ -124,6 +124,9 @@ export type ProjectPlan = {
   /** Baseline in vigore (null se non è ancora fissata) e tolleranze del progetto. */
   baseline: BaselineHead | null;
   tolerance: Tolerance;
+  /** Tolleranze proprie del progetto (null = quella del tenant) e se l'attore può cambiarle (passo 5). */
+  project_tolerance: { days: number | null; budget_pct: number | null };
+  can_edit_tolerance: boolean;
 };
 
 export type ItemRef = {
@@ -141,16 +144,31 @@ export type ItemRef = {
 
 export type Blocked = { item: ItemRef; waits_on: ItemRef; reason: "waiting" | "violated"; dep_kind: DepKind };
 
+/** Una versione di budget che concorre al budget del progetto: del progetto o di una sua richiesta. */
+export type BudgetRef = {
+  id: string;
+  element_key: string;
+  fiscal_year: string;
+  kind: "requested" | "approved" | "revised" | "forecast";
+  version: number;
+  status: "draft" | "submitted" | "approved" | "superseded";
+  total_cents: number;
+};
+
+/** Budget del progetto (passo 5): previsto (approvato), in lavorazione, impegnato, speso, previsione a finire. */
 export type Budget = {
   currency: string;
   approved_cents: number | null;
+  pending_cents?: number | null;
   spent_cents: number;
   committed_cents: number;
   forecast_cents: number | null;
+  consumption_pct?: number | null;
+  budgets?: BudgetRef[];
 };
 
 /** Codici del semaforo: milestone_late, past_target, over_tolerance, budget_over_tolerance (rosso);
- * work_package_late, blocked, conflicts, missing_roles (giallo). */
+ * work_package_late, blocked, conflicts, scope_changed, missing_roles (giallo). */
 export type Reason =
   | "milestone_late"
   | "past_target"
@@ -159,6 +177,7 @@ export type Reason =
   | "work_package_late"
   | "blocked"
   | "conflicts"
+  | "scope_changed"
   | "missing_roles";
 
 export type Numbers = {
@@ -199,7 +218,12 @@ export type Numbers = {
   open_change_requests: number;
   risks: ItemRef[];
   missing_roles: { key: string; name: string }[];
+  /** Perimetro (passo 5): work package e milestone aggiunti dopo la baseline o tolti. */
+  scope_added: ItemRef[];
+  scope_removed: ItemRef[];
+  /** Budget del progetto (null per chi non lo vede o se non c'è); budget_visible anche se è vuoto. */
   budget: Budget | null;
+  budget_visible: boolean;
   signal: Signal;
   reasons: Reason[];
 };
@@ -276,12 +300,14 @@ export type CRStatus = "draft" | "pending" | "approved" | "rejected" | "withdraw
 
 export type Deviation = {
   id: string;
-  kind: "milestone" | "project";
+  /** milestone, project (fine del progetto), scope_added/scope_removed (perimetro), budget (passo 5). */
+  kind: "milestone" | "project" | "scope_added" | "scope_removed" | "budget";
   key: string;
   title: string;
   baseline_end: string | null;
   end: string | null;
   days: number;
+  pct?: number | null;
   restricted?: boolean;
 };
 
@@ -307,6 +333,8 @@ export type ChangeRequest = {
   created_by: string | null;
   decided_at: string | null;
   can_submit: boolean;
+  /** Chi pianifica ritira la change request da inviare o in approvazione (passo 5). */
+  can_withdraw: boolean;
 };
 
 // ---- Fornitori (passo 4): contratto, SAL e deliverable del work package in modo «fornitore».
@@ -423,6 +451,8 @@ export type ProgramProject = {
   conflicts: number;
   claims_pending: number;
   milestones: RoadmapMilestone[];
+  /** Budget del progetto, solo a chi lo vede (passo 5). */
+  budget: Budget | null;
 };
 
 /** Pagina del programma: numbers sono quelli di computeNumbers su tutte le voci dei progetti. */
@@ -499,6 +529,8 @@ const veilNumbers = (n: Numbers): Numbers => ({
   next_milestone: n.next_milestone && veil(n.next_milestone),
   over_tolerance: n.over_tolerance.map(veil),
   conflicts: (n.conflicts ?? []).map(veilConflict),
+  scope_added: (n.scope_added ?? []).map(veil),
+  scope_removed: (n.scope_removed ?? []).map(veil),
 });
 
 export const projectsApi = {
@@ -567,6 +599,18 @@ export const projectsApi = {
   /** Mette il progetto in un programma ("" lo toglie). */
   setProgram: (ref: string, program: string) => call<{ program: Ref | null }>("PUT", `/projects/${q(ref)}/program`, { program }),
 
+  /** Tolleranze del singolo progetto (null torna a quella del tenant). */
+  setTolerance: (ref: string, t: { days: number | null; budget_pct: number | null }) =>
+    call<ProjectPlan>("PUT", `/projects/${q(ref)}/tolerance`, t).then((p) => ({ ...p, project: veilHead(p.project), items: p.items.map(veilItem) })),
+  /** «In arrivo dai progetti»: il lavoro pianificato sul team nelle prossime settimane. */
+  incoming: (f: { team?: string; space?: string; weeks?: number }) => {
+    const p = new URLSearchParams();
+    if (f.team) p.set("team", f.team);
+    if (f.space) p.set("space", f.space);
+    if (f.weeks) p.set("weeks", String(f.weeks));
+    return call<Incoming>("GET", `/projects/incoming?${p.toString()}`);
+  },
+
   settings: () => call<ProjectSettings>("GET", "/projects/settings"),
   saveSettings: (s: Partial<Omit<ProjectSettings, "available_roles" | "can_edit">>) => call<ProjectSettings>("PUT", "/projects/settings", s),
 
@@ -575,6 +619,28 @@ export const projectsApi = {
   /** «Crea il progetto»: la richiesta approvata diventa il progetto (o restituisce quello che ha già). */
   fromRequest: (ref: string) => call<{ project: Element; created: boolean }>("POST", `/demand/requests/${q(ref)}/project`),
 };
+
+/** Una voce di un progetto pianificata sul team (work package o attività). */
+export type IncomingItem = {
+  id: string;
+  key: string;
+  title: string;
+  kind: "work_package" | "plan_activity";
+  project: Ref;
+  phase: string | null;
+  work_package: Ref | null;
+  delivery_mode: DeliveryMode | null;
+  team: string;
+  state: string;
+  state_category: string;
+  start: string | null;
+  end: string | null;
+  estimate_effort_days: number | null;
+  /** Work package da accettare. */
+  proposed: boolean;
+  epics: Ref[];
+};
+export type Incoming = { teams: Ref[]; from: string; to: string; weeks: number; items: IncomingItem[]; restricted: number };
 
 /** Chiavi di React Query condivise dalle schede del progetto. */
 export const projectKeys = {
@@ -588,4 +654,5 @@ export const projectKeys = {
   supplier: (id: string) => ["plan-item-supplier", id] as const,
   programs: ["programs"] as const,
   program: (ref: string) => ["program", ref] as const,
+  incoming: (space: string, weeks: number) => ["projects-incoming", space, weeks] as const,
 };

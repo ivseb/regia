@@ -2,13 +2,17 @@ package api
 
 import (
 	"context"
+	"math"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"regia/internal/engine"
 	"regia/internal/modules/planning"
 	"regia/internal/modules/projects"
+	"regia/internal/modules/report"
 	"regia/internal/platform/auth"
 )
 
@@ -26,43 +30,109 @@ func (s *Server) projectsInit() {
 	s.proj.Epic = func(ctx context.Context, tx pgx.Tx, actor engine.Actor, wpRef string) (*engine.Element, error) {
 		return s.work.CreateEpicFor(ctx, tx, actor, wpRef)
 	}
+	// Passo 5: il budget approvato (o la previsione, o un trasferimento) ricontrolla le tolleranze del
+	// progetto; lo status report del progetto parte dai suoi numeri.
+	if s.fin != nil {
+		s.fin.Changed = s.proj.BudgetChanged
+	}
+	if s.report != nil {
+		s.report.ProjectSnapshot = s.projectStatusSnapshot
+		s.report.ProjectBudgetVisible = s.proj.BudgetVisibleTo
+	}
 }
 
-// projectBudget somma gli importi aggregati delle richieste confluite nel progetto.
-func (s *Server) projectBudget(ctx context.Context, tx pgx.Tx, actor engine.Actor, requestIDs []string) (*projects.Budget, error) {
+// projectBudget è il budget del progetto (passo 5): i totali della finanza sul progetto e sulle
+// richieste confluite. nil se non c'è nulla: nessun budget, nessun costo.
+func (s *Server) projectBudget(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID string, requestIDs []string) (*projects.Budget, error) {
 	if s.fin == nil {
 		return nil, nil
 	}
-	var out *projects.Budget
-	for _, id := range requestIDs {
-		t, err := s.fin.RequestTotals(ctx, tx, actor, id)
-		if err != nil {
-			if err == engine.ErrNotFound || err == engine.ErrForbidden {
-				continue
-			}
-			return nil, err
-		}
-		if out == nil {
-			out = &projects.Budget{Currency: t.Currency}
-		}
-		if t.ApprovedCents != nil {
-			v := *t.ApprovedCents
-			if out.ApprovedCents != nil {
-				v += *out.ApprovedCents
-			}
-			out.ApprovedCents = &v
-		}
-		if t.ForecastCents != nil {
-			v := *t.ForecastCents
-			if out.ForecastCents != nil {
-				v += *out.ForecastCents
-			}
-			out.ForecastCents = &v
-		}
-		out.SpentCents += t.ActualCents
-		out.CommittedCents += t.CommittedCents
+	t, err := s.fin.ProjectTotals(ctx, tx, actor, projectID, requestIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(t.Budgets) == 0 && t.ActualCents == 0 && t.CommittedCents == 0 {
+		return nil, nil
+	}
+	out := &projects.Budget{Currency: t.Currency, ApprovedCents: t.ApprovedCents, PendingCents: t.PendingCents, SpentCents: t.ActualCents,
+		CommittedCents: t.CommittedCents, ForecastCents: t.ForecastCents, ConsumptionPct: t.ConsumptionPct, Budgets: []projects.BudgetRef{}}
+	if out.ConsumptionPct != nil {
+		v := math.Round(*out.ConsumptionPct*10) / 10
+		out.ConsumptionPct = &v
+	}
+	for _, b := range t.Budgets {
+		out.Budgets = append(out.Budgets, projects.BudgetRef{ID: b.ID, ElementKey: b.ElementKey, FiscalYear: b.FiscalYear, Kind: b.Kind,
+			Version: b.Version, Status: b.Status, TotalCents: b.TotalCents})
 	}
 	return out, nil
+}
+
+// projectStatusSnapshot fotografa i numeri del progetto per lo status report (passo 5): gli stessi
+// della Panoramica, con gli occhi di chi scrive il report.
+func (s *Server) projectStatusSnapshot(ctx context.Context, tx pgx.Tx, actor engine.Actor, el *engine.Element, asOf time.Time) (*report.Snapshot, error) {
+	n, p, err := s.proj.Numbers(ctx, tx, actor, el.ID)
+	if err != nil {
+		return nil, err
+	}
+	sn := &report.Snapshot{}
+	sc := &sn.Schedule
+	sc.Start, sc.End = n.Start, n.End
+	switch n.TargetKind {
+	case "regulatory":
+		sc.Deadline = n.Target
+	case "desired":
+		sc.DesiredDate = n.Target
+	}
+	sc.Tasks, sc.TasksDone = n.WorkPackages, n.WorkPackagesDone
+	sc.Late = []report.TaskRef{}
+	for _, it := range p.Items {
+		if it.Kind == projects.TypeWorkPackage && it.StateCategory != "cancelled" && it.Start != nil && it.End != nil {
+			sc.TasksScheduled++
+		}
+	}
+	for _, l := range n.Late {
+		if l.Kind != projects.TypeWorkPackage {
+			continue
+		}
+		sc.TasksLate++
+		sc.Late = append(sc.Late, report.TaskRef{ID: l.ID, Key: l.Key, Application: l.Title, Team: l.Team, End: l.Date})
+	}
+	actual := n.Progress
+	sc.ActualPct = &actual
+	sc.PlannedPct = projects.PlannedPct(p, asOf)
+	if sc.PlannedPct == nil {
+		zero := 0.0
+		sc.PlannedPct = &zero
+	}
+	if b := n.Budget; b != nil {
+		sn.Cost = report.CostData{Currency: b.Currency, ApprovedCents: b.ApprovedCents, ActualCents: b.SpentCents,
+			CommittedCents: b.CommittedCents, ForecastCents: b.ForecastCents, ConsumptionPct: b.ConsumptionPct}
+	} else if !n.BudgetVisible {
+		sn.Cost.Hidden = true
+	}
+	conv := func(refs []projects.ItemRef) []report.ProjRef {
+		out := make([]report.ProjRef, 0, len(refs))
+		for _, r := range refs {
+			out = append(out, report.ProjRef{ID: r.ID, Key: r.Key, Title: r.Title, Kind: r.Kind, Date: r.Date, DaysLate: r.DaysLate, Restricted: r.Restricted})
+		}
+		return out
+	}
+	pd := &report.ProjectData{Signal: n.Signal, Reasons: n.Reasons, Progress: n.Progress, WorkPackages: n.WorkPackages,
+		WorkPackagesDone: n.WorkPackagesDone, Milestones: n.Milestones, MilestonesDone: n.MilestonesDone, Baseline: n.Baseline,
+		BaselineEnd: n.BaselineEnd, VarianceDays: n.VarianceDays, VariancePct: n.VariancePct, BudgetVariancePct: n.BudgetVariancePct,
+		ToleranceDays: n.Tolerance.Days, ToleranceBudget: n.Tolerance.BudgetPct, Target: n.Target, TargetKind: n.TargetKind,
+		MarginDays: n.MarginDays, Late: conv(n.Late), OverTolerance: conv(n.OverTolerance), ScopeAdded: conv(n.ScopeAdded),
+		ScopeRemoved: conv(n.ScopeRemoved), Blocked: len(n.Blocked), ClaimsPending: n.ClaimsPending, Conflicts: len(n.Conflicts),
+		OpenChanges: n.OpenChangeRequests, Risks: conv(n.Risks), MissingRoles: []string{}}
+	if n.NextMilestone != nil {
+		nm := conv([]projects.ItemRef{*n.NextMilestone})[0]
+		pd.NextMilestone = &nm
+	}
+	for _, r := range n.MissingRoles {
+		pd.MissingRoles = append(pd.MissingRoles, r.Name)
+	}
+	sn.Project = pd
+	return sn, nil
 }
 
 func (s *Server) projectRoutes(mux *http.ServeMux) {
@@ -94,6 +164,24 @@ func (s *Server) projectRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+cr+"/{id}", inTenant(s.changeRequest))
 	mux.HandleFunc("POST "+cr+"/{id}/submit", inTenant(s.submitChangeRequest))
 	mux.HandleFunc("POST "+cr+"/{id}/withdraw", inTenant(s.withdrawChangeRequest))
+	// Passo 5: tolleranze del progetto, «In arrivo dai progetti», status report del progetto.
+	mux.HandleFunc("PUT "+b+"/{ref}/tolerance", inTenant(s.setProjectTolerance))
+	mux.HandleFunc("GET "+b+"/incoming", inTenant(s.incomingWork))
+	mux.HandleFunc("GET "+b+"/{ref}/status-reports", inTenant(s.listStatusReports))
+	mux.HandleFunc("GET "+b+"/{ref}/status-reports/prefill", inTenant(s.prefillStatusReport))
+	mux.HandleFunc("POST "+b+"/{ref}/status-reports", inTenant(s.createStatusReport))
+	mux.HandleFunc("PUT "+b+"/{ref}/status-reports/schedule", inTenant(s.statusReportSchedule))
+	// Il singolo report del progetto ha un prefisso dei progetti: resta raggiungibile anche con la
+	// domanda spenta (gli status report della richiesta stanno sotto il modulo demand).
+	pr := "/api/v1/project-reports"
+	mux.HandleFunc("GET "+pr+"/{id}", inTenant(s.getStatusReport))
+	mux.HandleFunc("PATCH "+pr+"/{id}", inTenant(s.updateStatusReport))
+	mux.HandleFunc("DELETE "+pr+"/{id}", inTenant(s.deleteStatusReport))
+	mux.HandleFunc("POST "+pr+"/{id}/refresh", inTenant(s.refreshStatusReport))
+	mux.HandleFunc("POST "+pr+"/{id}/submit", inTenant(s.submitStatusReport))
+	mux.HandleFunc("POST "+pr+"/{id}/acknowledge", inTenant(s.acknowledgeStatusReport))
+	mux.HandleFunc("GET "+pr+"/{id}/compare", inTenant(s.compareStatusReports))
+	mux.HandleFunc("GET "+pr+"/{id}/export.md", inTenant(s.exportStatusReport))
 	// Passo 4: fornitori (contratto, SAL, deliverable) e programmi.
 	pc, dl, pg := "/api/v1/progress-claims", "/api/v1/deliverables", "/api/v1/programs"
 	mux.HandleFunc("GET "+it+"/{id}/supplier", inTenant(s.planItemSupplier))
@@ -507,5 +595,23 @@ func (s *Server) setProjectProgram(w http.ResponseWriter, r *http.Request, p *au
 	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (any, error) {
 		ref, err := s.proj.SetProgram(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), in.Program)
 		return map[string]any{"program": ref}, err
+	})
+}
+
+func (s *Server) setProjectTolerance(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.ToleranceInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.Plan, error) {
+		return s.proj.SetTolerance(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), in)
+	})
+}
+
+func (s *Server) incomingWork(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	q := r.URL.Query()
+	weeks, _ := strconv.Atoi(q.Get("weeks"))
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.Incoming, error) {
+		return s.proj.IncomingWork(r.Context(), tx, actorOf(r, p), projects.IncomingInput{Team: q.Get("team"), Space: q.Get("space"), Weeks: weeks})
 	})
 }

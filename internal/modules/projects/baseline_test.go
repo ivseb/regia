@@ -48,9 +48,9 @@ func TestNumbersAgainstBaseline(t *testing.T) {
 		Tolerance: Tolerance{Days: 5, BudgetPct: 5},
 		Baseline:  &BaselineHead{ID: "b", Number: 1, Start: str("2027-01-04"), End: str("2027-01-29")},
 		Items: []Item{
-			{ID: "wp", Kind: TypeWorkPackage, Start: str("2027-01-04"), End: str("2027-01-15"), BaselineEnd: str("2027-01-15"), StateCategory: "in_progress"},
-			{ID: "m1", Kind: TypeMilestone, Start: str("2027-02-12"), End: str("2027-02-12"), BaselineEnd: str("2027-01-29"), StateCategory: "todo"},
-			{ID: "m2", Kind: TypeMilestone, Start: str("2027-02-12"), End: str("2027-02-12"), BaselineEnd: str("2027-01-15"), StateCategory: "done"},
+			{ID: "wp", Kind: TypeWorkPackage, Start: str("2027-01-04"), End: str("2027-01-15"), BaselineEnd: str("2027-01-15"), InBaseline: true, StateCategory: "in_progress"},
+			{ID: "m1", Kind: TypeMilestone, Start: str("2027-02-12"), End: str("2027-02-12"), BaselineEnd: str("2027-01-29"), InBaseline: true, StateCategory: "todo"},
+			{ID: "m2", Kind: TypeMilestone, Start: str("2027-02-12"), End: str("2027-02-12"), BaselineEnd: str("2027-01-15"), InBaseline: true, StateCategory: "done"},
 		},
 	}
 	computeItemVariance(p)
@@ -78,4 +78,51 @@ func deref64i(v *int) any {
 		return nil
 	}
 	return *v
+}
+
+// Passo 5: work package e milestone nati dopo la baseline, o della baseline e poi annullati o tolti,
+// sono scostamenti di perimetro; le attività no.
+func TestScopeChanges(t *testing.T) {
+	p := &Plan{
+		Project:   Head{ID: "p"},
+		Tolerance: Tolerance{Days: 5, BudgetPct: 5},
+		Baseline: &BaselineHead{ID: "b", Number: 1, scope: []BaselineItem{
+			{ID: "wp1", Kind: TypeWorkPackage, Key: "PRJ-2", Title: "Analisi"},
+			{ID: "wp2", Kind: TypeWorkPackage, Key: "PRJ-3", Title: "Sviluppo"},
+			{ID: "gone", Kind: TypeMilestone, Key: "PRJ-4", Title: "Go-live", End: str("2027-02-01")},
+		}},
+		Items: []Item{
+			{ID: "wp1", Kind: TypeWorkPackage, InBaseline: true, StateCategory: "todo"},
+			{ID: "wp2", Kind: TypeWorkPackage, InBaseline: true, StateCategory: "cancelled"},
+			{ID: "new", Kind: TypeWorkPackage, Key: "PRJ-9", StateCategory: "todo"},
+			{ID: "act", Kind: TypeActivity, StateCategory: "todo"},
+			{ID: "newc", Kind: TypeMilestone, StateCategory: "cancelled"},
+		},
+	}
+	n := computeNumbers(p, time.Date(2027, 1, 4, 0, 0, 0, 0, time.UTC))
+	if len(n.ScopeAdded) != 1 || n.ScopeAdded[0].ID != "new" {
+		t.Fatalf("voci aggiunte: %+v", n.ScopeAdded)
+	}
+	if len(n.ScopeRemoved) != 2 || n.ScopeRemoved[0].ID != "wp2" || n.ScopeRemoved[1].ID != "gone" || n.ScopeRemoved[1].Title != "Go-live" {
+		t.Fatalf("voci tolte: %+v", n.ScopeRemoved)
+	}
+	if n.Signal != "amber" || n.Reasons[len(n.Reasons)-1] != "scope_changed" {
+		t.Fatalf("semaforo: %s %v", n.Signal, n.Reasons)
+	}
+	devs := deviationsOf(p, &n)
+	if len(devs) != 3 || devs[0].Kind != DevScopeAdded || devs[2].Kind != DevScopeRemoved || devs[2].BaselineEnd == nil {
+		t.Fatalf("scostamenti di perimetro: %+v", devs)
+	}
+	if crTitle(devs) != "Variazione del perimetro" {
+		t.Fatalf("titolo: %s", crTitle(devs))
+	}
+	// Il budget oltre la tolleranza è uno scostamento a sé.
+	p.Baseline.budget = &Budget{Currency: "EUR", ApprovedCents: i64(100_000)}
+	if d := budgetDeviation(p, &Budget{Currency: "EUR", ApprovedCents: i64(104_000)}); d != nil {
+		t.Fatalf("budget dentro la tolleranza: %+v", d)
+	}
+	d := budgetDeviation(p, &Budget{Currency: "EUR", ApprovedCents: i64(100_000), ForecastCents: i64(112_000)})
+	if d == nil || d.Kind != DevBudget || *d.Pct != 12 || crTitle([]Deviation{*d}) != "Budget oltre la tolleranza" {
+		t.Fatalf("budget oltre la tolleranza: %+v", d)
+	}
 }

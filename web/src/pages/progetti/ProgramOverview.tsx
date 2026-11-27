@@ -154,9 +154,23 @@ function Variance({ p }: { p: ProgramProject }) {
   );
 }
 
+/** Budget del progetto nel programma (passo 5): speso sul previsto; «—» per chi non lo vede o se manca. */
+function BudgetCell({ p }: { p: ProgramProject }) {
+  const t = useT();
+  const b = p.budget;
+  if (!b) return <span className="text-muted">—</span>;
+  return (
+    <span className="tabular whitespace-nowrap">
+      {euro(b.spent_cents)}
+      <span className="text-muted"> {b.approved_cents != null ? t("progetti.passo5.budget.ofApproved", { amount: euro(b.approved_cents) }) : t("progetti.overview.budgetNoApproved")}</span>
+    </span>
+  );
+}
+
 function ProjectsTable({ projects }: { projects: ProgramProject[] }) {
   const t = useT();
   const none = t("progetti.common.none");
+  const anyBudget = projects.some((p) => p.budget);
   return (
     <>
       <table className="hidden w-full border-collapse text-[13px] md:table" aria-label={t("progetti.programmi.table.title")}>
@@ -170,6 +184,7 @@ function ProjectsTable({ projects }: { projects: ProgramProject[] }) {
             <th className={th}>{t("progetti.programmi.table.baseline")}</th>
             <th className={th}>{t("progetti.programmi.table.variance")}</th>
             <th className={th}>{t("progetti.programmi.table.late")}</th>
+            {anyBudget && <th className={th}>{t("progetti.overview.budget")}</th>}
           </tr>
         </thead>
         <tbody>
@@ -195,6 +210,11 @@ function ProjectsTable({ projects }: { projects: ProgramProject[] }) {
                 <Variance p={p} />
               </td>
               <td className={td}>{p.late > 0 ? <span className="font-semibold text-danger">{t("progetti.programmi.lateCount", { count: p.late })}</span> : <span className="text-muted">{t("progetti.programmi.onTime")}</span>}</td>
+              {anyBudget && (
+                <td className={td}>
+                  <BudgetCell p={p} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -220,6 +240,11 @@ function ProjectsTable({ projects }: { projects: ProgramProject[] }) {
               </span>
             )}
             {p.late > 0 && <span className="text-[12.5px] font-semibold text-danger">{t("progetti.programmi.lateCount", { count: p.late })}</span>}
+            {p.budget && (
+              <span className="text-[12.5px]">
+                {t("progetti.overview.budget")}: <BudgetCell p={p} />
+              </span>
+            )}
           </li>
         ))}
       </ul>

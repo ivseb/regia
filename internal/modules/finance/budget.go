@@ -515,9 +515,11 @@ func (s *Service) approve(ctx context.Context, tx pgx.Tx, actor engine.Actor, id
 		return err
 	}
 	if kind != "forecast" {
-		return s.syncPortfolio(ctx, tx, actor, fyID)
+		if err := s.syncPortfolio(ctx, tx, actor, fyID); err != nil {
+			return err
+		}
 	}
-	return nil
+	return s.changed(ctx, tx, actor, elementID)
 }
 
 // closeBudget applica l'esito dell'approvazione: approvata → versione corrente;
@@ -719,6 +721,18 @@ func (s *Service) decideTransfer(ctx context.Context, tx pgx.Tx, actor engine.Ac
 	if _, err := tx.Exec(ctx, `update budget_transfers set status = $2, decided_by = $3, decided_at = now(), decision_note = $4 where id = $1`,
 		id, status, nullable(actor.MemberID), nullable(note)); err != nil {
 		return err
+	}
+	if status == "approved" {
+		var elementID string
+		if err := tx.QueryRow(ctx, `select b.element_id::text from budget_transfers t
+			join budget_lines l on l.tenant_id = t.tenant_id and l.id = coalesce(t.to_line_id, t.from_line_id)
+			join budgets b on b.tenant_id = l.tenant_id and b.id = l.budget_id where t.id = $1`, id).Scan(&elementID); err == nil {
+			if err := s.changed(ctx, tx, actor, elementID); err != nil {
+				return err
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 	}
 	return audit.Append(ctx, tx, audit.Event{Action: "budget.transfer." + status, EntityType: "budget_transfer", EntityID: id,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"outcome": outcome}})

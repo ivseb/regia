@@ -57,6 +57,8 @@ type ProgramProject struct {
 	Conflicts     int                `json:"conflicts"`
 	ClaimsPending int                `json:"claims_pending"`
 	Milestones    []RoadmapMilestone `json:"milestones"`
+	// Budget del progetto (passo 5), solo a chi lo vede; senza l'elenco delle versioni.
+	Budget *Budget `json:"budget"`
 }
 
 // ProgramView è la pagina del programma.
@@ -156,6 +158,11 @@ func (s *Service) programNumbers(ctx context.Context, tx pgx.Tx, actor engine.Ac
 			Progress: n.Progress, Signal: n.Signal, Reasons: n.Reasons, Start: n.Start, End: n.End, BaselineStart: n.BaselineStart,
 			BaselineEnd: n.BaselineEnd, VarianceDays: n.VarianceDays, WorkPackages: n.WorkPackages, Late: len(n.Late),
 			Conflicts: len(n.Conflicts), ClaimsPending: n.ClaimsPending, Milestones: []RoadmapMilestone{}}
+		if n.Budget != nil {
+			b := *n.Budget
+			b.Budgets = nil
+			pp.Budget = &b
+		}
 		if pp.Start == nil {
 			pp.Start, pp.End = p.Project.Start, p.Project.End
 		}

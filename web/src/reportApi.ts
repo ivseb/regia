@@ -26,7 +26,7 @@ export const DIMENSIONS: { key: "overall" | "schedule" | "cost" | "scope" | "ris
 ];
 
 export type Sections = { summary: string; done: string; next: string; risks: string; decisions: string; notes: Record<string, string> };
-export type TaskRef = { key: string; application: string; team: string | null; end: string | null };
+export type TaskRef = { id?: string; key: string; application: string; team: string | null; end: string | null };
 export type Snapshot = {
   as_of: string;
   phase: string;
@@ -53,10 +53,47 @@ export type Snapshot = {
     cpi: number | null;
     spi: number | null;
     ev_as_of: string | null;
+    /** Chi legge non vede il budget del progetto: gli importi sono tolti. */
+    hidden?: boolean;
   };
   reviews_late: { key: string; title: string; team: string; due: string; late_days: number; mandatory: boolean }[];
   impacts_blocked: { key: string; application: string; reason: string }[];
   suggested: { overall: RAG; schedule: RAG; cost: RAG; scope: RAG; risk: RAG; reasons: Record<string, string[]> };
+  /** I numeri del progetto, solo nei report del progetto (passo 5). */
+  project?: ProjectData;
+};
+
+/** Voce del progetto citata nel report (senza titolo per chi non la legge). */
+export type ProjRef = { id: string; key: string; title: string; kind: string; date: string | null; days_late: number; restricted?: boolean };
+export type ProjectData = {
+  signal: "green" | "amber" | "red" | "none";
+  reasons: string[];
+  progress: number;
+  work_packages: number;
+  work_packages_done: number;
+  milestones: number;
+  milestones_done: number;
+  baseline: number | null;
+  baseline_end: string | null;
+  variance_days: number | null;
+  variance_pct: number | null;
+  budget_variance_pct: number | null;
+  tolerance_days: number;
+  tolerance_budget_pct: number;
+  target: string | null;
+  target_kind: string;
+  margin_days: number | null;
+  next_milestone: ProjRef | null;
+  late: ProjRef[];
+  over_tolerance: ProjRef[];
+  scope_added: ProjRef[];
+  scope_removed: ProjRef[];
+  blocked: number;
+  claims_pending: number;
+  conflicts: number;
+  open_change_requests: number;
+  risks: ProjRef[];
+  missing_roles: string[];
 };
 
 export type StatusReport = {
@@ -227,19 +264,33 @@ export type PortalSettings = {
 
 const q = encodeURIComponent;
 
+/**
+ * Status report di un elemento: la richiesta (scheda «Stato», sotto la domanda) oppure il progetto
+ * (passo 5 dei progetti, sotto il modulo dei progetti). Le operazioni sono le stesse, cambiano gli indirizzi.
+ */
+export type ReportKind = "request" | "project";
+export function reportsOf(kind: ReportKind) {
+  const base = kind === "project" ? "/projects" : "/demand/requests";
+  const one = kind === "project" ? "/project-reports" : "/status-reports";
+  return {
+    list: (ref: string) => call<ReportList>("GET", `${base}/${q(ref)}/status-reports`),
+    create: (ref: string, period_end?: string) => call<StatusReport>("POST", `${base}/${q(ref)}/status-reports`, { period_end: period_end ?? "" }),
+    schedule: (ref: string, frequency: string, next_due?: string) =>
+      call<ReportList>("PUT", `${base}/${q(ref)}/status-reports/schedule`, { frequency, ...(next_due !== undefined ? { next_due } : {}) }),
+    get: (id: string) => call<StatusReport>("GET", `${one}/${id}`),
+    update: (id: string, input: ReportInput) => call<StatusReport>("PATCH", `${one}/${id}`, input),
+    remove: (id: string) => call<void>("DELETE", `${one}/${id}`),
+    refresh: (id: string) => call<StatusReport>("POST", `${one}/${id}/refresh`),
+    submit: (id: string) => call<StatusReport>("POST", `${one}/${id}/submit`),
+    acknowledge: (id: string) => call<StatusReport>("POST", `${one}/${id}/acknowledge`),
+    compare: (id: string, other?: string) => call<Comparison>("GET", `${one}/${id}/compare${other ? `?with=${other}` : ""}`),
+    markdownUrl: (id: string) => `/api/v1${one}/${id}/export.md`,
+  };
+}
+export type ReportCalls = ReturnType<typeof reportsOf>;
+
 export const reportApi = {
-  list: (ref: string) => call<ReportList>("GET", `/demand/requests/${q(ref)}/status-reports`),
-  create: (ref: string, period_end?: string) => call<StatusReport>("POST", `/demand/requests/${q(ref)}/status-reports`, { period_end: period_end ?? "" }),
-  schedule: (ref: string, frequency: string, next_due?: string) =>
-    call<ReportList>("PUT", `/demand/requests/${q(ref)}/status-reports/schedule`, { frequency, ...(next_due !== undefined ? { next_due } : {}) }),
-  get: (id: string) => call<StatusReport>("GET", `/status-reports/${id}`),
-  update: (id: string, input: ReportInput) => call<StatusReport>("PATCH", `/status-reports/${id}`, input),
-  remove: (id: string) => call<void>("DELETE", `/status-reports/${id}`),
-  refresh: (id: string) => call<StatusReport>("POST", `/status-reports/${id}/refresh`),
-  submit: (id: string) => call<StatusReport>("POST", `/status-reports/${id}/submit`),
-  acknowledge: (id: string) => call<StatusReport>("POST", `/status-reports/${id}/acknowledge`),
-  compare: (id: string, other?: string) => call<Comparison>("GET", `/status-reports/${id}/compare${other ? `?with=${other}` : ""}`),
-  markdownUrl: (id: string) => `/api/v1/status-reports/${id}/export.md`,
+  ...reportsOf("request"),
   settings: () => call<ReportSettings>("GET", "/report/settings"),
   saveSettings: (s: Partial<Pick<ReportSettings, "frequency" | "reminder_days" | "phases" | "regulatory">>) => call<ReportSettings>("PUT", "/report/settings", s),
 

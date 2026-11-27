@@ -1,6 +1,6 @@
 // «Panoramica» del PM (replica/progetti.md §3 e §6): semaforo con i motivi, avanzamento, prossima milestone,
 // baseline, budget e margine; sotto, ciò che chiede attenzione. Tutti i numeri li calcola il server.
-import { useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Select } from "../../select";
@@ -10,6 +10,14 @@ import { EmptyState } from "../../emptyState";
 import { ErrorNote, Loading, SectionTitle, date, euro } from "../../ui";
 import { useT } from "../../i18n/react";
 import { ItemLink, ProgressBar, SignalMark, useClaimName, useConflictText } from "./shared";
+import { useMe } from "../../shell";
+import { reportsOf, type RAG } from "../../reportApi";
+import { RagMark } from "../StatusReports";
+import { kindLabel, statusLabel } from "../finance-ui";
+
+// «Attinge da» (docs/sviluppo/budget-collegamento.md) per chi vede la finanza: lo stesso componente della richiesta.
+const BudgetSourceList = lazy(() => import("../budget/RequestBudgetSource").then((m) => ({ default: m.RequestBudgetSource })));
+const projectReports = reportsOf("project");
 
 export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: TabKey) => void }) {
   const t = useT();
@@ -36,6 +44,7 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
       ) : (
         <>
           <Head data={q.data} refKey={refKey} />
+          {n.budget_visible && <BudgetBlock data={q.data} refKey={refKey} />}
           <div className="grid gap-7 md:grid-cols-2">
             <Block title={t("progetti.overview.late")}>
               {n.late.length === 0 ? <None text={t("progetti.overview.lateNone")} /> : <ul className="m-0 list-none p-0">{n.late.map((i) => <LateRow key={i.id} item={i} />)}</ul>}
@@ -59,6 +68,22 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
             </Block>
             <Block title={t("progetti.overview.changes")}>
               {n.open_change_requests === 0 ? <None text={t("progetti.overview.changesNone")} /> : <p className="m-0 font-semibold">{t("progetti.overview.changesCount", { count: n.open_change_requests })}</p>}
+              {(n.scope_added.length > 0 || n.scope_removed.length > 0) && (
+                <ul className="m-0 list-none p-0" aria-label={t("progetti.passo5.scope.title")} data-testid="panoramica-perimetro">
+                  {n.scope_added.map((i) => (
+                    <li key={"a" + i.id} className="flex flex-wrap items-center justify-between gap-x-3 border-b border-hair py-1">
+                      <ItemLink itemKey={i.key} title={i.title} />
+                      <span className="text-[12.5px] font-semibold">{t("progetti.passo5.scope.added")}</span>
+                    </li>
+                  ))}
+                  {n.scope_removed.map((i) => (
+                    <li key={"r" + i.id} className="flex flex-wrap items-center justify-between gap-x-3 border-b border-hair py-1">
+                      <ItemLink itemKey={i.key} title={i.title} />
+                      <span className="text-[12.5px] font-semibold">{t("progetti.passo5.scope.removed")}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {n.over_tolerance.length > 0 && (
                 <ul className="m-0 list-none p-0" aria-label={t("progetti.baseline.overTolerance")}>
                   {n.over_tolerance.map((i) => (
@@ -69,7 +94,7 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
                   ))}
                 </ul>
               )}
-              {(n.open_change_requests > 0 || n.over_tolerance.length > 0 || n.end_over_tolerance) && (
+              {(n.open_change_requests > 0 || n.over_tolerance.length > 0 || n.end_over_tolerance || n.scope_added.length > 0 || n.scope_removed.length > 0) && (
                 <button type="button" className="btn btn-quiet self-start px-0 underline" onClick={() => onTab("piano")}>
                   {t("progetti.baseline.openPlan")}
                 </button>
@@ -119,6 +144,7 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
                 </ul>
               )}
             </Block>
+            <ReportsBlock refKey={refKey} onTab={onTab} />
             <Block title={t("progetti.overview.byMode")}>
               {n.by_mode.length === 0 ? (
                 <None text={t("progetti.overview.byModeNone")} />
@@ -343,5 +369,109 @@ function LateRow({ item }: { item: ItemRef }) {
       <ItemLink itemKey={item.key} title={item.title} />
       <span className="tabular text-[12.5px] font-semibold text-danger">{t("progetti.common.daysLate", { count: item.days_late })}</span>
     </li>
+  );
+}
+
+/**
+ * «Budget e costi» del progetto (passo 5): i budget del progetto e delle sue richieste, dalla Finanza.
+ * Previsto (approvato), in lavorazione, impegnato, speso e previsione a finire; per chi vede la finanza
+ * il campo «Attinge da» di ogni budget e il collegamento per crearne uno nuovo in Finanza.
+ */
+function BudgetBlock({ data, refKey }: { data: Overview; refKey: string }) {
+  const t = useT();
+  const perms = useMe().data?.active_tenant?.permissions ?? [];
+  const finance = perms.includes("*") || perms.includes("finance.read");
+  const b = data.numbers.budget;
+  const list = b?.budgets ?? [];
+  return (
+    <section className="flex min-w-0 flex-col gap-3" aria-label={t("progetti.passo5.budget.title")} data-testid="panoramica-budget">
+      <SectionTitle
+        aside={
+          finance ? (
+            <Link to="/finanza" search={{ richiesta: refKey }} className="text-[12px] text-accent underline">
+              {t("progetti.passo5.budget.openFinance")}
+            </Link>
+          ) : undefined
+        }
+      >
+        {t("progetti.passo5.budget.title")}
+      </SectionTitle>
+      {!b ? (
+        <None text={t("progetti.passo5.budget.none")} />
+      ) : (
+        <>
+          <dl className="m-0 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+            <Stat label={t("progetti.passo5.budget.approved")}>
+              <span className="tabular text-[16px] font-semibold">{b.approved_cents != null ? euro(b.approved_cents) : "—"}</span>
+              {b.pending_cents != null && <span className="tabular text-[12px] text-muted">{t("progetti.passo5.budget.pending", { amount: euro(b.pending_cents) })}</span>}
+            </Stat>
+            <Stat label={t("progetti.passo5.budget.committed")}>
+              <span className="tabular text-[16px] font-semibold">{euro(b.committed_cents)}</span>
+            </Stat>
+            <Stat label={t("progetti.passo5.budget.spent")}>
+              <span className={`tabular text-[16px] font-semibold ${b.consumption_pct != null && b.consumption_pct > 100 ? "text-danger" : ""}`}>{euro(b.spent_cents)}</span>
+              {b.consumption_pct != null && <span className="tabular text-[12px] text-muted">{t("progetti.passo5.budget.consumption", { pct: Math.round(b.consumption_pct) })}</span>}
+            </Stat>
+            <Stat label={t("progetti.passo5.budget.forecast")}>
+              <span className="tabular text-[16px] font-semibold">{b.forecast_cents != null ? euro(b.forecast_cents) : "—"}</span>
+            </Stat>
+          </dl>
+          {list.length > 0 && (
+            <ul className="m-0 list-none p-0 text-[13px]" aria-label={t("progetti.passo5.budget.versions")}>
+              {list.map((v) => (
+                <li key={v.id} className="flex flex-wrap items-baseline gap-x-3 border-b border-hair py-1">
+                  <ItemLink itemKey={v.element_key} />
+                  <span>{t("progetti.passo5.budget.version", { year: v.fiscal_year, version: v.version, kind: kindLabel(v.kind) })}</span>
+                  <span className="text-muted">{statusLabel(v.status)}</span>
+                  <span className="tabular ml-auto">{euro(v.total_cents)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {finance && (
+        <Suspense fallback={null}>
+          <BudgetSourceList elementKey={refKey} />
+        </Suspense>
+      )}
+    </section>
+  );
+}
+
+/** Ultimi status report del progetto (passo 5): lo storico si apre dalla scheda «Stato». */
+function ReportsBlock({ refKey, onTab }: { refKey: string; onTab: (t: TabKey) => void }) {
+  const t = useT();
+  const q = useQuery({ queryKey: ["status-reports", refKey], queryFn: () => projectReports.list(refKey), retry: false });
+  const items = q.data?.items ?? [];
+  const sent = items.filter((r) => r.status === "submitted").slice(0, 3);
+  const draft = items.some((r) => r.status === "draft");
+  const sc = q.data?.schedule;
+  return (
+    <Block title={t("progetti.passo5.report.title")}>
+      <div data-testid="panoramica-report" className="flex flex-col gap-2">
+        {sent.length === 0 ? (
+          <None text={t("progetti.passo5.report.none")} />
+        ) : (
+          <ul className="m-0 list-none p-0">
+            {sent.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-3 border-b border-hair py-1.5 text-[13px]">
+                <RagMark value={r.overall as RAG} />
+                <span className="tabular">{date(r.period_end)}</span>
+                <span className="min-w-0 flex-1 truncate text-muted">{r.sections.summary}</span>
+                <span className="text-[12px] text-muted">{r.acknowledged_at ? t("progetti.passo5.report.seen") : t("progetti.passo5.report.unseen")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {draft && <p className="m-0 text-[12.5px] font-semibold">{t("progetti.passo5.report.draft")}</p>}
+        {sc?.overdue && <p className="m-0 text-[12.5px] font-semibold text-danger">{t("lavoro.statusreports.reportLate")}</p>}
+        {sc?.next_due && !sc.overdue && <p className="m-0 text-[12.5px] text-muted">{t("progetti.passo5.report.next", { date: date(sc.next_due) })}</p>}
+        <ErrorNote error={q.error} />
+        <button type="button" className="btn mt-1 self-start touch-44" onClick={() => onTab("stato")}>
+          {q.data?.can_edit ? t("progetti.passo5.report.write") : t("progetti.passo5.report.open")}
+        </button>
+      </div>
+    </Block>
   );
 }

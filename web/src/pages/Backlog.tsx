@@ -6,11 +6,12 @@
 import { useStateName } from "../stateLabels";
 import { Select } from "../select";
 import { EmptyState } from "../emptyState";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { lazy, Suspense, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../api";
-import { PageHeader } from "../shell";
+import { PageHeader, useMe } from "../shell";
+import { moduleOn } from "../modules";
 import { QueryBar, withLabel } from "../query";
 import { TagChips } from "../tags";
 import { ErrorNote, Loading } from "../ui";
@@ -24,6 +25,9 @@ import { loc } from "../i18n/format";
 import { useTypeNames } from "../typesApi";
 import { fmtPoints, workApi, type Backlog as BacklogData, type BacklogItem, type Burndown, type CreateType, type SprintView } from "../workApi";
 import { crumbs } from "../crumbs";
+
+// «In arrivo dai progetti» (progetti.md, passo 5): caricato solo se il modulo dei progetti è acceso.
+const IncomingWork = lazy(() => import("./progetti/IncomingWork").then((m) => ({ default: m.IncomingWork })));
 
 export type BacklogSearch = { spazio?: string; q?: string };
 
@@ -40,6 +44,7 @@ export function Backlog({ search, onSearch }: { search: BacklogSearch; onSearch:
   const t = useT();
   const qc = useQueryClient();
   const narrow = useNarrow();
+  const projectsOn = moduleOn(useMe().data, "projects");
   const { spaces, items: spaceList, current } = useSpaces(search.spazio);
   const [draft, setDraft] = useState(search.q ?? "");
   useEffect(() => setDraft(search.q ?? ""), [search.q]);
@@ -257,6 +262,11 @@ export function Backlog({ search, onSearch }: { search: BacklogSearch; onSearch:
           </div>
           <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-4 xl:self-start" aria-label={t("lavoro.backlog.burndown")}>
             {active ? <BurndownPanel sprintKey={active.key} /> : <p className="m-0 text-[12.5px] text-muted">{t("lavoro.backlog.noActive")}</p>}
+            {projectsOn && (
+              <Suspense fallback={null}>
+                <IncomingWork spaceKey={current} />
+              </Suspense>
+            )}
           </aside>
         </div>
       )}

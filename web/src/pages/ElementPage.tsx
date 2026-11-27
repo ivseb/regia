@@ -106,7 +106,8 @@ function tabsFor(t: T, d: ElementDetail, tn: ReturnType<typeof useTypeNames>): T
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "requisiti", label: t("lavoro.elementpage.tabRequirements") });
   if (ty === "business_request" || ty === "project") tabs.push({ key: "piano", label: t("lavoro.elementpage.tabPlan") });
   if (ty === "project") tabs.push({ key: "wp", label: tn.plural("work_package", t("progetti.tab.workPackages")) }, { key: "milestone", label: t("progetti.tab.milestones") });
-  if (ty === "business_request") tabs.push({ key: "stato", label: t("lavoro.elementpage.tabStatus") });
+  // Lo status report passa sul progetto (progetti.md, passo 5): la scheda «Stato» c'è anche lì.
+  if (ty === "business_request" || ty === "project") tabs.push({ key: "stato", label: t("lavoro.elementpage.tabStatus") });
   if (ty === "logical_asset") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabProduction") });
   if (ty === "application") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabServices") });
   if (ty === "application" || ty === "business_request") tabs.push({ key: "gate", label: t("lavoro.elementpage.tabGate") });
@@ -127,7 +128,7 @@ function defaultTab(d: ElementDetail, tabs: Tab[], memberId?: string): TabKey {
   if (awaitsMyDecision(d) && has("approvazioni")) return "approvazioni";
   if ((d.element.type === "incident" || d.element.type === "control") && has("dettagli")) return "dettagli";
   const mine = new Set(d.stakeholders.filter((s) => memberId && s.member_id === memberId).map((s) => s.role));
-  if (mine.size > 0 && [...mine].every((r) => r === "requester" || r === "business_owner") && has("stato")) return "stato";
+  if (d.element.type === "business_request" && mine.size > 0 && [...mine].every((r) => r === "requester" || r === "business_owner") && has("stato")) return "stato";
   if (mine.has("compliance") && has("gate")) return "gate";
   if (["reviewer", "review_lead", "review_owner", "review_compiler", "compliance"].some((r) => mine.has(r)) && has("requisiti")) return "requisiti";
   if (has("panoramica")) return "panoramica";
@@ -546,7 +547,7 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
     case "stato":
       return (
         <Suspense fallback={<Loading className="text-muted" />}>
-          <StatusReportsTab refKey={key} />
+          <StatusReportsTab refKey={key} kind={el.type === "project" ? "project" : "request"} />
         </Suspense>
       );
     case "approvazioni":

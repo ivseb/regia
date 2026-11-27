@@ -25,6 +25,8 @@ type Snapshot struct {
 	ReviewsLate    []LateReview    `json:"reviews_late"`
 	ImpactsBlocked []BlockedImpact `json:"impacts_blocked"`
 	Suggested      Suggested       `json:"suggested"`
+	// Project: i numeri del progetto (solo nei report del progetto, passo 5).
+	Project *ProjectData `json:"project,omitempty"`
 }
 
 // ScheduleData: avanzamento dal Gantt. L'atteso pesa ogni impatto per la sua stima e per
@@ -44,6 +46,8 @@ type ScheduleData struct {
 }
 
 type TaskRef struct {
+	// ID: la voce, per togliere il titolo a chi non la legge (report del progetto).
+	ID          string  `json:"id,omitempty"`
 	Key         string  `json:"key"`
 	Application string  `json:"application"`
 	Team        *string `json:"team"`
@@ -61,6 +65,8 @@ type CostData struct {
 	CPI            *float64 `json:"cpi"`
 	SPI            *float64 `json:"spi"`
 	EVAsOf         *string  `json:"ev_as_of"`
+	// Hidden: chi legge non vede il budget del progetto (gli importi sono tolti).
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 type LateReview struct {
@@ -104,6 +110,27 @@ func round1(v float64) float64 { return math.Round(v*10) / 10 }
 
 // snapshot raccoglie i dati della richiesta alla data asOf.
 func (s *Service) snapshot(ctx context.Context, tx pgx.Tx, actor engine.Actor, el *engine.Element, asOf time.Time) (*Snapshot, error) {
+	if el.TypeKey == projectType {
+		if s.ProjectSnapshot == nil {
+			return nil, engine.ErrNotFound
+		}
+		sn, err := s.ProjectSnapshot(ctx, tx, actor, el, asOf)
+		if err != nil {
+			return nil, err
+		}
+		sn.AsOf, sn.Phase = day(asOf), el.State
+		if sn.ReviewsLate == nil {
+			sn.ReviewsLate = []LateReview{}
+		}
+		if sn.ImpactsBlocked == nil {
+			sn.ImpactsBlocked = []BlockedImpact{}
+		}
+		if sn.Schedule.Late == nil {
+			sn.Schedule.Late = []TaskRef{}
+		}
+		sn.Suggested = suggestProject(sn, asOf)
+		return sn, nil
+	}
 	sn := &Snapshot{AsOf: day(asOf), Phase: el.State, ReviewsLate: []LateReview{}, ImpactsBlocked: []BlockedImpact{}}
 	// --- Tempi: il piano della richiesta (Gantt).
 	plan, err := s.plan.GetPlan(ctx, tx, actor, el.ID)
@@ -305,32 +332,7 @@ func suggest(sn *Snapshot, asOf time.Time) Suggested {
 		}
 	}
 
-	// Costi.
-	c := sn.Cost
-	g.Cost = "green"
-	switch {
-	case c.CPI != nil && *c.CPI < 0.9:
-		g.Cost = "red"
-		add("cost", fmt.Sprintf("CPI %.2f: si spende più del valore prodotto", *c.CPI))
-	case c.ConsumptionPct != nil && *c.ConsumptionPct > 100:
-		g.Cost = "red"
-		add("cost", fmt.Sprintf("consumo del budget al %.0f%%", *c.ConsumptionPct))
-	case c.ApprovedCents != nil && c.ForecastCents != nil && float64(*c.ForecastCents) > float64(*c.ApprovedCents)*1.1:
-		g.Cost = "red"
-		add("cost", "la previsione a finire supera il budget di oltre il 10%")
-	case c.CPI != nil && *c.CPI < 0.97:
-		g.Cost = "amber"
-		add("cost", fmt.Sprintf("CPI %.2f", *c.CPI))
-	case c.ApprovedCents == nil && c.ActualCents > 0:
-		g.Cost = "amber"
-		add("cost", "costi registrati senza un budget approvato")
-	case c.ApprovedCents != nil && c.ForecastCents != nil && *c.ForecastCents > *c.ApprovedCents:
-		g.Cost = "amber"
-		add("cost", "la previsione a finire supera il budget")
-	case c.ConsumptionPct != nil && sc.ActualPct != nil && *c.ConsumptionPct > 80 && *c.ConsumptionPct > *sc.ActualPct+15:
-		g.Cost = "amber"
-		add("cost", fmt.Sprintf("consumo del budget al %.0f%% con il %.0f%% del lavoro completato", *c.ConsumptionPct, *sc.ActualPct))
-	}
+	g.Cost = suggestCost(sn, add)
 
 	// Rischi e problemi.
 	g.Risk = "green"
@@ -376,6 +378,37 @@ func suggest(sn *Snapshot, asOf time.Time) Suggested {
 	return g
 }
 
+// suggestCost propone il semaforo dei costi dagli aggregati e dall'earned value (richiesta e progetto).
+func suggestCost(sn *Snapshot, add func(dim, why string)) string {
+	c := sn.Cost
+	sc := sn.Schedule
+	cost := "green"
+	switch {
+	case c.CPI != nil && *c.CPI < 0.9:
+		cost = "red"
+		add("cost", fmt.Sprintf("CPI %.2f: si spende più del valore prodotto", *c.CPI))
+	case c.ConsumptionPct != nil && *c.ConsumptionPct > 100:
+		cost = "red"
+		add("cost", fmt.Sprintf("consumo del budget al %.0f%%", *c.ConsumptionPct))
+	case c.ApprovedCents != nil && c.ForecastCents != nil && float64(*c.ForecastCents) > float64(*c.ApprovedCents)*1.1:
+		cost = "red"
+		add("cost", "la previsione a finire supera il budget di oltre il 10%")
+	case c.CPI != nil && *c.CPI < 0.97:
+		cost = "amber"
+		add("cost", fmt.Sprintf("CPI %.2f", *c.CPI))
+	case c.ApprovedCents == nil && c.ActualCents > 0:
+		cost = "amber"
+		add("cost", "costi registrati senza un budget approvato")
+	case c.ApprovedCents != nil && c.ForecastCents != nil && *c.ForecastCents > *c.ApprovedCents:
+		cost = "amber"
+		add("cost", "la previsione a finire supera il budget")
+	case c.ConsumptionPct != nil && sc.ActualPct != nil && *c.ConsumptionPct > 80 && *c.ConsumptionPct > *sc.ActualPct+15:
+		cost = "amber"
+		add("cost", fmt.Sprintf("consumo del budget al %.0f%% con il %.0f%% del lavoro completato", *c.ConsumptionPct, *sc.ActualPct))
+	}
+	return cost
+}
+
 func it(t time.Time) string { return t.Format("02/01/2006") }
 
 func plural(n int, one, many string) string {
@@ -387,6 +420,9 @@ func plural(n int, one, many string) string {
 
 // prefillText scrive la bozza delle sezioni dai dati: il PM la corregge.
 func (s *Service) prefillText(ctx context.Context, tx pgx.Tx, el *engine.Element, sn *Snapshot, from, to time.Time, freq string) (Sections, error) {
+	if sn.Project != nil {
+		return s.prefillProjectText(ctx, tx, el, sn, from, to, freq)
+	}
 	var sec Sections
 	var b strings.Builder
 	fmt.Fprintf(&b, "Fase «%s».", sn.Phase)
