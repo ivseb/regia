@@ -1,11 +1,11 @@
 // AI, ondata 1 (replica/ai.md): l'amministratore configura il fornitore finto (solo in sviluppo,
 // niente rete né chiavi) e accende l'AI; la persona fa una domanda nel pannello «Assistente» e
 // arriva all'elemento dal link; una scrittura resta una proposta finché non si conferma; il
-// consumo mostra le chiamate; spenta, il pannello sparisce. Lavora nel tenant «altro», così
-// l'AI accesa non cambia le pagine degli altri test, che girano nel tenant demo.
+// consumo mostra le chiamate; spenta, il pannello sparisce. Lavora in un'organizzazione
+// creata apposta, così l'AI accesa e le richieste create non cambiano le pagine degli altri test.
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createRequire } from "node:module";
-import { call, expectNoHorizontalScroll, login, scegli, uniq } from "./fixtures";
+import { apiAs, call, expectNoHorizontalScroll, login, scegli, uniq } from "./fixtures";
 
 // axe-core come in a11y.spec.ts: la CSP dell'app blocca lo script iniettato, solo nei test la si ignora.
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -22,7 +22,8 @@ async function seriousA11y(page: Page): Promise<unknown[]> {
   });
 }
 
-const TENANT = "altro";
+// L'organizzazione del test: creata una volta dal superamministratore, che ne diventa membro.
+let TENANT = "";
 
 async function resetAI(req: APIRequestContext) {
   await call(req, "PUT", "/api/v1/ai/settings", { enabled: false });
@@ -50,6 +51,17 @@ async function ask(page: Page, question: string) {
 
 test.describe("AI: fondamenta e assistente", () => {
   test.describe.configure({ mode: "serial" });
+
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    const { req } = await apiAs(playwright, baseURL!, "admin");
+    const slug = `ai-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+    await call(req, "POST", "/api/v1/platform/tenants", { name: uniq("Org AI"), slug });
+    // login() resta nel demo se non trova l'organizzazione: qui si verifica che l'amministratore ci sia.
+    const me = await call<{ tenants: { slug: string }[] }>(req, "GET", "/api/v1/me");
+    expect(me.tenants.map((t) => t.slug)).toContain(slug);
+    await req.dispose();
+    TENANT = slug;
+  });
 
   test("l'amministratore accende l'AI e l'assistente risponde con il link all'elemento", async ({ page }) => {
     await login(page, "admin", TENANT);
