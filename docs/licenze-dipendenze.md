@@ -3,15 +3,32 @@
 Generato da `make licenses-report` (go-licenses e `pnpm licenses list --prod`): non modificare a mano.
 Il controllo `make licenses` blocca le licenze non permissive; vedi `docs/licenza.md`.
 
-## Go (incluse nel binario): 33 moduli
+## Go (incluse nel binario): 57 moduli
 
-Licenze: MIT (13), BSD-3-Clause (10), Apache-2.0 (10).
+Licenze: Apache-2.0 (26), MIT (17), BSD-3-Clause (14).
 
 | modulo | versione | licenza |
 | --- | --- | --- |
+| [cloud.google.com/go/compute/metadata](https://github.com/googleapis/google-cloud-go/blob/compute/metadata/v0.5.0/compute/metadata/LICENSE) | compute | Apache-2.0 |
 | [filippo.io/age](https://github.com/FiloSottile/age/blob/v1.3.1/LICENSE) | v1.3.1 | BSD-3-Clause |
 | [filippo.io/hpke](https://github.com/FiloSottile/hpke/blob/v0.4.0/LICENSE) | v0.4.0 | BSD-3-Clause |
 | [github.com/anthropics/anthropic-sdk-go/v2](https://github.com/anthropics/anthropic-sdk-go/blob/v2.15.0/LICENSE) | v2.15.0 | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2/blob/v1.38.0/LICENSE.txt) | v1.38.0 | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream](https://github.com/aws/aws-sdk-go-v2/blob/aws/protocol/eventstream/v1.6.3/aws/protocol/eventstream/LICENSE.txt) | aws | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/config](https://github.com/aws/aws-sdk-go-v2/blob/config/v1.27.27/config/LICENSE.txt) | config | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/credentials](https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.17.27/credentials/LICENSE.txt) | credentials | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/feature/ec2/imds](https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.16.11/feature/ec2/imds/LICENSE.txt) | feature | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/internal/configsources](https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.3.15/internal/configsources/LICENSE.txt) | internal | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/internal/endpoints/v2](https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.6.15/internal/endpoints/v2/LICENSE.txt) | internal | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/internal/ini](https://github.com/aws/aws-sdk-go-v2/blob/internal/ini/v1.8.0/internal/ini/LICENSE.txt) | internal | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/internal/sync/singleflight](https://github.com/aws/aws-sdk-go-v2/blob/v1.38.0/internal/sync/singleflight/LICENSE) | v1.38.0 | BSD-3-Clause |
+| [github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.11.3/service/internal/accept-encoding/LICENSE.txt) | service | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/service/internal/presigned-url](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.11.17/service/internal/presigned-url/LICENSE.txt) | service | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/service/sso](https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.22.4/service/sso/LICENSE.txt) | service | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/service/ssooidc](https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.26.4/service/ssooidc/LICENSE.txt) | service | Apache-2.0 |
+| [github.com/aws/aws-sdk-go-v2/service/sts](https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.30.3/service/sts/LICENSE.txt) | service | Apache-2.0 |
+| [github.com/aws/smithy-go](https://github.com/aws/smithy-go/blob/v1.22.5/LICENSE) | v1.22.5 | Apache-2.0 |
+| [github.com/aws/smithy-go/internal/sync/singleflight](https://github.com/aws/smithy-go/blob/v1.22.5/internal/sync/singleflight/LICENSE) | v1.22.5 | BSD-3-Clause |
 | [github.com/bahlo/generic-list-go](https://github.com/bahlo/generic-list-go/blob/v0.2.0/LICENSE) | v0.2.0 | BSD-3-Clause |
 | [github.com/buger/jsonparser](https://github.com/buger/jsonparser/blob/v1.1.2/LICENSE) | v1.1.2 | MIT |
 | [github.com/coreos/go-oidc/v3](https://github.com/coreos/go-oidc/blob/v3.21.0/LICENSE) | v3.21.0 | Apache-2.0 |
@@ -19,17 +36,23 @@ Licenze: MIT (13), BSD-3-Clause (10), Apache-2.0 (10).
 | [github.com/go-jose/go-jose/v4](https://github.com/go-jose/go-jose/blob/v4.1.4/json/LICENSE) | v4.1.4 | BSD-3-Clause |
 | [github.com/go-logr/logr](https://github.com/go-logr/logr/blob/v1.4.2/LICENSE) | v1.4.2 | Apache-2.0 |
 | [github.com/go-logr/stdr](https://github.com/go-logr/stdr/blob/v1.2.2/LICENSE) | v1.2.2 | Apache-2.0 |
+| [github.com/google/jsonschema-go/jsonschema](https://github.com/google/jsonschema-go/blob/v0.4.3/LICENSE) | v0.4.3 | MIT |
 | [github.com/invopop/jsonschema](https://github.com/invopop/jsonschema/blob/v0.14.0/COPYING) | v0.14.0 | MIT |
 | [github.com/jackc/pgpassfile](https://github.com/jackc/pgpassfile/blob/v1.0.0/LICENSE) | v1.0.0 | MIT |
 | [github.com/jackc/pgservicefile](https://github.com/jackc/pgservicefile/blob/5a60cdf6a761/LICENSE) | 5a60cdf6a761 | MIT |
 | [github.com/jackc/pgx/v5](https://github.com/jackc/pgx/blob/v5.13.0/LICENSE) | v5.13.0 | MIT |
 | [github.com/jackc/puddle/v2](https://github.com/jackc/puddle/blob/v2.2.3/LICENSE) | v2.2.3 | MIT |
+| [github.com/modelcontextprotocol/go-sdk](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/LICENSE) | v1.8.0 | Apache-2.0 |
+| [github.com/modelcontextprotocol/go-sdk](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/LICENSE) | v1.8.0 | MIT |
 | [github.com/pb33f/ordered-map/v2](https://github.com/pb33f/ordered-map/blob/v2.3.1/LICENSE) | v2.3.1 | Apache-2.0 |
+| [github.com/segmentio/asm](https://github.com/segmentio/asm/blob/v1.1.3/LICENSE) | v1.1.3 | MIT |
+| [github.com/segmentio/encoding](https://github.com/segmentio/encoding/blob/v0.5.4/LICENSE) | v0.5.4 | MIT |
 | [github.com/standard-webhooks/standard-webhooks/libraries/go](https://github.com/standard-webhooks/standard-webhooks/blob/libraries/v0.0.1/libraries/LICENSE) | libraries | MIT |
 | [github.com/tidwall/gjson](https://github.com/tidwall/gjson/blob/v1.18.0/LICENSE) | v1.18.0 | MIT |
 | [github.com/tidwall/match](https://github.com/tidwall/match/blob/v1.1.1/LICENSE) | v1.1.1 | MIT |
 | [github.com/tidwall/pretty](https://github.com/tidwall/pretty/blob/v1.2.1/LICENSE) | v1.2.1 | MIT |
 | [github.com/tidwall/sjson](https://github.com/tidwall/sjson/blob/v1.2.5/LICENSE) | v1.2.5 | MIT |
+| [github.com/yosida95/uritemplate/v3](https://github.com/yosida95/uritemplate/blob/v3.0.2/LICENSE) | v3.0.2 | BSD-3-Clause |
 | [go.opentelemetry.io/auto/sdk](https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/sdk/v1.1.0/sdk/LICENSE) | sdk | Apache-2.0 |
 | [go.opentelemetry.io/otel](https://github.com/open-telemetry/opentelemetry-go/blob/v1.33.0/LICENSE) | v1.33.0 | Apache-2.0 |
 | [go.opentelemetry.io/otel/metric](https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.33.0/metric/LICENSE) | metric | Apache-2.0 |
@@ -42,6 +65,7 @@ Licenze: MIT (13), BSD-3-Clause (10), Apache-2.0 (10).
 | [golang.org/x/sys](https://cs.opensource.google/go/x/sys/+/v0.50.0:LICENSE) | v0.50.0 | BSD-3-Clause |
 | [golang.org/x/term](https://cs.opensource.google/go/x/term/+/v0.48.0:LICENSE) | v0.48.0 | BSD-3-Clause |
 | [golang.org/x/text](https://cs.opensource.google/go/x/text/+/v0.44.0:LICENSE) | v0.44.0 | BSD-3-Clause |
+| [golang.org/x/time/rate](https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE) | v0.15.0 | BSD-3-Clause |
 
 ## Frontend (incluso nel binario): 23 pacchetti npm di produzione
 
