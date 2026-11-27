@@ -98,6 +98,10 @@ type Target struct {
 	Tools bool
 	// Mask: i dati personali vanno mascherati (fornitore esterno e mascheramento acceso).
 	Mask bool
+	// TierEffort e RouteEffort: il ragionamento configurato per il livello e per la funzione
+	// (vuoto = automatico); CallStream sceglie con effortFor.
+	TierEffort  string
+	RouteEffort string
 }
 
 // Resolve sceglie il modello di una funzione: la funzione spostata su un modello preciso,
@@ -116,6 +120,7 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, feature string) (*Targ
 	}
 	t := &Target{Feature: feature, Tier: f.Tier}
 	r := st.Routes[feature]
+	t.RouteEffort = r.Reasoning
 	var choice TierChoice
 	switch {
 	case r.ProviderID != "":
@@ -143,7 +148,7 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, feature string) (*Targ
 	if err != nil {
 		return nil, st, ErrNotConfigured
 	}
-	t.Provider, t.Model = p, choice.Model
+	t.Provider, t.Model, t.TierEffort = p, choice.Model, choice.Reasoning
 	t.Kind = s.kinds[p.Kind]
 	t.Tools = toolsFor(p, choice.Model)
 	t.Mask = st.MaskPersonalData && !p.Local
@@ -169,7 +174,8 @@ func (s *Service) Call(ctx context.Context, t *Target, req Request, meta CallMet
 func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta CallMeta, onText func(string)) (*Response, error) {
 	req.Model = t.Model
 	req.Deep = t.Tier != TierFast
-	req.MaxTokens = thinkingHeadroom(req.MaxTokens, req.Deep && !req.Brief)
+	req.Effort = effortFor(t.RouteEffort, t.TierEffort, req.Deep, req.Brief)
+	req.MaxTokens = thinkingHeadroom(req.MaxTokens, req.Effort != EffortLow)
 	if !t.Tools {
 		req.Tools = nil
 	}
@@ -200,8 +206,14 @@ func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta C
 	defer cancel()
 	// Con un budget: i token dell'input si contano prima (API del fornitore o stima) e la
 	// chiamata non parte se da sola porterebbe oltre il limite.
+	// Prima la stima locale: il conteggio del fornitore è un giro in più a ogni chiamata (e a
+	// ogni passo dell'assistente), quindi si chiede solo quando la stima, raddoppiata per
+	// prudenza, arriva vicino al limite.
 	if bud.State != BudgetNone {
-		in := s.countTokens(cctx, prov, req)
+		in := EstimateTokens(req)
+		if over(bud, Cost(t.Provider, t.Model, 2*in, 0), 2*in) {
+			in = s.countTokens(cctx, prov, req)
+		}
 		if over(bud, Cost(t.Provider, t.Model, in, 0), in) {
 			rec.Outcome, rec.ErrorCode, rec.In = "refused", "budget", in
 			s.record(ctx, meta.TenantID, rec)

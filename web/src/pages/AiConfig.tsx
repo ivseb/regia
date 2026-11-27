@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../api";
-import { aiApi, usd, type AIKind, type AIModel, type AIProvider, type AISettings, type AISettingsView, type ProviderInput, type Route, type TierChoice, type TierKey } from "../aiApi";
+import { aiApi, REASONINGS, usd, type Reasoning, type AIKind, type AIModel, type AIProvider, type AISettings, type AISettingsView, type ProviderInput, type Route, type TierChoice, type TierKey } from "../aiApi";
 import { PageHeader } from "../shell";
 import { Select } from "../select";
 import { ErrorNote, Loading, SectionTitle } from "../ui";
@@ -43,6 +43,21 @@ function noTools(p: AIProvider | undefined, models: AIModel[], id: string): bool
   return p.no_tools_models.includes(id) || models.some((m) => m.id === id && m.tools === false);
 }
 
+/** Scelta del ragionamento: vuoto = automatico (o, per una funzione, come il livello). */
+function ReasoningSelect(props: { id: string; label: string; value: Reasoning | undefined; emptyLabel: string; srOnly?: boolean; onChange: (r: Reasoning) => void }) {
+  const t = useT();
+  return (
+    <label className="flex min-w-0 max-w-xs flex-col gap-1">
+      <span className={props.srOnly ? "sr-only" : "label"}>{props.label}</span>
+      <Select className="field" data-testid={`ragionamento-${props.id}`} value={props.value ?? ""} onChange={(e) => props.onChange(e.target.value as Reasoning)}>
+        {REASONINGS.map((r) => (
+          <option key={r} value={r}>{r === "" ? props.emptyLabel : t(`ai.cfg.reasoning.${r}`)}</option>
+        ))}
+      </Select>
+    </label>
+  );
+}
+
 function TierPicker(props: {
   id: string;
   label: string;
@@ -51,6 +66,8 @@ function TierPicker(props: {
   view: AISettingsView;
   loaded: Record<string, AIModel[]>;
   tier?: TierKey;
+  /** Mostra la scelta del ragionamento (sui livelli; per le funzioni la mostra RouteRow). */
+  reasoning?: boolean;
   onChange: (v: TierChoice) => void;
 }) {
   const t = useT();
@@ -71,7 +88,7 @@ function TierPicker(props: {
               const pid = e.target.value;
               const p = view.providers.find((x) => x.id === pid);
               const known = props.loaded[pid] ?? view.kinds.find((k) => k.key === p?.kind)?.proposed ?? [];
-              onChange({ provider_id: pid, model: pid ? proposedFor(known, props.tier) : "" });
+              onChange({ ...value, provider_id: pid, model: pid ? proposedFor(known, props.tier) : "" });
             }}
           >
             <option value="">{t("ai.cfg.none")}</option>
@@ -101,6 +118,10 @@ function TierPicker(props: {
       </div>
       {noTools(prov, models, value.model) && (
         <span className="text-[12.5px]" data-testid="modello-senza-strumenti">{t("ai.cfg6.modelNoTools")}</span>
+      )}
+      {props.reasoning && (
+        <ReasoningSelect id={id} label={t("ai.cfg.reasoning")} value={value.reasoning} emptyLabel={t("ai.cfg.reasoning.auto")}
+          onChange={(reasoning) => onChange({ ...value, reasoning })} />
       )}
     </fieldset>
   );
@@ -399,6 +420,9 @@ function RouteRow({ f, route, view, loaded, onChange }: { f: AISettingsView["fea
   const t = useT();
   const mode = route?.provider_id !== undefined && route.provider_id !== "" ? "model" : route?.model !== undefined ? "model" : (route?.tier ?? "");
   const choice: TierChoice = { provider_id: route?.provider_id ?? "", model: route?.model ?? "" };
+  const reasoning = route?.reasoning || undefined;
+  // Il ragionamento della funzione resta anche quando si cambia livello o modello.
+  const keep = (r: Route | undefined): Route | undefined => (reasoning ? { ...(r ?? {}), reasoning } : r);
   return (
     <li className="flex flex-col gap-2 border-b border-hair py-3" data-testid={`funzione-${f.key}`}>
       <div className="flex flex-wrap items-baseline gap-x-3">
@@ -413,9 +437,9 @@ function RouteRow({ f, route, view, loaded, onChange }: { f: AISettingsView["fea
           value={mode}
           onChange={(e) => {
             const v = e.target.value;
-            if (v === "") onChange(undefined);
-            else if (v === "model") onChange({ provider_id: "", model: "" });
-            else onChange({ tier: v as TierKey });
+            if (v === "") onChange(keep(undefined));
+            else if (v === "model") onChange(keep({ provider_id: "", model: "" }));
+            else onChange(keep({ tier: v as TierKey }));
           }}
         >
           <option value="">{t("ai.cfg.routeDefault", { tier: tierName(f.tier) })}</option>
@@ -426,8 +450,15 @@ function RouteRow({ f, route, view, loaded, onChange }: { f: AISettingsView["fea
       </label>
       {mode === "model" && (
         <TierPicker id={`f-${f.key}`} label={t("ai.cfg.routeModel")} help={t("ai.cfg.routeModelHelp")} value={choice} view={view} loaded={loaded}
-          onChange={(c) => onChange({ provider_id: c.provider_id, model: c.model })} />
+          onChange={(c) => onChange(keep({ provider_id: c.provider_id, model: c.model }))} />
       )}
+      <ReasoningSelect id={`f-${f.key}`} srOnly label={t("ai.cfg.reasoningFor", { name: featureName(f.key) })} value={reasoning} emptyLabel={t("ai.cfg.reasoningTier")}
+        onChange={(r) => {
+          const base: Route = { ...(route ?? {}) };
+          delete base.reasoning;
+          const next: Route = r ? { ...base, reasoning: r } : base;
+          onChange(Object.keys(next).length ? next : undefined);
+        }} />
     </li>
   );
 }
@@ -517,8 +548,9 @@ export function AiConfig() {
               <section aria-labelledby="ai-livelli" className="flex flex-col gap-3">
                 <SectionTitle><span id="ai-livelli">{t("ai.cfg.tiers")}</span></SectionTitle>
                 <p className="m-0 text-[13px] text-muted">{t("ai.cfg.tiersHelp")}</p>
-                <TierPicker id="approfondito" tier="approfondito" label={tierName("approfondito")} help={t("ai.cfg.deepHelp")} value={draft.deep} view={v} loaded={loaded} onChange={(deep) => set({ deep })} />
-                <TierPicker id="rapido" tier="rapido" label={tierName("rapido")} help={t("ai.cfg.fastHelp")} value={draft.fast} view={v} loaded={loaded} onChange={(fast) => set({ fast })} />
+                <TierPicker id="approfondito" tier="approfondito" reasoning label={tierName("approfondito")} help={t("ai.cfg.deepHelp")} value={draft.deep} view={v} loaded={loaded} onChange={(deep) => set({ deep })} />
+                <TierPicker id="rapido" tier="rapido" reasoning label={tierName("rapido")} help={t("ai.cfg.fastHelp")} value={draft.fast} view={v} loaded={loaded} onChange={(fast) => set({ fast })} />
+                <p className="m-0 text-[12.5px] text-muted">{t("ai.cfg.reasoningHelp")}</p>
               </section>
 
               <section aria-labelledby="ai-funzioni" className="flex flex-col gap-2">

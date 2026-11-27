@@ -29,7 +29,9 @@ import (
 const (
 	maxSteps    = 8
 	maxQuestion = 4000
-	historyKeep = 20
+	// historyKeep: i messaggi che tornano interi al modello; i più vecchi vanno nel riassunto
+	// della conversazione (convsummary.go).
+	historyKeep = 10
 )
 
 const systemPrompt = `Sei l'assistente di Regia, la piattaforma dell'organizzazione per demand, progetti, architettura, DevSecOps e conformità. Rispondi in %s, in modo breve e concreto.
@@ -341,7 +343,11 @@ func (s *Service) AskStream(ctx context.Context, tenantID string, actor engine.A
 	} else {
 		system += noToolsPrompt
 	}
-	msgs := historyMessages(history)
+	var summary string
+	if conv != nil {
+		summary, history = s.conversationSummary(ctx, tenantID, actor, lang, conv.ID, history)
+	}
+	msgs := withSummary(historyMessages(history), summary)
 	for i := range msgs {
 		msgs[i].Text = masker.Mask(msgs[i].Text)
 	}

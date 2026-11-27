@@ -206,3 +206,19 @@ func TestGeminiRispostaVuotaEBreve(t *testing.T) {
 		t.Fatalf("ragionamento approfondito: %s", l)
 	}
 }
+
+// Il ragionamento configurato arriva come thinkingLevel; su Gemini 3 Pro il medio diventa alto.
+func TestGeminiRagionamentoConfigurato(t *testing.T) {
+	lvl := func(model, effort string) string {
+		return build(ai.Request{Model: model, Effort: effort}).GenerationConfig.ThinkingConfig.ThinkingLevel
+	}
+	if l := lvl("gemini-4-carbon", ai.EffortMedium); l != "MEDIUM" {
+		t.Fatalf("medio: %s", l)
+	}
+	if l := lvl("gemini-3-pro-preview", ai.EffortMedium); l != "HIGH" {
+		t.Fatalf("medio su Gemini 3 Pro: %s", l)
+	}
+	if l := lvl("gemini-4-hydrogen", ai.EffortLow); l != "LOW" {
+		t.Fatalf("basso: %s", l)
+	}
+}

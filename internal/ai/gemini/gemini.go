@@ -145,10 +145,13 @@ func build(req ai.Request) request {
 	}
 	gc := &generationConfig{MaxOutputTokens: req.MaxTokens}
 	if thinking(req.Model) {
-		gc.ThinkingConfig = &thinkingConfig{ThinkingLevel: "LOW"}
-		if req.Deep && !req.Brief {
-			gc.ThinkingConfig.ThinkingLevel = "HIGH"
+		// thinkingLevel: Gemini 4 accetta LOW, MEDIUM e HIGH; Gemini 3 Pro solo LOW e HIGH,
+		// quindi lì il medio diventa alto.
+		level := strings.ToUpper(ai.EffortOf(req))
+		if level == "MEDIUM" && strings.HasPrefix(strings.TrimPrefix(req.Model, "models/"), "gemini-3-pro") {
+			level = "HIGH"
 		}
+		gc.ThinkingConfig = &thinkingConfig{ThinkingLevel: level}
 	}
 	if gc.MaxOutputTokens > 0 || gc.ThinkingConfig != nil {
 		w.GenerationConfig = gc

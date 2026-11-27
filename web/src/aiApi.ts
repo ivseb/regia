@@ -5,8 +5,11 @@ import { fmtCurrency } from "./i18n/format";
 const q = encodeURIComponent;
 
 export type TierKey = "rapido" | "approfondito";
-export type TierChoice = { provider_id: string; model: string };
-export type Route = { tier?: TierKey; provider_id?: string; model?: string };
+/** Ragionamento configurato (vuoto = automatico), internal/ai/model.go. */
+export type Reasoning = "" | "low" | "medium" | "high";
+export const REASONINGS: Reasoning[] = ["", "low", "medium", "high"];
+export type TierChoice = { provider_id: string; model: string; reasoning?: Reasoning };
+export type Route = { tier?: TierKey; provider_id?: string; model?: string; reasoning?: Reasoning };
 
 export type AISettings = {
   enabled: boolean;

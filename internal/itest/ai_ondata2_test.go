@@ -332,7 +332,7 @@ func TestAIOndata2(t *testing.T) {
 	if !strings.Contains(fmtJSON(found), demKey) {
 		t.Fatalf("la query non trova la richiesta: %v", found)
 	}
-	if n := e.count(t, `select count(*) from ai_calls where feature = 'domande_grafo' and outcome = 'ok' and tier = 'approfondito'`); n != 1 {
+	if n := e.count(t, `select count(*) from ai_calls where feature = 'domande_grafo' and outcome = 'ok' and tier = 'rapido'`); n != 1 {
 		t.Fatalf("chiamate della domanda sul grafo: %d", n)
 	}
 	// Il prompt porta il catalogo del tenant come dato.

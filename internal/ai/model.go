@@ -73,6 +73,48 @@ type Request struct {
 	// Brief: la risposta è breve e strutturata (una query, una classificazione). Anche al
 	// livello approfondito basta poco ragionamento: risponde prima e non esaurisce i token.
 	Brief bool
+	// Effort è il ragionamento deciso da Regia (EffortLow, EffortMedium, EffortHigh): lo
+	// imposta CallStream dalla configurazione o, in automatico, da Deep e Brief. Ogni
+	// adattatore lo traduce nel parametro del suo fornitore.
+	Effort string
+}
+
+// Livelli di ragionamento configurabili (vuoto = automatico).
+const (
+	EffortLow    = "low"
+	EffortMedium = "medium"
+	EffortHigh   = "high"
+)
+
+// EffortOf è il ragionamento della richiesta per gli adattatori: Effort se c'è (lo imposta
+// CallStream), altrimenti quello automatico da Deep e Brief.
+func EffortOf(req Request) string {
+	if req.Effort != "" {
+		return req.Effort
+	}
+	return effortFor("", "", req.Deep, req.Brief)
+}
+
+// ValidEffort: valore ammesso nella configurazione (vuoto = automatico).
+func ValidEffort(e string) bool {
+	return e == "" || e == EffortLow || e == EffortMedium || e == EffortHigh
+}
+
+// effortFor sceglie il ragionamento di una chiamata: quello configurato per la funzione vince;
+// altrimenti le richieste brevi ragionano poco; poi quello configurato per il livello; in
+// automatico il rapido ragiona poco e l'approfondito molto.
+func effortFor(route, tier string, deep, brief bool) string {
+	switch {
+	case route != "":
+		return route
+	case brief:
+		return EffortLow
+	case tier != "":
+		return tier
+	case deep:
+		return EffortHigh
+	}
+	return EffortLow
 }
 
 // thinkingHeadroom: i modelli che ragionano contano il ragionamento nei token di uscita, quindi

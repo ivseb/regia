@@ -454,8 +454,9 @@ func (s *Service) Card(ctx context.Context, tenantID string, actor engine.Actor,
 	if in.Action == "bozza" {
 		max = 3000
 	}
-	resp, err := s.Call(ctx, target, Request{System: system, Messages: []Message{{Role: RoleUser, Text: user}}, MaxTokens: max},
-		CallMeta{TenantID: tenantID, Actor: actor, ElementIDs: []string{c.el.ID}})
+	// Il riassunto è breve: poco ragionamento anche se la funzione sta sul livello approfondito.
+	resp, err := s.Call(ctx, target, Request{System: system, Messages: []Message{{Role: RoleUser, Text: user}}, MaxTokens: max,
+		Brief: in.Action == "riassunto"}, CallMeta{TenantID: tenantID, Actor: actor, ElementIDs: []string{c.el.ID}})
 	if err != nil {
 		return nil, err
 	}
@@ -947,8 +948,9 @@ func (s *Service) Triage(ctx context.Context, tenantID string, actor engine.Acto
 		tools.Data("simili", masker.Mask(or(&sim))) + "\n\n" + tools.Data("campi", masker.Mask(or(&fl))) + "\n\n" +
 		tools.Data("collegamenti possibili", masker.Mask(or(&ln)))
 	system := fmt.Sprintf(cardSystem, langName(lang)) + "\n\n" + triageTask
-	resp, err := s.Call(ctx, target, Request{System: system, Messages: []Message{{Role: RoleUser, Text: user}}, MaxTokens: 1500},
-		CallMeta{TenantID: tenantID, Actor: actor})
+	// Duplicati e classificazione: risposta breve e strutturata, poco ragionamento.
+	resp, err := s.Call(ctx, target, Request{System: system, Messages: []Message{{Role: RoleUser, Text: user}}, MaxTokens: 1500,
+		Brief: true}, CallMeta{TenantID: tenantID, Actor: actor})
 	if err != nil {
 		return nil, err
 	}

@@ -96,8 +96,8 @@ Le funzioni non scelgono un modello ma un **livello**:
 
 | Livello | Per cosa | Anthropic | OpenAI | Gemini | Ollama |
 |---|---|---|---|---|---|
-| **Approfondito** | analisi, domande sul grafo, bozze, conversazione con l'assistente | `claude-opus-5-5` | `gpt-6.2-astra` | `gemini-4-carbon` | il modello più grande installato |
-| **Rapido** | classificare, trovare duplicati, riassunti brevi, aggiornare la wiki | `claude-haiku-5-5` | `gpt-6-luna` | `gemini-4-hydrogen` | il più piccolo |
+| **Approfondito** | analisi, bozze, conversazione con l'assistente | `claude-opus-5-5` | `gpt-6.2-astra` | `gemini-4-carbon` | il modello più grande installato |
+| **Rapido** | classificare, trovare duplicati, riassunti brevi, domande sul grafo, aggiornare la wiki | `claude-haiku-5-5` | `gpt-6-luna` | `gemini-4-hydrogen` | il più piccolo |
 
 Quando scegli il fornitore di un livello Regia propone il modello (su Bedrock con il prefisso `anthropic.`); lo cambi scrivendo o scegliendo fra quelli trovati dalla prova di connessione. Un solo modello per tutti e due va bene: se un livello è vuoto si usa l'altro, e il rapido propone il modello dell'approfondito se non ne ha uno suo. Con un servizio compatibile scegli tra i modelli installati.
 
@@ -106,7 +106,7 @@ In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello 
 | Funzione | Livello predefinito | Dove |
 |---|---|---|
 | Assistente | approfondito | pannello «Chiedi all'assistente» |
-| Domande sul grafo | approfondito | pannello, modo «Domanda sul grafo» |
+| Domande sul grafo | rapido | pannello, modo «Domanda sul grafo» |
 | Riassunti | rapido | scheda: «Riassumi» |
 | Cosa manca per decidere | approfondito | scheda: «Cosa manca per decidere» |
 | Bozze | approfondito | scheda: «Scrivi una bozza» |
@@ -115,7 +115,21 @@ In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello 
 | GRC assistito | approfondito | schede di evidenze, controlli e rischi; requisito normativo; notifica DORA dell'incidente (sezione 10) |
  Domande sul grafo, funzioni della scheda, collegamenti del GRC e notifica DORA non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare. La **wiki personale** invece li usa (legge con cerca, query e leggi e scrive le pagine con uno strumento suo): con un modello segnato «senza strumenti» l'aggiornamento non parte, e la wiki resta da scrivere a mano. Le **bozze di policy e runbook** usano gli strumenti di lettura se il modello li sa usare (per cercare gli elementi da citare); senza, si scrivono con i dati che Regia passa.
 
-Regia usa la **cache del prompt** dove il fornitore la offre: istruzioni, strumenti e catalogo restano uguali fra le domande e il fornitore li rilegge dalla cache a una frazione del prezzo (Anthropic, anche su Bedrock e Vertex; OpenAI; Gemini con la cache implicita; Ollama tiene il contesto in memoria). I token letti dalla cache sono nel registro e il costo stimato li conta al prezzo ridotto. Il **ragionamento** si regola con il livello: più profondo per l'approfondito, più rapido per il rapido (Claude, GPT e Gemini).
+Regia usa la **cache del prompt** dove il fornitore la offre: istruzioni, strumenti e catalogo restano uguali fra le domande e il fornitore li rilegge dalla cache a una frazione del prezzo (Anthropic, anche su Bedrock e Vertex; OpenAI; Gemini con la cache implicita; Ollama tiene il contesto in memoria). I token letti dalla cache sono nel registro e il costo stimato li conta al prezzo ridotto.
+
+### Ragionamento
+
+I modelli che ragionano prima di rispondere (Claude, GPT, Gemini) si regolano con **Ragionamento**: automatico, basso, medio o alto. Più ragionamento vuol dire risposte più accurate, ma più lente e più costose (il ragionamento si paga come testo in uscita).
+
+- **Per livello**, accanto al modello. In automatico il rapido ragiona poco e l'approfondito molto.
+- **Per funzione**, sotto la scelta del livello o del modello: vince su quello del livello. Per esempio le bozze ad «alto» e l'assistente a «medio».
+- **Richieste brevi.** Domande sul grafo, riassunti della scheda, duplicati e classificazione, riassunti delle conversazioni hanno una risposta breve e strutturata: ragionano poco anche sul livello approfondito, salvo un valore scelto per la funzione.
+- Regia lo traduce nel parametro di ogni fornitore: l'*effort* di Claude, il *reasoning effort* di GPT, il *thinkingLevel* di Gemini (su Gemini 3 Pro il medio diventa alto, perché quel modello ha solo basso e alto). Con Ollama e i servizi compatibili il ragionamento lo decide il modello.
+- Il ragionamento conta nei token di uscita: Regia allarga da sé il limite di ogni risposta quando il modello ragiona, così una risposta non resta vuota perché il ragionamento ha consumato tutto.
+
+### Conversazioni lunghe
+
+Al modello tornano interi gli ultimi 10 messaggi della conversazione. Quelli più vecchi non si perdono: Regia li riassume con la funzione **Riassunti** (livello rapido, ragionamento basso) e manda il riassunto in testa alla conversazione. Il riassunto si aggiorna a pezzi, solo con i messaggi usciti dalla finestra da allora, e la chiamata compare nel registro con la conversazione. Se il riassunto non riesce (per esempio budget esaurito) la conversazione va avanti con gli ultimi 10 messaggi.
 
 ## 3. Budget
 
@@ -123,7 +137,7 @@ Un budget mensile in dollari (al listino del fornitore) e, se vuoi, un tetto di 
 
 - **All'80%** compare un avviso nella configurazione, nel consumo e nel pannello dell'assistente, chi amministra l'organizzazione riceve una **notifica** (e l'email, se le email sono attive e non le ha silenziate per il tipo «AI»), e resta una voce nel registro di audit (`ai.budget.warning`). Una volta sola al mese.
 - **Al 100%** le chiamate non partono più fino al mese dopo (restano nel registro come rifiutate). Tutto ciò che non usa l'AI funziona come sempre.
-- **Prima di ogni chiamata** Regia conta i token del testo che manda (con Anthropic, anche su Bedrock e Vertex, con OpenAI e con Gemini con le API ufficiali di conteggio, gratuite; con gli altri fornitori con una stima prudente): una richiesta che da sola porterebbe oltre il budget non parte, e la persona lo vede («il budget non basta per questa richiesta»).
+- **Prima di ogni chiamata** Regia stima i token del testo che manda. Solo se la stima, raddoppiata per prudenza, si avvicina al limite li conta con le API ufficiali del fornitore (Anthropic, anche su Bedrock e Vertex, OpenAI e Gemini; gratuite ma un giro in più, che così non rallenta le altre chiamate). Una richiesta che da sola porterebbe oltre il budget non parte, e la persona lo vede («il budget non basta per questa richiesta»).
 
 ## 4. Dati personali e conservazione
 

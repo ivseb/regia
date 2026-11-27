@@ -154,10 +154,8 @@ func build(req ai.Request) request {
 	w := request{Model: req.Model, Instructions: req.System, Input: input(req.Messages), MaxOutputTokens: req.MaxTokens,
 		Store: &no, Include: []string{"reasoning.encrypted_content"}}
 	if reasoning(req.Model) {
-		w.Reasoning = &effort{Effort: "low"}
-		if req.Deep && !req.Brief {
-			w.Reasoning.Effort = "high"
-		}
+		// I valori di Regia coincidono con quelli di OpenAI (low, medium, high).
+		w.Reasoning = &effort{Effort: ai.EffortOf(req)}
 	}
 	for _, t := range req.Tools {
 		w.Tools = append(w.Tools, tool{Type: "function", Name: t.Name, Description: t.Description, Parameters: t.Schema})

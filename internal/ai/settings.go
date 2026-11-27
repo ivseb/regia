@@ -37,8 +37,9 @@ type Feature struct {
 // Features sono le funzioni dell'AI (replica/ai.md §2 e §4).
 var Features = []Feature{
 	{Key: "assistente", Tier: TierDeep, NeedsTools: true, Active: true},
-	// Domande sul grafo (ondata 2): il modello scrive una query, Regia la prova; non chiama strumenti.
-	{Key: "domande_grafo", Tier: TierDeep, Active: true},
+	// Domande sul grafo (ondata 2): il modello scrive una query, Regia la prova; non chiama
+	// strumenti. Tradurre in una query è un compito breve: di default il livello rapido.
+	{Key: "domande_grafo", Tier: TierFast, Active: true},
 	// Assistente nella scheda (ondata 3): riassunto, cosa manca per decidere, bozze; duplicati e
 	// classificazione alla creazione. Il modello non chiama strumenti: Regia gli dà il contesto.
 	{Key: "riassunti", Tier: TierFast, Active: true},
@@ -91,6 +92,8 @@ func invalid(field, code, msg string) error {
 type TierChoice struct {
 	ProviderID string `json:"provider_id"`
 	Model      string `json:"model"`
+	// Reasoning: il ragionamento del livello (low, medium, high; vuoto = automatico).
+	Reasoning string `json:"reasoning,omitempty"`
 }
 
 // Route sposta una funzione su un altro livello o su un modello preciso (anche di un altro fornitore).
@@ -98,6 +101,8 @@ type Route struct {
 	Tier       string `json:"tier,omitempty"`
 	ProviderID string `json:"provider_id,omitempty"`
 	Model      string `json:"model,omitempty"`
+	// Reasoning: il ragionamento della funzione, che vince su quello del livello (vuoto = automatico).
+	Reasoning string `json:"reasoning,omitempty"`
 }
 
 // Settings sono le impostazioni AI del tenant.
@@ -156,11 +161,12 @@ func LoadSettings(ctx context.Context, tx pgx.Tx) (Settings, error) {
 	}
 	st := Settings{RetentionDays: 90, Routes: map[string]Route{}, Regulated: reg, MaskPersonalData: reg}
 	var fastP, deepP, fastM, deepM *string
+	var fastR, deepR string
 	var routes []byte
 	err = tx.QueryRow(ctx, `select enabled, mask_personal_data, monthly_budget_usd::float8, monthly_token_budget, retention_days,
-		fast_provider_id::text, fast_model, deep_provider_id::text, deep_model, routes, mcp_enabled
+		fast_provider_id::text, fast_model, deep_provider_id::text, deep_model, routes, mcp_enabled, fast_reasoning, deep_reasoning
 		from ai_settings where tenant_id = app_tenant()`).Scan(&st.Enabled, &st.MaskPersonalData, &st.MonthlyBudgetUSD, &st.MonthlyTokenBudget,
-		&st.RetentionDays, &fastP, &fastM, &deepP, &deepM, &routes, &st.MCPEnabled)
+		&st.RetentionDays, &fastP, &fastM, &deepP, &deepM, &routes, &st.MCPEnabled, &fastR, &deepR)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return st, nil
 	}
@@ -168,8 +174,8 @@ func LoadSettings(ctx context.Context, tx pgx.Tx) (Settings, error) {
 		return Settings{}, err
 	}
 	st.Saved = true
-	st.Fast = TierChoice{ProviderID: deref(fastP), Model: deref(fastM)}
-	st.Deep = TierChoice{ProviderID: deref(deepP), Model: deref(deepM)}
+	st.Fast = TierChoice{ProviderID: deref(fastP), Model: deref(fastM), Reasoning: fastR}
+	st.Deep = TierChoice{ProviderID: deref(deepP), Model: deref(deepM), Reasoning: deepR}
 	if len(routes) > 0 {
 		if err := json.Unmarshal(routes, &st.Routes); err != nil {
 			return Settings{}, err
@@ -218,7 +224,10 @@ func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Acto
 		return slices.ContainsFunc(provs, func(p ProviderRow) bool { return p.ID == id })
 	}
 	checkTier := func(field string, c *TierChoice) error {
-		c.ProviderID, c.Model = strings.TrimSpace(c.ProviderID), strings.TrimSpace(c.Model)
+		c.ProviderID, c.Model, c.Reasoning = strings.TrimSpace(c.ProviderID), strings.TrimSpace(c.Model), strings.TrimSpace(c.Reasoning)
+		if !ValidEffort(c.Reasoning) {
+			return invalid(field, "ai.reasoning_invalid", "ragionamento sconosciuto: automatico, basso, medio o alto")
+		}
 		switch {
 		case c.ProviderID == "" && c.Model == "":
 			return nil
@@ -255,39 +264,49 @@ func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Acto
 		if _, ok := featureByKey(key); !ok {
 			return Settings{}, invalid("routes", "ai.feature_unknown", "funzione sconosciuta: "+key)
 		}
-		r.Tier, r.ProviderID, r.Model = strings.TrimSpace(r.Tier), strings.TrimSpace(r.ProviderID), strings.TrimSpace(r.Model)
+		r.Tier, r.ProviderID, r.Model, r.Reasoning = strings.TrimSpace(r.Tier), strings.TrimSpace(r.ProviderID), strings.TrimSpace(r.Model), strings.TrimSpace(r.Reasoning)
+		if !ValidEffort(r.Reasoning) {
+			return Settings{}, invalid("routes", "ai.reasoning_invalid", "ragionamento sconosciuto per la funzione "+key)
+		}
 		switch {
 		case r.ProviderID != "":
 			if !has(r.ProviderID) || r.Model == "" || utf8.RuneCountInString(r.Model) > 200 {
 				return Settings{}, invalid("routes", "ai.route_invalid", "per la funzione "+key+" scegli fornitore e modello")
 			}
-			routes[key] = Route{ProviderID: r.ProviderID, Model: r.Model}
+			routes[key] = Route{ProviderID: r.ProviderID, Model: r.Model, Reasoning: r.Reasoning}
 		case r.Tier == TierFast || r.Tier == TierDeep:
 			if f, _ := featureByKey(key); f.Tier != r.Tier {
-				routes[key] = Route{Tier: r.Tier}
+				routes[key] = Route{Tier: r.Tier, Reasoning: r.Reasoning}
+			} else if r.Reasoning != "" {
+				routes[key] = Route{Reasoning: r.Reasoning}
 			}
 		case r.Tier == "":
+			if r.Reasoning != "" {
+				routes[key] = Route{Reasoning: r.Reasoning}
+			}
 		default:
 			return Settings{}, invalid("routes", "ai.route_invalid", "livello sconosciuto per la funzione "+key)
 		}
 	}
 	rj, _ := json.Marshal(routes)
 	if _, err := tx.Exec(ctx, `insert into ai_settings (tenant_id, enabled, mask_personal_data, monthly_budget_usd, monthly_token_budget,
-			retention_days, fast_provider_id, fast_model, deep_provider_id, deep_model, routes, mcp_enabled, updated_at)
-		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+			retention_days, fast_provider_id, fast_model, deep_provider_id, deep_model, routes, mcp_enabled, fast_reasoning, deep_reasoning, updated_at)
+		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
 		on conflict (tenant_id) do update set enabled = excluded.enabled, mask_personal_data = excluded.mask_personal_data,
 			monthly_budget_usd = excluded.monthly_budget_usd, monthly_token_budget = excluded.monthly_token_budget,
 			retention_days = excluded.retention_days, fast_provider_id = excluded.fast_provider_id, fast_model = excluded.fast_model,
 			deep_provider_id = excluded.deep_provider_id, deep_model = excluded.deep_model, routes = excluded.routes,
-			mcp_enabled = excluded.mcp_enabled, updated_at = now()`,
+			mcp_enabled = excluded.mcp_enabled, fast_reasoning = excluded.fast_reasoning, deep_reasoning = excluded.deep_reasoning,
+			updated_at = now()`,
 		in.Enabled, in.MaskPersonalData, in.MonthlyBudgetUSD, in.MonthlyTokenBudget, in.RetentionDays,
-		nullable(in.Fast.ProviderID), nullable(in.Fast.Model), nullable(in.Deep.ProviderID), nullable(in.Deep.Model), rj, in.MCPEnabled); err != nil {
+		nullable(in.Fast.ProviderID), nullable(in.Fast.Model), nullable(in.Deep.ProviderID), nullable(in.Deep.Model), rj, in.MCPEnabled,
+		in.Fast.Reasoning, in.Deep.Reasoning); err != nil {
 		return Settings{}, err
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "ai.settings.update", EntityType: "ai_settings",
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
 		Payload: map[string]any{"enabled": in.Enabled, "mask_personal_data": in.MaskPersonalData, "retention_days": in.RetentionDays,
-			"fast_model": in.Fast.Model, "deep_model": in.Deep.Model, "routes": len(routes), "mcp_enabled": in.MCPEnabled,
+			"fast_model": in.Fast.Model, "deep_model": in.Deep.Model, "fast_reasoning": in.Fast.Reasoning, "deep_reasoning": in.Deep.Reasoning, "routes": len(routes), "mcp_enabled": in.MCPEnabled,
 			"monthly_budget_usd": in.MonthlyBudgetUSD, "monthly_token_budget": in.MonthlyTokenBudget}}); err != nil {
 		return Settings{}, err
 	}
