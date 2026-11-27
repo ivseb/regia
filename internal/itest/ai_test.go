@@ -355,7 +355,7 @@ func TestAIFondamenta(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	fakeai.Program("budget", fakeai.Step{Text: "uno", InputTokens: 80, OutputTokens: 5}, fakeai.Step{Text: "due", InputTokens: 20, OutputTokens: 5}, fakeai.Step{Text: "tre"})
+	fakeai.Program("budget", fakeai.Step{Text: "uno", InputTokens: 80, OutputTokens: 5}, fakeai.Step{Text: "due", InputTokens: 10, OutputTokens: 5}, fakeai.Step{Text: "tre"})
 	setDeep("scenario:budget", map[string]any{"monthly_token_budget": 100})
 	res = ed.do("POST", "/api/v1/ai/ask", map[string]any{"question": "uno"}, http.StatusOK)
 	if b := obj(obj(res["status"])["budget"]); b["state"] != ai.BudgetWarn || b["tokens"] != float64(85) {
@@ -368,6 +368,22 @@ func TestAIFondamenta(t *testing.T) {
 	ed.do("POST", "/api/v1/ai/ask", map[string]any{"question": "tre"}, http.StatusTooManyRequests)
 	if n := calls(`outcome = 'refused' and error_code = 'budget'`); n != 1 {
 		t.Fatalf("chiamata bloccata non registrata: %d", n)
+	}
+	// Conteggio dei token prima della chiamata (ondata 3): una richiesta che da sola supererebbe
+	// il budget non parte, anche se il mese non è ancora al 100%, e il registro ha i token contati.
+	if err := d.InTenant(ctx, tid, db.TenantOpts{}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `delete from ai_calls`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fakeai.Program("budget", fakeai.Step{Text: "troppo", InputTokens: 150, OutputTokens: 5})
+	ed.do("POST", "/api/v1/ai/ask", map[string]any{"question": "una domanda lunga"}, http.StatusTooManyRequests)
+	if n := calls(`outcome = 'refused' and error_code = 'budget' and input_tokens = 150`); n != 1 {
+		t.Fatalf("chiamata fermata dal conteggio dei token: %d", n)
+	}
+	if n := len(fakeai.Requests("budget")); n != 0 {
+		t.Fatalf("la chiamata fermata dal conteggio è arrivata al fornitore: %d", n)
 	}
 	var warned int
 	if err := d.Owner.QueryRow(ctx, `select count(*) from audit_log where tenant_id = $1 and action = 'ai.budget.warning'`, tid).Scan(&warned); err != nil || warned != 1 {

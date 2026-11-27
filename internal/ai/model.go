@@ -116,6 +116,34 @@ type Streamer interface {
 	ChatStream(ctx context.Context, req Request, onText func(string)) (*Response, error)
 }
 
+// TokenCounter è un adattatore che sa contare i token dell'input prima della chiamata con
+// l'API del fornitore (Anthropic: /v1/messages/count_tokens, gratuita). Chi non lo implementa
+// usa la stima EstimateTokens. Il conteggio serve al controllo del budget prima della chiamata.
+type TokenCounter interface {
+	CountTokens(ctx context.Context, req Request) (int64, error)
+}
+
+// EstimateTokens stima i token dell'input di una richiesta: circa quattro caratteri per token
+// (istruzioni, messaggi, risultati e input degli strumenti, schemi degli strumenti), arrotondato
+// per eccesso. È volutamente prudente: serve a non superare il budget, non a fatturare.
+func EstimateTokens(req Request) int64 {
+	n := len(req.System)
+	for _, m := range req.Messages {
+		n += len(m.Text)
+		for _, r := range m.ToolResults {
+			n += len(r.Content)
+		}
+		for _, c := range m.ToolCalls {
+			n += len(c.Input) + len(c.Name)
+		}
+	}
+	for _, t := range req.Tools {
+		b, _ := json.Marshal(t.Schema)
+		n += len(t.Name) + len(t.Description) + len(b)
+	}
+	return int64(n/4 + 1)
+}
+
 // ProviderConfig è ciò che serve a un adattatore per collegarsi.
 type ProviderConfig struct {
 	BaseURL string

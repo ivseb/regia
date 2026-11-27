@@ -9,6 +9,7 @@
 package openaicompat
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -101,6 +102,13 @@ type wireRequest struct {
 	Messages  []wireMessage `json:"messages"`
 	Tools     []wireTool    `json:"tools,omitempty"`
 	MaxTokens int           `json:"max_tokens,omitempty"`
+	// Stream chiede la risposta a pezzi (SSE); StreamOptions l'uso dei token nell'ultimo pezzo.
+	Stream        bool           `json:"stream,omitempty"`
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type wireResponse struct {
@@ -156,20 +164,21 @@ func toWire(req ai.Request) wireRequest {
 	return w
 }
 
-func (p *provider) do(ctx context.Context, method, path string, body any, out any) error {
+// send fa la richiesta e restituisce la risposta riuscita (il chiamante chiude il corpo).
+func (p *provider) send(ctx context.Context, method, path string, body any, accept string) (*http.Response, error) {
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		rd = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, p.base+path, rd)
 	if err != nil {
-		return &ai.ProviderError{Code: "config", Msg: "indirizzo non valido"}
+		return nil, &ai.ProviderError{Code: "config", Msg: "indirizzo non valido"}
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -179,17 +188,27 @@ func (p *provider) do(ctx context.Context, method, path string, body any, out an
 	resp, err := p.hc.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return err
+			return nil, err
 		}
-		return &ai.ProviderError{Code: "network", Msg: "servizio non raggiungibile (" + p.host() + ")"}
+		return nil, &ai.ProviderError{Code: "network", Msg: "servizio non raggiungibile (" + p.host() + ")"}
+	}
+	if resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return nil, statusError(resp.StatusCode, data)
+	}
+	return resp, nil
+}
+
+func (p *provider) do(ctx context.Context, method, path string, body any, out any) error {
+	resp, err := p.send(ctx, method, path, body, "application/json")
+	if err != nil {
+		return err
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return &ai.ProviderError{Code: "network", Msg: "risposta interrotta"}
-	}
-	if resp.StatusCode >= 300 {
-		return statusError(resp.StatusCode, data)
 	}
 	if err := json.Unmarshal(data, out); err != nil {
 		return &ai.ProviderError{Code: "bad_response", Msg: "risposta non riconosciuta: il servizio è compatibile OpenAI?"}
@@ -234,6 +253,11 @@ func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, erro
 	if err := p.do(ctx, http.MethodPost, "/chat/completions", toWire(req), &w); err != nil {
 		return nil, err
 	}
+	return fromWire(req, w)
+}
+
+// fromWire traduce la risposta (intera o ricomposta dai pezzi dello streaming).
+func fromWire(req ai.Request, w wireResponse) (*ai.Response, error) {
 	if len(w.Choices) == 0 {
 		return nil, &ai.ProviderError{Code: "bad_response", Msg: "risposta senza contenuto"}
 	}
@@ -268,6 +292,125 @@ func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, erro
 		out.Stop = ai.StopEnd
 	}
 	return out, nil
+}
+
+// streamChunk è un pezzo della risposta in streaming (chat.completion.chunk).
+type streamChunk struct {
+	Model   string `json:"model"`
+	Choices []struct {
+		Delta struct {
+			Content   *string `json:"content"`
+			ToolCalls []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"delta"`
+		FinishReason *string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int64 `json:"prompt_tokens"`
+		CompletionTokens int64 `json:"completion_tokens"`
+	} `json:"usage"`
+}
+
+// ChatStream chiede la risposta in streaming (Chat Completions con «stream: true»: eventi SSE
+// «data: {chunk}» fino a «data: [DONE]») e passa a onText i pezzi di testo man mano. Le chiamate
+// di strumenti arrivano a pezzi per indice e si ricompongono; l'uso dei token arriva nell'ultimo
+// pezzo («stream_options.include_usage»). Un servizio che ignora lo streaming e risponde in JSON
+// si legge come Chat.
+func (p *provider) ChatStream(ctx context.Context, req ai.Request, onText func(string)) (*ai.Response, error) {
+	body := toWire(req)
+	body.Stream, body.StreamOptions = true, &streamOptions{IncludeUsage: true}
+	resp, err := p.send(ctx, http.MethodPost, "/chat/completions", body, "text/event-stream")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if !strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		var w wireResponse
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		if err != nil {
+			return nil, &ai.ProviderError{Code: "network", Msg: "risposta interrotta"}
+		}
+		if err := json.Unmarshal(data, &w); err != nil {
+			return nil, &ai.ProviderError{Code: "bad_response", Msg: "risposta non riconosciuta: il servizio è compatibile OpenAI?"}
+		}
+		out, err := fromWire(req, w)
+		if err == nil && onText != nil && out.Message.Text != "" {
+			onText(out.Message.Text)
+		}
+		return out, err
+	}
+	var (
+		w      wireResponse
+		text   strings.Builder
+		calls  []wireToolCall
+		finish string
+	)
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 64<<10), 8<<20)
+	done := false
+	for !done && sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue // commenti («: ping»), righe vuote fra gli eventi, «event:»
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" {
+			done = true
+			break
+		}
+		var ch streamChunk
+		if err := json.Unmarshal([]byte(data), &ch); err != nil {
+			return nil, &ai.ProviderError{Code: "bad_response", Msg: "pezzo dello streaming non riconosciuto"}
+		}
+		if ch.Model != "" {
+			w.Model = ch.Model
+		}
+		if ch.Usage != nil {
+			w.Usage.PromptTokens, w.Usage.CompletionTokens = ch.Usage.PromptTokens, ch.Usage.CompletionTokens
+		}
+		for _, c := range ch.Choices {
+			if c.Delta.Content != nil && *c.Delta.Content != "" {
+				text.WriteString(*c.Delta.Content)
+				if onText != nil {
+					onText(*c.Delta.Content)
+				}
+			}
+			for _, tc := range c.Delta.ToolCalls {
+				for len(calls) <= tc.Index {
+					calls = append(calls, wireToolCall{Type: "function"})
+				}
+				if tc.ID != "" {
+					calls[tc.Index].ID = tc.ID
+				}
+				calls[tc.Index].Function.Name += tc.Function.Name
+				calls[tc.Index].Function.Arguments += tc.Function.Arguments
+			}
+			if c.FinishReason != nil {
+				finish = *c.FinishReason
+			}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, &ai.ProviderError{Code: "network", Msg: "risposta interrotta"}
+	}
+	if !done && finish == "" {
+		return nil, &ai.ProviderError{Code: "network", Msg: "streaming interrotto prima della fine"}
+	}
+	content := text.String()
+	w.Choices = append(w.Choices, struct {
+		Message      wireMessage `json:"message"`
+		FinishReason string      `json:"finish_reason"`
+	}{Message: wireMessage{Role: "assistant", Content: &content, ToolCalls: calls}, FinishReason: finish})
+	return fromWire(req, w)
 }
 
 // Models elenca i modelli del servizio (con Ollama e LM Studio: quelli installati).

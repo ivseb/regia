@@ -119,6 +119,24 @@ func params(req ai.Request) sdk.MessageNewParams {
 	return params
 }
 
+// CountTokens conta i token dell'input con l'API ufficiale (Messages.CountTokens): stessi
+// modello, istruzioni, strumenti e messaggi della chiamata, senza generare né consumare.
+func (p *provider) CountTokens(ctx context.Context, req ai.Request) (int64, error) {
+	full := params(req)
+	cp := sdk.MessageCountTokensParams{Model: full.Model, Messages: full.Messages, OutputConfig: full.OutputConfig}
+	if len(full.System) > 0 {
+		cp.System = sdk.MessageCountTokensParamsSystemUnion{OfTextBlockArray: full.System}
+	}
+	for _, t := range full.Tools {
+		cp.Tools = append(cp.Tools, sdk.MessageCountTokensToolUnionParam{OfTool: t.OfTool})
+	}
+	res, err := p.client.Messages.CountTokens(ctx, cp)
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return res.InputTokens, nil
+}
+
 func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) {
 	resp, err := p.client.Messages.New(ctx, params(req))
 	if err != nil {

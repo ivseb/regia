@@ -107,6 +107,20 @@ func approxTokens(req ai.Request) int64 {
 	return int64(n/4 + 1)
 }
 
+// CountTokens conta i token come li conterà Chat (stessa stima), senza registrare la richiesta:
+// così il controllo del budget prima della chiamata si prova anche con il finto.
+func (provider) CountTokens(ctx context.Context, req ai.Request) (int64, error) {
+	if strings.HasPrefix(req.Model, "scenario:") {
+		mu.Lock()
+		list := scenarios[strings.TrimPrefix(req.Model, "scenario:")]
+		mu.Unlock()
+		if len(list) > 0 && list[0].InputTokens > 0 {
+			return list[0].InputTokens, ctx.Err()
+		}
+	}
+	return approxTokens(req), ctx.Err()
+}
+
 func (provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

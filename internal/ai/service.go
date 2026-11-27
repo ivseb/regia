@@ -195,6 +195,16 @@ func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta C
 	}
 	cctx, cancel := context.WithTimeout(ctx, s.o.Timeout)
 	defer cancel()
+	// Con un budget: i token dell'input si contano prima (API del fornitore o stima) e la
+	// chiamata non parte se da sola porterebbe oltre il limite.
+	if bud.State != BudgetNone {
+		in := s.countTokens(cctx, prov, req)
+		if over(bud, Cost(t.Provider, t.Model, in, 0), in) {
+			rec.Outcome, rec.ErrorCode, rec.In = "refused", "budget", in
+			s.record(ctx, meta.TenantID, rec)
+			return nil, ErrBudgetCall
+		}
+	}
 	start := s.o.Now()
 	var resp *Response
 	if st, ok := prov.(Streamer); ok && onText != nil {
@@ -223,6 +233,29 @@ func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta C
 	s.record(ctx, meta.TenantID, rec)
 	s.warnBudget(ctx, meta)
 	return resp, nil
+}
+
+// countTokens conta i token dell'input: con l'API del fornitore se l'adattatore la offre
+// (TokenCounter), altrimenti, o se il conteggio non riesce, con la stima.
+func (s *Service) countTokens(ctx context.Context, prov Provider, req Request) int64 {
+	if tc, ok := prov.(TokenCounter); ok {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		n, err := tc.CountTokens(cctx, req)
+		if err == nil && n > 0 {
+			return n
+		}
+		s.o.Log.Debug("conteggio dei token non riuscito, uso la stima", "errore", err)
+	}
+	return EstimateTokens(req)
+}
+
+// over dice se una chiamata con quel costo e quei token d'input supererebbe il budget del mese.
+func over(b Budget, cost float64, in int64) bool {
+	if b.LimitUSD != nil && *b.LimitUSD > 0 && b.SpentUSD+cost > *b.LimitUSD {
+		return true
+	}
+	return b.LimitTokens != nil && *b.LimitTokens > 0 && b.Tokens+in > *b.LimitTokens
 }
 
 // promptHash è lo SHA-256 della richiesta (modello, istruzioni, messaggi, nomi degli strumenti).

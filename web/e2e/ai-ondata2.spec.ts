@@ -143,11 +143,15 @@ test.describe("AI, ondata 2: domande sul grafo, streaming, MCP", () => {
 
   test("all'80% del budget chi amministra riceve una notifica", async ({ page }) => {
     await login(page, "admin", TENANT);
-    // Un tetto appena sopra i token già usati nel mese: la prossima risposta lo supera e scatta
-    // l'avviso del mese (una volta sola).
-    const used = (await call<{ budget: { tokens: number } }>(page.request, "GET", "/api/v1/ai/usage")).budget.tokens;
-    await enableFake(page.request, { monthly_token_budget: used + 1 });
-    // Una domanda sul grafo fa una sola chiamata: passa, e dopo il tetto è superato.
+    // Una domanda sul grafo fa una sola chiamata: si misura quanto consuma, poi il tetto lascia
+    // passare la stessa domanda (i token si contano prima della chiamata) e dopo è oltre l'80%:
+    // scatta l'avviso del mese (una volta sola).
+    const usage = async () => (await call<{ budget: { tokens: number } }>(page.request, "GET", "/api/v1/ai/usage")).budget.tokens;
+    await enableFake(page.request);
+    const before = await usage();
+    await call(page.request, "POST", "/api/v1/ai/graph", { question: "Quali richieste aperte ci sono?" });
+    const used = await usage();
+    await enableFake(page.request, { monthly_token_budget: used + (used - before) + 10 });
     await call(page.request, "POST", "/api/v1/ai/graph", { question: "Quali richieste aperte ci sono?" });
     await page.goto("/notifiche");
     const row = page.getByRole("link", { name: /Il budget dell'AI di/ }).first();
