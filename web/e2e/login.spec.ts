@@ -44,6 +44,13 @@ test("accesso con password e cambio di organizzazione", async ({ page }) => {
   await scegli(org, "Altro Cliente");
   await expect(org).toContainText("Altro Cliente");
   await expect(page).not.toHaveURL(/DEM-1/);
+  // Il cambio si salva sul server un attimo dopo, sotto carico: la pagina si riapre a cambio fatto.
+  await expect
+    .poll(async () => {
+      const m = await call(page.request, "GET", "/api/v1/me");
+      return m.tenants.find((t: { tenant_id: string }) => t.tenant_id === m.active_tenant.tenant_id).slug;
+    })
+    .toBe("altro");
   await page.goto("/richieste");
   await expect(page.getByRole("link", { name: "DEM-1", exact: true })).toHaveCount(0);
   const me = await call(page.request, "GET", "/api/v1/me");
