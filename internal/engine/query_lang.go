@@ -17,6 +17,8 @@ import (
 //	valore       = [ ">" | ">=" | "<" | "<=" ] termine
 //	             | [ termine ] ".." [ termine ]      intervallo, estremi inclusi
 //	             | "vuoto" | "presente"
+//	             | "(" query ")"                    sottoquery: gli elementi che trova
+//	relazione    = [ "-" ] ( "collegata" | tipo di relazione ) ":" valore { "," valore }
 //	termine      = parola | "testo tra virgolette"
 //	ordinamento  = ( "ordina per" | "ordina" | "sort by" | "sort" ) ":" campo [ "asc" | "desc" ]
 //	testo        = parole libere (full-text), "parola*" per i prefissi, una chiave come DEM-12
@@ -26,8 +28,15 @@ import (
 //	tipo: business_request fase: Triage,Valutazione urgenza: Alta aggiornata: -7g
 //	  -assegnatario: me importo: 10000..50000 registro fornitori ordina per: fase
 //
+// Clausola di relazione (ondata 3 dell'AI): «tipo: application collegata: (tipo: risk fase: aperta)»
+// trova le applicazioni collegate a un rischio aperto; al posto di «collegata» (qualsiasi
+// relazione, nei due versi) si può scrivere un tipo di relazione per chiave o per nome nel suo
+// verso («dipende_da», «"è usata da"»). Una sottoquery vale anche per i campi che puntano a
+// elementi: «genitore: (tipo: epic fase: aperta)», «applicazione: (tipo: application criticità: Alta)».
+// Le parentesi aprono una sottoquery solo subito dopo «:» o «,»: nel testo libero restano parole.
+//
 // Questo file contiene solo la sintassi: campi e valori si risolvono sul tenant in
-// query_plan.go, l'autocompletamento è in query_suggest.go.
+// query_plan.go (relazioni e sottoquery in query_rel.go), l'autocompletamento è in query_suggest.go.
 
 // QueryError è un errore della query con la posizione del frammento sbagliato, in unità
 // UTF-16 (gli indici delle stringhe JavaScript), così l'interfaccia lo sottolinea.
@@ -87,23 +96,33 @@ const (
 	qQuoted
 	qColon
 	qComma
+	qSub // "( … )" dopo ":" o ",": sottoquery
 )
+
+// maxSubDepth è il numero massimo di sottoquery una dentro l'altra.
+const maxSubDepth = 3
 
 type qtok struct {
 	kind     qtokKind
 	text     string // per qQuoted: il contenuto senza virgolette
 	pos, end int    // byte
-	open     bool   // virgolette non chiuse (solo in modalità tollerante)
+	open     bool   // virgolette o parentesi non chiuse (solo in modalità tollerante)
+	// in0, in1: per qSub, il testo della sottoquery dentro le parentesi (byte).
+	in0, in1 int
 }
 
 func isQuerySpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
 
 // lexQuery divide la query in parole, testi tra virgolette, due punti e virgole.
 // In modalità tollerante (autocompletamento) le virgolette non chiuse arrivano a fine testo.
-func lexQuery(src string, tolerant bool) ([]qtok, error) {
+func lexQuery(src string, tolerant bool) ([]qtok, error) { return lexRange(src, 0, len(src), tolerant) }
+
+// lexRange divide la parte src[from:to] (le posizioni restano quelle di src). Una «(» subito
+// dopo «:» o «,» apre una sottoquery fino alla «)» corrispondente (fuori dalle virgolette).
+func lexRange(src string, from, to int, tolerant bool) ([]qtok, error) {
 	var out []qtok
-	i := 0
-	for i < len(src) {
+	i := from
+	for i < to {
 		c := src[i]
 		switch {
 		case isQuerySpace(c):
@@ -114,14 +133,26 @@ func lexQuery(src string, tolerant bool) ([]qtok, error) {
 		case c == ',':
 			out = append(out, qtok{kind: qComma, text: ",", pos: i, end: i + 1})
 			i++
+		case c == '(' && len(out) > 0 && (out[len(out)-1].kind == qColon || out[len(out)-1].kind == qComma):
+			j, closed := matchParen(src, i, to)
+			if !closed {
+				if !tolerant {
+					return nil, qerr(src, i, to, "parentesi non chiusa: la sottoquery finisce con «)»")
+				}
+				out = append(out, qtok{kind: qSub, text: src[i+1 : to], pos: i, end: to, open: true, in0: i + 1, in1: to})
+				i = to
+				continue
+			}
+			out = append(out, qtok{kind: qSub, text: src[i+1 : j], pos: i, end: j + 1, in0: i + 1, in1: j})
+			i = j + 1
 		case c == '"':
-			j := strings.IndexByte(src[i+1:], '"')
+			j := strings.IndexByte(src[i+1:to], '"')
 			if j < 0 {
 				if !tolerant {
-					return nil, qerr(src, i, len(src), "virgolette non chiuse")
+					return nil, qerr(src, i, to, "virgolette non chiuse")
 				}
-				out = append(out, qtok{kind: qQuoted, text: src[i+1:], pos: i, end: len(src), open: true})
-				i = len(src)
+				out = append(out, qtok{kind: qQuoted, text: src[i+1 : to], pos: i, end: to, open: true})
+				i = to
 				continue
 			}
 			out = append(out, qtok{kind: qQuoted, text: src[i+1 : i+1+j], pos: i, end: i + j + 2})
@@ -129,7 +160,7 @@ func lexQuery(src string, tolerant bool) ([]qtok, error) {
 		default:
 			// I byte delle lettere accentate sono tutti >= 0x80: non si confondono con i separatori.
 			j := i
-			for j < len(src) && !isQuerySpace(src[j]) && src[j] != ':' && src[j] != ',' && src[j] != '"' {
+			for j < to && !isQuerySpace(src[j]) && src[j] != ':' && src[j] != ',' && src[j] != '"' {
 				j++
 			}
 			out = append(out, qtok{kind: qWord, text: src[i:j], pos: i, end: j})
@@ -137,6 +168,28 @@ func lexQuery(src string, tolerant bool) ([]qtok, error) {
 		}
 	}
 	return out, nil
+}
+
+// matchParen trova la «)» che chiude la «(» in src[i], fuori dalle virgolette.
+func matchParen(src string, i, to int) (int, bool) {
+	depth, quoted := 0, false
+	for j := i; j < to; j++ {
+		switch src[j] {
+		case '"':
+			quoted = !quoted
+		case '(':
+			if !quoted {
+				depth++
+			}
+		case ')':
+			if !quoted {
+				if depth--; depth == 0 {
+					return j, true
+				}
+			}
+		}
+	}
+	return to, false
 }
 
 // Query è una query analizzata (solo la sintassi).
@@ -158,10 +211,12 @@ type QClause struct {
 
 // QValue è un valore di una clausola.
 type QValue struct {
-	Op       string // eq | gt | ge | lt | le | range | empty | present
+	Op       string // eq | gt | ge | lt | le | range | empty | present | sub
 	A, B     string // per range: gli estremi ("" = aperto)
 	Quoted   bool
 	Pos, End int
+	// Sub: la sottoquery di un valore «( … )» (Op "sub"); le posizioni sono quelle di Src.
+	Sub *Query
 }
 
 // QText è una parola (o una frase tra virgolette) del testo libero.
@@ -198,6 +253,11 @@ func parseQuery(src string, tolerant bool) (*Query, error) {
 	if err != nil {
 		return &Query{Src: src}, err
 	}
+	return parseToks(src, toks, tolerant, 0)
+}
+
+// parseToks analizza i token di una query (depth: quante sottoquery la contengono).
+func parseToks(src string, toks []qtok, tolerant bool, depth int) (*Query, error) {
 	q := &Query{Src: src}
 	var first error
 	fail := func(e error) bool {
@@ -258,7 +318,7 @@ func parseQuery(src string, tolerant bool) (*Query, error) {
 				c.NameEnd = t.end - 1
 			}
 			i += 2
-			vals, j, err := parseValues(src, toks, i, strings.ToLower(name))
+			vals, j, err := parseValues(src, toks, i, strings.ToLower(name), tolerant, depth)
 			if err != nil && fail(err) {
 				return q, first
 			}
@@ -282,6 +342,10 @@ func parseQuery(src string, tolerant bool) (*Query, error) {
 			}
 		case qComma:
 			if fail(qerr(src, t.pos, t.end, "virgola fuori da un elenco di valori: scrivi «campo: a, b»")) {
+				return q, first
+			}
+		case qSub:
+			if fail(qerr(src, t.pos, t.end, "una sottoquery tra parentesi va dopo un campo: scrivi «collegata: (tipo: risk)»")) {
 				return q, first
 			}
 		default:
@@ -315,7 +379,7 @@ var opOnly = map[string]bool{">": true, ">=": true, "<": true, "<=": true, "=": 
 
 // parseValues legge i valori di una clausola a partire da toks[i]. field è il nome del
 // campo in minuscolo: "oppure campo: valore" sullo stesso campo continua l'elenco.
-func parseValues(src string, toks []qtok, i int, field string) ([]QValue, int, error) {
+func parseValues(src string, toks []qtok, i int, field string, tolerant bool, depth int) ([]QValue, int, error) {
 	var vals []QValue
 	expect := true
 	for i < len(toks) {
@@ -346,6 +410,16 @@ func parseValues(src string, toks []qtok, i int, field string) ([]QValue, int, e
 				v.Pos = t.pos
 				vals = append(vals, v)
 				i += 2
+				expect = false
+				continue
+			}
+			if t.kind == qSub {
+				v, err := parseSub(src, t, tolerant, depth)
+				if err != nil && (!tolerant || v.Sub == nil) {
+					return vals, i + 1, err
+				}
+				vals = append(vals, v)
+				i++
 				expect = false
 				continue
 			}
@@ -387,6 +461,27 @@ func parseValues(src string, toks []qtok, i int, field string) ([]QValue, int, e
 		return vals, i, qerr(src, last.pos, last.end, "manca un valore dopo «%s»", last.text)
 	}
 	return vals, i, nil
+}
+
+// parseSub analizza la sottoquery di un valore «( … )».
+func parseSub(src string, t qtok, tolerant bool, depth int) (QValue, error) {
+	v := QValue{Op: "sub", Pos: t.pos, End: t.end}
+	if depth+1 >= maxSubDepth {
+		return v, qerr(src, t.pos, t.end, "troppe sottoquery una dentro l'altra (al massimo %d)", maxSubDepth-1)
+	}
+	if strings.TrimSpace(t.text) == "" {
+		return v, qerr(src, t.pos, t.end, "sottoquery vuota: scrivi le condizioni tra le parentesi, es. (tipo: risk)")
+	}
+	toks, err := lexRange(src, t.in0, t.in1, tolerant)
+	if err != nil {
+		return v, err
+	}
+	sub, err := parseToks(src, toks, tolerant, depth+1)
+	v.Sub = sub
+	if err == nil && sub.Sort != nil {
+		err = qerr(src, sub.Sort.Pos, sub.Sort.End, "in una sottoquery l'ordinamento non serve")
+	}
+	return v, err
 }
 
 func parseValue(src string, t qtok) (QValue, error) {

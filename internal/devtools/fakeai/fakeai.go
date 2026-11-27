@@ -200,6 +200,8 @@ var (
 	clauseRe     = regexp.MustCompile(`-?[^\s:"]+:\s*(?:"[^"]*"|\S+)|"[^"]*"|\S+`)
 	graphWords   = []struct{ prefix, clause string }{
 		{"applicazion", "tipo: application"},
+		// Relazioni e sottoquery (ondata 3): il campo delle vulnerabilità di DevSecOps.
+		{"vulnerabil", "scadenza_vulnerabilità: <oggi"},
 		{"richiest", "tipo: business_request"},
 		{"rischi", "tipo: risk"},
 		{"incident", "tipo: incident"},

@@ -15,6 +15,17 @@ import (
 // rischio se «vuln_eccezioni» supera una soglia.
 
 func (s *Service) registerVuln(eng *engine.Service) {
+	// Nel linguaggio di query (ondata 3 dell'AI): le applicazioni con vulnerabilità da correggere
+	// per data di scadenza, così «applicazioni con vulnerabilità scadute» è
+	// «tipo: application scadenza_vulnerabilità: <oggi». Indici: findings_work_idx (scadenza) e
+	// (tenant_id, application_element_id, status).
+	eng.QueryField(engine.QueryField{
+		Key: "vuln_due", Names: []string{"scadenza_vulnerabilità", "scadenza_vulnerabilita", "vulnerabilità", "vulnerabilita", "vulnerability_due"},
+		Label: "Scadenza delle vulnerabilità da correggere (applicazioni): <oggi = scadute, -7g..+7g = in scadenza",
+		Kind:  "date", Types: []string{architecture.AppType},
+		Source: `select application_element_id as element_id, due_at as v from findings
+			where stage in ` + openStages + ` and due_at is not null and application_element_id is not null`,
+	})
 	eng.Facts(architecture.AppType, s.vulnAppFacts)
 	eng.Facts(architecture.RequestType, s.vulnRequestFacts)
 	eng.DescribeFacts(architecture.AppType,

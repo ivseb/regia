@@ -153,13 +153,26 @@ func (s *Service) Suggest(ctx context.Context, tx pgx.Tx, actor Actor, src strin
 	}
 	bpos := fromU16(src, pos)
 	toks, _ := lexQuery(src, true)
+	// Dentro una sottoquery «( … )» si propone come in una query a sé (stesse posizioni).
+	from, to := 0, len(src)
+	for found := true; found; {
+		found = false
+		for _, t := range toks {
+			if t.kind == qSub && t.in0 <= bpos && bpos <= t.in1 {
+				from, to = t.in0, t.in1
+				toks, _ = lexRange(src, from, to, true)
+				found = true
+				break
+			}
+		}
+	}
 	cat, err := s.catalog(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 	sp := locate(src, toks, bpos)
 	sp.types = []string{}
-	if tq, _ := parseQuery(src, true); tq != nil {
+	if tq, _ := parseToks(src, toks, true, 0); tq != nil {
 		for _, c := range tq.Clauses {
 			if f := cat.lookup(c.Name); f != nil && f.sys != nil && f.sys.kind == qkType && !c.Negated {
 				sp.types = append(sp.types, lowerAll(c.Values)...)
@@ -286,6 +299,17 @@ func suggestFields(cat *catalog, sp spot) []Suggestion {
 			ins = "-" + ins
 		}
 		out = append(out, Suggestion{Kind: "field", Label: n, Insert: ins, Detail: f.label})
+	}
+	// La relazione generica (query_rel.go): i tipi di relazione si scrivono per nome.
+	if strings.HasPrefix("collegata", p) {
+		ins := "collegata"
+		if !sp.colonAfter {
+			ins += ": "
+		}
+		if sp.neg {
+			ins = "-" + ins
+		}
+		out = append(out, Suggestion{Kind: "field", Label: "collegata", Insert: ins, Detail: "Collegata a elementi: chiavi o sottoquery, es. collegata: (tipo: risk fase: aperta)"})
 	}
 	if !sp.neg && !sp.colonAfter && p != "" && (strings.HasPrefix("ordina per", p) || strings.HasPrefix("sort by", p)) {
 		out = append([]Suggestion{{Kind: "sort", Label: "ordina per", Insert: "ordina per: ", Detail: "Ordinamento dei risultati"}}, out...)

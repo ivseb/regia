@@ -88,6 +88,10 @@ type binder struct {
 	cat   *catalog
 	now   time.Time
 	nowOK bool
+	// svc e scope servono alle sottoquery (query_rel.go): si risolvono con la visibilità della persona.
+	svc   *Service
+	scope *spaceScope
+	rels  []relName // tipi di relazione del tenant, letti alla prima clausola di relazione
 }
 
 func (b *binder) err(pos, end int, format string, args ...any) error {
@@ -127,18 +131,43 @@ func (s *Service) plan(ctx context.Context, tx pgx.Tx, actor Actor, q *Query) (*
 	if err != nil {
 		return nil, err
 	}
-	b := &binder{ctx: ctx, tx: tx, actor: actor, q: q, cat: cat}
+	b := &binder{ctx: ctx, tx: tx, actor: actor, q: q, cat: cat, svc: s}
+	return b.bind(q)
+}
+
+// bind costruisce il piano di q (la query o una sua sottoquery) con il binder b.
+func (b *binder) bind(q *Query) (*plan, error) {
+	q0 := b.q
+	b.q = q
+	defer func() { b.q = q0 }()
+	cat := b.cat
 	pl := &plan{}
 	for i := range q.Clauses {
 		c := &q.Clauses[i]
 		f := cat.lookup(c.Name)
+		var rel *relSpec
 		if f == nil {
-			return nil, b.err(c.NamePos, c.NameEnd, "«%s» non è un campo: usa tipo, fase, spazio, assegnatario, aggiornata, un campo personalizzato… (l'autocompletamento li propone)", c.Name)
+			var err error
+			if rel, err = b.relation(c.Name); err != nil {
+				return nil, err
+			}
+			if rel == nil {
+				return nil, b.err(c.NamePos, c.NameEnd, "«%s» non è un campo né una relazione: usa tipo, fase, spazio, assegnatario, aggiornata, collegata, un campo personalizzato… (l'autocompletamento li propone)", c.Name)
+			}
 		}
 		if len(c.Values) == 0 {
 			return nil, b.err(c.Pos, c.End, "manca il valore di «%s»", c.Name)
 		}
-		cd, err := b.bindClause(pl, f, c)
+		var cd cond
+		var err error
+		if rel != nil {
+			cd, err = b.bindRelation(rel, c)
+		} else {
+			if err := b.subAllowed(f, c); err != nil {
+				return nil, err
+			}
+			cd, err = b.bindClause(pl, f, c)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -154,10 +183,24 @@ func (s *Service) plan(ctx context.Context, tx pgx.Tx, actor Actor, q *Query) (*
 	if err := b.bindSort(pl); err != nil {
 		return nil, err
 	}
-	if pl.scope, err = s.scopeOf(ctx, tx, actor); err != nil {
+	sc, err := b.spaceScope()
+	if err != nil {
 		return nil, err
 	}
+	pl.scope = sc
 	return pl, nil
+}
+
+// spaceScope: spazi nascosti e concessi all'attore, letti una volta per query.
+func (b *binder) spaceScope() (spaceScope, error) {
+	if b.scope == nil {
+		sc, err := b.svc.scopeOf(b.ctx, b.tx, b.actor)
+		if err != nil {
+			return sc, err
+		}
+		b.scope = &sc
+	}
+	return *b.scope, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -313,11 +356,12 @@ func columnCond(sf *sysField, vals []bval, resolvable bool) cond {
 	return c
 }
 
-type refFlags struct{ empty, present bool }
+// refFlags: «vuoto», «presente» e almeno una sottoquery (che può non trovare niente).
+type refFlags struct{ empty, present, sub bool }
 
 func refVals(ids []string, f refFlags) []bval {
 	var out []bval
-	if len(ids) > 0 {
+	if len(ids) > 0 || f.sub {
 		out = append(out, bval{op: "in", ids: ids})
 	}
 	if f.empty {
@@ -556,7 +600,17 @@ func (b *binder) elementRefs(c *QClause, f *qfield, refType string, titles bool)
 	var flags refFlags
 	var spaces, uuids, names []string
 	var numbers []int64
-	for _, v := range c.Values {
+	var subIDs []string
+	matched := make([]bool, len(c.Values))
+	for i, v := range c.Values {
+		if v.Op == "sub" {
+			got, err := b.subIDs(v)
+			if err != nil {
+				return nil, nil, flags, err
+			}
+			subIDs, matched[i], flags.sub = append(subIDs, got...), true, true
+			continue
+		}
 		if err := b.noOps(c, v, f.nullable()); err != nil {
 			return nil, nil, flags, err
 		}
@@ -612,8 +666,7 @@ func (b *binder) elementRefs(c *QClause, f *qfield, refType string, titles bool)
 			return nil, nil, flags, err
 		}
 	}
-	var ids []string
-	matched := make([]bool, len(c.Values))
+	ids := subIDs
 	for i, v := range c.Values {
 		if v.Op != "eq" {
 			continue
@@ -977,7 +1030,7 @@ func (b *binder) bindCustom(f *qfield, c *QClause) (cond, error) {
 			}
 		}
 		empty, present = flags.empty, flags.present
-		if len(ids) > 0 {
+		if len(ids) > 0 || flags.sub {
 			vals = append(vals, bval{op: "in", ids: ids})
 		}
 	}
@@ -1064,6 +1117,10 @@ func (b *binder) bindModule(f *qfield, c *QClause) (cond, error) {
 			}
 		}
 		empty, present = flags.empty, flags.present
+		if flags.sub && len(ids) == 0 {
+			// La sottoquery non trova niente: la condizione non vale per nessun elemento.
+			vals = append(vals, bval{op: "in", ids: []string{}})
+		}
 		var extra map[string][]string
 		if mf.Lookup != "" {
 			var err error
@@ -1375,30 +1432,7 @@ func (pl *plan) resolve(ctx context.Context, tx pgx.Tx) ([]string, error) {
 // buildBucket compone la query di un gruppo dell'ordinamento.
 func buildBucket(pl *plan, bk *bucket, actor Actor, ids []string, mode textMode, cur *cursor, n int) (string, []any) {
 	sb := &sqlb{}
-	where := []string{"e.deleted_at is null", "not e.is_draft"}
-	if !actor.Has("element.read") {
-		me := sb.arg(actor.MemberID)
-		own := "e.reporter_id = " + me + " or " + stakeholderOf("e.id", me)
-		if len(pl.scope.granted) > 0 {
-			own += " or e.space_id = any(" + sb.arg(pl.scope.granted) + "::uuid[])"
-		}
-		where = append(where, "("+own+")")
-	}
-	if len(pl.scope.hidden) > 0 {
-		where = append(where, "not (e.space_id = any("+sb.arg(pl.scope.hidden)+"::uuid[]))")
-	}
-	for i := range pl.conds {
-		where = append(where, pl.conds[i].pred(sb))
-	}
-	if ids != nil {
-		where = append(where, "e.id = any("+sb.arg(ids)+"::uuid[])")
-	}
-	switch {
-	case pl.key != nil:
-		where = append(where, "s.key = "+sb.arg(pl.key.space)+" and e.number = "+sb.arg(pl.key.number))
-	case mode == textWalk:
-		where = append(where, textPred(sb, pl.text, pl.prefix))
-	}
+	where := planWhere(sb, pl, actor, ids, mode)
 	join := ""
 	if bk.join != nil {
 		join = bk.join(sb)
@@ -1417,6 +1451,26 @@ func buildBucket(pl *plan, bk *bucket, actor Actor, ids []string, mode textMode,
 		" where " + strings.Join(where, " and ") +
 		fmt.Sprintf(" order by %s %s, e.id %s limit %s", bk.expr, dir, dir, sb.arg(n))
 	return sql, sb.args
+}
+
+// visibleWhere sono le condizioni di visibilità di un elemento con alias a (le stesse di
+// CanRead, in SQL): non cancellato né bozza, spazi riservati esclusi e, per chi non ha
+// element.read (richiedente del portale), solo ciò che ha aperto, ciò in cui ha un ruolo e gli
+// spazi in cui ha un ruolo che concede la lettura.
+func visibleWhere(sb *sqlb, a string, actor Actor, sc spaceScope) []string {
+	where := []string{a + ".deleted_at is null", "not " + a + ".is_draft"}
+	if !actor.Has("element.read") {
+		me := sb.arg(actor.MemberID)
+		own := a + ".reporter_id = " + me + "::uuid or " + stakeholderOf(a+".id", me+"::uuid")
+		if len(sc.granted) > 0 {
+			own += " or " + a + ".space_id = any(" + sb.arg(sc.granted) + "::uuid[])"
+		}
+		where = append(where, "("+own+")")
+	}
+	if len(sc.hidden) > 0 {
+		where = append(where, "not ("+a+".space_id = any("+sb.arg(sc.hidden)+"::uuid[]))")
+	}
+	return where
 }
 
 // textPred: ricerca full-text valutata riga per riga (scorrimento dell'indice ordinato).

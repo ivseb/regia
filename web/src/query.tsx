@@ -8,17 +8,28 @@ import { ApiError, queryApi, type QueryErrorInfo, type Suggestion, type Suggesti
 // Evidenziazione: un lexer che rispecchia la grammatica di internal/engine/query_lang.go.
 // ---------------------------------------------------------------------
 
-type Tok = { kind: "colon" | "comma" | "quoted" | "word"; text: string; from: number; to: number };
+type Tok = { kind: "colon" | "comma" | "quoted" | "word" | "open" | "close"; text: string; from: number; to: number };
 type Paint = "field" | "value" | "keyword" | "punct" | "text";
 export type Segment = { from: number; to: number; paint?: Paint; error?: boolean };
 
 function lex(s: string): Tok[] {
   const out: Tok[] = [];
   let i = 0;
+  // Sottoquery: «(» subito dopo «:» o «,» apre, la «)» corrispondente chiude (query_lang.go).
+  let depth = 0;
   while (i < s.length) {
     const c = s[i];
+    const prev = out[out.length - 1]?.kind;
     if (/\s/.test(c)) i++;
-    else if (c === ":" || c === ",") {
+    else if (c === "(" && (prev === "colon" || prev === "comma")) {
+      out.push({ kind: "open", text: c, from: i, to: i + 1 });
+      depth++;
+      i++;
+    } else if (c === ")" && depth > 0) {
+      out.push({ kind: "close", text: c, from: i, to: i + 1 });
+      depth--;
+      i++;
+    } else if (c === ":" || c === ",") {
       out.push({ kind: c === ":" ? "colon" : "comma", text: c, from: i, to: i + 1 });
       i++;
     } else if (c === '"') {
@@ -28,7 +39,7 @@ function lex(s: string): Tok[] {
       i = to;
     } else {
       let j = i;
-      while (j < s.length && !/[\s:,"]/.test(s[j])) j++;
+      while (j < s.length && !/[\s:,"]/.test(s[j]) && !(depth > 0 && s[j] === ")")) j++;
       out.push({ kind: "word", text: s.slice(i, j), from: i, to: j });
       i = j;
     }
@@ -82,6 +93,13 @@ export function paint(s: string): Segment[] {
     const t = toks[i];
     const next = toks[i + 1];
     const lw = t.text.toLowerCase();
+    if (t.kind === "open" || t.kind === "close") {
+      // Dentro le parentesi ricomincia una query; dopo la chiusura si può continuare l'elenco.
+      out.push({ from: t.from, to: t.to, paint: "punct" });
+      mode = t.kind === "open" ? "text" : "values";
+      expect = false;
+      continue;
+    }
     const fieldStart = (t.kind === "word" || t.kind === "quoted") && next?.kind === "colon";
     let head = 0;
     if (t.kind === "word" && SORT.has(lw)) {
