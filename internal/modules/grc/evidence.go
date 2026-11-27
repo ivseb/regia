@@ -528,21 +528,28 @@ func (s *Service) RecordAutomatic(ctx context.Context, tx pgx.Tx, actor engine.A
 // EvidenceView è il dettaglio di un'evidenza.
 type EvidenceView struct {
 	EvidenceRef
-	Note        string        `json:"note"`
-	URL         string        `json:"url"`
-	Page        *ElementLink  `json:"page"`
-	Source      string        `json:"source"`
-	Collector   string        `json:"collector"`
-	ExternalRef string        `json:"external_ref"`
-	ValidFrom   time.Time     `json:"valid_from"`
-	ValidatedAt *time.Time    `json:"validated_at"`
-	Signature   string        `json:"signature"`
-	SignatureOK bool          `json:"signature_ok"`
-	StatusNote  string        `json:"status_note"`
-	CreatedBy   string        `json:"created_by"`
-	Linked      []ElementLink `json:"linked_controls"`
-	Attachments int           `json:"attachments"`
-	Can         EvidenceCan   `json:"can"`
+	Note        string          `json:"note"`
+	URL         string          `json:"url"`
+	Page        *ElementLink    `json:"page"`
+	Source      string          `json:"source"`
+	Collector   string          `json:"collector"`
+	ExternalRef string          `json:"external_ref"`
+	ValidFrom   time.Time       `json:"valid_from"`
+	ValidatedAt *time.Time      `json:"validated_at"`
+	Signature   string          `json:"signature"`
+	SignatureOK bool            `json:"signature_ok"`
+	StatusNote  string          `json:"status_note"`
+	CreatedBy   string          `json:"created_by"`
+	Linked      []LinkedControl `json:"linked_controls"`
+	Attachments int             `json:"attachments"`
+	Can         EvidenceCan     `json:"can"`
+}
+
+// LinkedControl è un controllo a cui l'evidenza è collegata, con il grado dichiarato.
+type LinkedControl struct {
+	ElementLink
+	Coverage string `json:"coverage,omitempty"`
+	Via      string `json:"via"`
 }
 
 // ElementLink è un elemento citato.
@@ -569,7 +576,7 @@ func (s *Service) Evidence(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `select e.id, s.key || '-' || e.number, e.title, x.owner_id = $2
+	rows, err := tx.Query(ctx, `select e.id, s.key || '-' || e.number, e.title, x.owner_id = $2, coalesce(g.coverage, ''), g.via
 		from grc_evidence_controls g join elements e on e.tenant_id = g.tenant_id and e.id = g.control_element_id
 		join spaces s on s.tenant_id = e.tenant_id and s.id = e.space_id
 		join ext_control x on x.tenant_id = g.tenant_id and x.element_id = g.control_element_id
@@ -577,11 +584,11 @@ func (s *Service) Evidence(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 	if err != nil {
 		return nil, err
 	}
-	linked := []ElementLink{}
+	linked := []LinkedControl{}
 	owner := false
-	var l ElementLink
+	var l LinkedControl
 	var own *bool
-	if _, err := pgx.ForEachRow(rows, []any{&l.ID, &l.Key, &l.Title, &own}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&l.ID, &l.Key, &l.Title, &own, &l.Coverage, &l.Via}, func() error {
 		linked = append(linked, l)
 		if own != nil && *own {
 			owner = true

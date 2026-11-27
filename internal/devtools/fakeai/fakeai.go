@@ -466,6 +466,9 @@ func rules(req ai.Request) Step {
 	if strings.Contains(req.System, GraphMarker) {
 		return graphRules(req)
 	}
+	if strings.Contains(req.System, ai.GRCSystemMarker) {
+		return grcRules(req)
+	}
 	if strings.Contains(req.System, "Lavori sulla scheda di un elemento") {
 		return cardRules(req)
 	}

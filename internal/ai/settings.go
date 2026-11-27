@@ -47,7 +47,9 @@ var Features = []Feature{
 	{Key: "classificazione", Tier: TierFast, Active: true},
 	// Wiki personale (ondata 4): aggiornamento in background con gli strumenti di lettura.
 	{Key: "wiki", Tier: TierFast, NeedsTools: true, Active: true},
-	{Key: "grc", Tier: TierDeep, NeedsTools: true},
+	// GRC assistito (ondata 5): collegamenti evidenza → controllo, bozze di policy e runbook (con
+	// gli strumenti di lettura se il modello li sa usare), bozza della notifica DORA.
+	{Key: "grc", Tier: TierDeep, NeedsTools: true, Active: true},
 }
 
 func featureByKey(key string) (Feature, bool) {

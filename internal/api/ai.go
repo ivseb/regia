@@ -48,7 +48,7 @@ func (s *Server) aiInit(o Options) {
 			box = secretbox.Random()
 		}
 		s.ai = ai.New(ai.Options{DB: o.DB, Box: box, Kinds: aiKinds(o.Dev), Dev: o.Dev, AllowPrivate: o.ConnectorAllowPrivate, Log: o.Log,
-			Tools: s.AITools()})
+			Tools: s.AITools(), GRC: ai.GRCServices{GRC: s.grc, Risk: s.risk, KB: s.kb}})
 	}
 }
 
@@ -77,6 +77,13 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+b+"/card/insert", inTenant(s.aiCardInsert))
 	mux.HandleFunc("POST "+b+"/card/triage", inTenant(s.aiCardTriage))
 	mux.HandleFunc("POST "+b+"/card/links", inTenant(s.aiCardLinks))
+	// GRC assistito (ondata 5).
+	mux.HandleFunc("POST "+b+"/grc/map", inTenant(s.aiGRCMap))
+	mux.HandleFunc("POST "+b+"/grc/map/decide", inTenant(s.aiGRCDecide))
+	mux.HandleFunc("POST "+b+"/grc/draft", inTenant(s.aiGRCDraft))
+	mux.HandleFunc("POST "+b+"/grc/draft/save", inTenant(s.aiGRCDraftSave))
+	mux.HandleFunc("POST "+b+"/grc/notice", inTenant(s.aiGRCNotice))
+	mux.HandleFunc("POST "+b+"/grc/notice/save", inTenant(s.aiGRCNoticeSave))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/confirm", inTenant(s.aiConfirm))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/reject", inTenant(s.aiReject))
 	// Server MCP (ondata 2): solo con un token API, nel tenant del token.

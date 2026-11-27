@@ -29,6 +29,8 @@ type Options struct {
 	Kinds []Kind
 	// Tools sono gli strumenti con i permessi della persona (internal/ai/tools).
 	Tools *tools.Services
+	// GRC: i moduli del GRC assistito (ondata 5), con i permessi della persona.
+	GRC GRCServices
 	// Dev toglie la protezione SSRF (http e indirizzi locali).
 	Dev bool
 	// AllowPrivate è il consenso dell'operatore alle reti interne (REGIA_CONNECTOR_ALLOW_PRIVATE).
@@ -371,7 +373,7 @@ func (s *Service) StatusFor(ctx context.Context, tx pgx.Tx) (Status, error) {
 	}
 	out.Features = map[string]bool{}
 	if st.Enabled {
-		for _, f := range append(CardFeatures[:len(CardFeatures):len(CardFeatures)], FeatureWiki) {
+		for _, f := range append(CardFeatures[:len(CardFeatures):len(CardFeatures)], FeatureWiki, FeatureGRC) {
 			if ft, _, ferr := s.Resolve(ctx, tx, f); ferr == nil && ft != nil && (f != FeatureWiki || ft.Tools) {
 				out.Features[f] = true
 			} else if ferr != nil && !errors.As(ferr, &ae) {

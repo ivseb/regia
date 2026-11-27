@@ -1049,8 +1049,25 @@ type NotificationInput struct {
 	Note        *string `json:"note"`
 }
 
-// SaveDraft salva il contenuto della notifica come bozza (incident.manage).
+// SaveDraft salva il contenuto della notifica come bozza (incident.manage). Se la notifica ha
+// già una storia di bozze (iniziata da una bozza dell'assistente, notification_drafts.go), anche
+// questa diventa una versione, scritta dalla persona.
 func (s *Service) SaveDraft(ctx context.Context, tx pgx.Tx, actor engine.Actor, id string, in NotificationInput) (*Notification, error) {
+	n, err := s.saveDraft(ctx, tx, actor, id, in)
+	if err != nil {
+		return nil, err
+	}
+	if ok, err := hasDraftVersions(ctx, tx, n.ID); err != nil {
+		return nil, err
+	} else if ok {
+		if _, err := s.addDraftVersion(ctx, tx, actor, n, nil, DraftByPerson); err != nil {
+			return nil, err
+		}
+	}
+	return n, nil
+}
+
+func (s *Service) saveDraft(ctx context.Context, tx pgx.Tx, actor engine.Actor, id string, in NotificationInput) (*Notification, error) {
 	if err := requireIncident(actor); err != nil {
 		return nil, err
 	}

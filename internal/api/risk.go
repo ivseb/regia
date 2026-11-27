@@ -56,6 +56,8 @@ func (s *Server) riskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/incidents/{ref}/actions", inTenant(s.addCorrectiveAction))
 	mux.HandleFunc("GET /api/v1/regulatory-notifications", inTenant(s.openNotifications))
 	mux.HandleFunc("PUT /api/v1/regulatory-notifications/{id}/draft", inTenant(s.notificationDraft))
+	mux.HandleFunc("GET /api/v1/regulatory-notifications/{id}/drafts", inTenant(s.notificationDrafts))
+	mux.HandleFunc("GET /api/v1/regulatory-notifications/{id}/drafts/{version}/export", inTenant(s.notificationDraftExport))
 	mux.HandleFunc("POST /api/v1/regulatory-notifications/{id}/submit", inTenant(s.notificationSubmit))
 	mux.HandleFunc("POST /api/v1/regulatory-notifications/{id}/not-required", inTenant(s.notificationNotRequired))
 
