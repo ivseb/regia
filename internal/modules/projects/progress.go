@@ -227,6 +227,8 @@ type Numbers struct {
 	// accettare e conflitti con altri progetti sulla stessa applicazione.
 	ClaimsPending int        `json:"claims_pending"`
 	Conflicts     []Conflict `json:"conflicts"`
+	// ExternalLate (passo 6): dipendenze da milestone di altri progetti previste oltre la data che serve.
+	ExternalLate []CrossDep `json:"external_late"`
 	// Change request aperte e rischi collegati al progetto o alle sue richieste.
 	OpenChangeRequests int       `json:"open_change_requests"`
 	Risks              []ItemRef `json:"risks"`
@@ -319,7 +321,13 @@ func parse(s *string) *time.Time {
 // computeNumbers calcola i numeri del piano già caricato: è l'unica funzione che li calcola.
 func computeNumbers(p *Plan, now time.Time) Numbers {
 	n := Numbers{Late: []ItemRef{}, Blocked: []Blocked{}, Risks: []ItemRef{}, MissingRoles: []RoleRef{}, ByMode: []ModeStat{}, Reasons: []string{},
-		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance, Conflicts: []Conflict{}, ScopeAdded: []ItemRef{}, ScopeRemoved: []ItemRef{}}
+		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance, Conflicts: []Conflict{}, ScopeAdded: []ItemRef{}, ScopeRemoved: []ItemRef{},
+		ExternalLate: []CrossDep{}}
+	for _, d := range p.External {
+		if d.LateDays > 0 {
+			n.ExternalLate = append(n.ExternalLate, d)
+		}
+	}
 	wps, ws := wpWeights(p)
 	vs := make([]float64, len(wps))
 	byMode := map[string]*struct {
@@ -506,6 +514,9 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 		}
 		if len(n.Blocked) > 0 {
 			amber = append(amber, "blocked")
+		}
+		if len(n.ExternalLate) > 0 {
+			amber = append(amber, "external_late")
 		}
 		if len(n.Conflicts) > 0 {
 			amber = append(amber, "conflicts")

@@ -59,6 +59,8 @@ type ProgramProject struct {
 	Milestones    []RoadmapMilestone `json:"milestones"`
 	// Budget del progetto (passo 5), solo a chi lo vede; senza l'elenco delle versioni.
 	Budget *Budget `json:"budget"`
+	// External: dipendenze da milestone di altri progetti (passo 6), per la roadmap.
+	External []CrossDep `json:"external"`
 }
 
 // ProgramView è la pagina del programma.
@@ -139,14 +141,7 @@ func (s *Service) programNumbers(ctx context.Context, tx pgx.Tx, actor engine.Ac
 			}
 			return Numbers{}, nil, err
 		}
-		p, err := s.loadPlan(ctx, tx, el)
-		if err != nil {
-			return Numbers{}, nil, err
-		}
-		if err := s.limitPlan(ctx, tx, actor, p, rd); err != nil {
-			return Numbers{}, nil, err
-		}
-		n, err := s.numbersOf(ctx, tx, actor, p, withBudget)
+		pp, p, n, err := s.projectRow(ctx, tx, actor, el, rd, withBudget)
 		if err != nil {
 			return Numbers{}, nil, err
 		}
@@ -154,33 +149,6 @@ func (s *Service) programNumbers(ctx context.Context, tx pgx.Tx, actor engine.Ac
 		if n.Budget != nil {
 			budgets = append(budgets, n.Budget)
 		}
-		pp := ProgramProject{ID: el.ID, Key: el.Key, Title: el.Title, State: el.State, StateCategory: el.StateCategory,
-			Progress: n.Progress, Signal: n.Signal, Reasons: n.Reasons, Start: n.Start, End: n.End, BaselineStart: n.BaselineStart,
-			BaselineEnd: n.BaselineEnd, VarianceDays: n.VarianceDays, WorkPackages: n.WorkPackages, Late: len(n.Late),
-			Conflicts: len(n.Conflicts), ClaimsPending: n.ClaimsPending, Milestones: []RoadmapMilestone{}}
-		if n.Budget != nil {
-			b := *n.Budget
-			b.Budgets = nil
-			pp.Budget = &b
-		}
-		if pp.Start == nil {
-			pp.Start, pp.End = p.Project.Start, p.Project.End
-		}
-		late := map[string]int{}
-		for _, l := range n.Late {
-			late[l.ID] = l.DaysLate
-		}
-		for _, it := range p.Items {
-			if it.Kind != TypeMilestone || it.StateCategory == "cancelled" {
-				continue
-			}
-			pp.Milestones = append(pp.Milestones, RoadmapMilestone{ID: it.ID, Key: it.Key, Title: it.Title, Date: it.End,
-				BaselineDate: it.BaselineEnd, StateCategory: it.StateCategory, Contractual: it.Contractual, DaysLate: late[it.ID], Restricted: it.Restricted})
-		}
-		_ = tx.QueryRow(ctx, `select m.display_name from stakeholders sh
-			join stakeholder_roles r on r.tenant_id = sh.tenant_id and r.id = sh.role_id and r.key = 'project_manager'
-			join members m on m.tenant_id = sh.tenant_id and m.id = sh.member_id
-			where sh.element_id = $1 order by sh.created_at limit 1`, el.ID).Scan(&pp.PM)
 		out = append(out, pp)
 	}
 	agg := computeNumbers(merged, today())
@@ -196,6 +164,50 @@ func (s *Service) programNumbers(ctx context.Context, tx pgx.Tx, actor engine.Ac
 		}
 	}
 	return agg, out, nil
+}
+
+// projectRow carica il piano del progetto con i limiti dell'attore e ne fa la riga della roadmap:
+// numeri, milestone e dipendenze da altri progetti (passo 6).
+func (s *Service) projectRow(ctx context.Context, tx pgx.Tx, actor engine.Actor, el *engine.Element, rd *reader, withBudget bool) (ProgramProject, *Plan, *Numbers, error) {
+	p, err := s.loadPlan(ctx, tx, el)
+	if err != nil {
+		return ProgramProject{}, nil, nil, err
+	}
+	if err := s.limitPlan(ctx, tx, actor, p, rd); err != nil {
+		return ProgramProject{}, nil, nil, err
+	}
+	n, err := s.numbersOf(ctx, tx, actor, p, withBudget)
+	if err != nil {
+		return ProgramProject{}, nil, nil, err
+	}
+	pp := ProgramProject{ID: el.ID, Key: el.Key, Title: el.Title, State: el.State, StateCategory: el.StateCategory,
+		Progress: n.Progress, Signal: n.Signal, Reasons: n.Reasons, Start: n.Start, End: n.End, BaselineStart: n.BaselineStart,
+		BaselineEnd: n.BaselineEnd, VarianceDays: n.VarianceDays, WorkPackages: n.WorkPackages, Late: len(n.Late),
+		Conflicts: len(n.Conflicts), ClaimsPending: n.ClaimsPending, Milestones: []RoadmapMilestone{}, External: p.External}
+	if n.Budget != nil {
+		b := *n.Budget
+		b.Budgets = nil
+		pp.Budget = &b
+	}
+	if pp.Start == nil {
+		pp.Start, pp.End = p.Project.Start, p.Project.End
+	}
+	late := map[string]int{}
+	for _, l := range n.Late {
+		late[l.ID] = l.DaysLate
+	}
+	for _, it := range p.Items {
+		if it.Kind != TypeMilestone || it.StateCategory == "cancelled" {
+			continue
+		}
+		pp.Milestones = append(pp.Milestones, RoadmapMilestone{ID: it.ID, Key: it.Key, Title: it.Title, Date: it.End,
+			BaselineDate: it.BaselineEnd, StateCategory: it.StateCategory, Contractual: it.Contractual, DaysLate: late[it.ID], Restricted: it.Restricted})
+	}
+	_ = tx.QueryRow(ctx, `select m.display_name from stakeholders sh
+		join stakeholder_roles r on r.tenant_id = sh.tenant_id and r.id = sh.role_id and r.key = 'project_manager'
+		join members m on m.tenant_id = sh.tenant_id and m.id = sh.member_id
+		where sh.element_id = $1 order by sh.created_at limit 1`, el.ID).Scan(&pp.PM)
+	return pp, p, n, nil
 }
 
 // sumBudgets somma i budget dei progetti nella stessa valuta (nil se mancano o le valute differiscono).

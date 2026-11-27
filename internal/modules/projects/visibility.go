@@ -105,6 +105,12 @@ func (s *Service) limitPlan(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 			}
 		}
 	}
+	if err := limitDeps(ctx, tx, r, p.External); err != nil {
+		return err
+	}
+	if err := limitDeps(ctx, tx, r, p.Dependents); err != nil {
+		return err
+	}
 	if pg := p.Project.Program; pg != nil {
 		ok, err := r.can(ctx, tx, pg.ID)
 		if err != nil {

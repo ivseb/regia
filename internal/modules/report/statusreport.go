@@ -185,6 +185,60 @@ type List struct {
 	Items    []*Report `json:"items"`
 	Schedule Schedule  `json:"schedule"`
 	CanEdit  bool      `json:"can_edit"`
+	// Project: la richiesta è confluita in un progetto (progetti, passo 6): gli status report ora
+	// sono lì; quelli della richiesta restano consultabili.
+	Project *ProjectLink `json:"project,omitempty"`
+}
+
+// ProjectLink è il progetto in cui la richiesta è confluita, con l'ultimo report inviato.
+type ProjectLink struct {
+	ID    string `json:"id,omitempty"`
+	Key   string `json:"key,omitempty"`
+	Title string `json:"title,omitempty"`
+	// Restricted: l'attore non legge il progetto (niente chiave, titolo né report).
+	Restricted bool    `json:"restricted,omitempty"`
+	Latest     *Report `json:"latest"`
+	Submitted  int     `json:"submitted"`
+}
+
+// projectOf restituisce il progetto in cui è confluita la richiesta ("" se non c'è).
+func projectOf(ctx context.Context, tx pgx.Tx, requestID string) (string, error) {
+	var id string
+	err := tx.QueryRow(ctx, `select pr.project_id::text from project_requests pr
+		join elements p on p.tenant_id = pr.tenant_id and p.id = pr.project_id and p.deleted_at is null
+		where pr.request_id = $1`, requestID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+// projectLink: il riepilogo del progetto della richiesta, con i limiti di chi legge.
+func (s *Service) projectLink(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID string) (*ProjectLink, error) {
+	ok, err := s.eng.CanRead(ctx, tx, actor, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &ProjectLink{Restricted: true}, nil
+	}
+	l := &ProjectLink{ID: projectID}
+	if err := tx.QueryRow(ctx, `select s.key || '-' || e.number, e.title, (select count(*) from status_reports r where r.element_id = e.id and r.status = 'submitted')
+		from elements e join spaces s on s.tenant_id = e.tenant_id and s.id = e.space_id where e.id = $1`, projectID).Scan(&l.Key, &l.Title, &l.Submitted); err != nil {
+		return nil, err
+	}
+	r, err := scanReport(tx.QueryRow(ctx, selectReport+` where r.element_id = $1 and r.status = 'submitted' order by r.period_end desc limit 1`, projectID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return l, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.redactProject(ctx, tx, actor, r); err != nil {
+		return nil, err
+	}
+	l.Latest = r
+	return l, nil
 }
 
 func (s *Service) List(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) (*List, error) {
@@ -233,7 +287,23 @@ func (s *Service) List(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref s
 		return nil, err
 	}
 	out.Schedule, err = s.schedule(ctx, tx, el, st, c.today)
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	if el.TypeKey == requestType {
+		pid, err := projectOf(ctx, tx, el.ID)
+		if err != nil {
+			return nil, err
+		}
+		if pid != "" {
+			if out.Project, err = s.projectLink(ctx, tx, actor, pid); err != nil {
+				return nil, err
+			}
+			// Il report ora lo chiede il progetto.
+			out.Schedule.Expected, out.Schedule.Overdue = false, false
+		}
+	}
+	return out, nil
 }
 
 // Get legge un report (le bozze solo per chi può scriverle).
@@ -385,6 +455,14 @@ func (s *Service) Create(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref
 		return nil, err
 	} else if !ok {
 		return nil, engine.ErrForbidden
+	}
+	// La richiesta confluita in un progetto non ha report nuovi: li scrive il progetto (passo 6).
+	if el.TypeKey == requestType {
+		if pid, err := projectOf(ctx, tx, el.ID); err != nil {
+			return nil, err
+		} else if pid != "" {
+			return nil, engine.InvalidCode("validation.report.status_in_project", "element", "la richiesta è confluita in un progetto: lo status report si scrive sul progetto")
+		}
 	}
 	var drafts int
 	if err := tx.QueryRow(ctx, `select count(*) from status_reports where element_id = $1 and status = 'draft'`, el.ID).Scan(&drafts); err != nil {
