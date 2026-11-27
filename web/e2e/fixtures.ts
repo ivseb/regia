@@ -37,19 +37,12 @@ export async function call<T = any>(req: APIRequestContext, method: string, path
 }
 
 /**
- * Crea un'organizzazione (superamministratore). Due creazioni nello stesso istante possono
- * scontrarsi sulla chiave del registro di audit (at, seq) e dare 500: si riprova una volta.
+ * Crea un'organizzazione (superamministratore). Le creazioni contemporanee non si scontrano più
+ * sul registro di audit (migrazione 0085): nessun nuovo tentativo.
  */
 export async function createTenant(req: APIRequestContext, name: string, slug: string): Promise<void> {
-  for (let i = 0; ; i++) {
-    const r = await req.post("/api/v1/platform/tenants", { data: { name, slug } });
-    if (r.ok()) return;
-    if (r.status() < 500 || i >= 2) {
-      expect(r.ok(), `POST /api/v1/platform/tenants: ${r.status()} ${(await r.text()).slice(0, 300)}`).toBeTruthy();
-      return;
-    }
-    await new Promise((ok) => setTimeout(ok, 200 + Math.random() * 300));
-  }
+  const r = await req.post("/api/v1/platform/tenants", { data: { name, slug } });
+  expect(r.ok(), `POST /api/v1/platform/tenants: ${r.status()} ${(await r.text()).slice(0, 300)}`).toBeTruthy();
 }
 
 /** Contesto API separato, autenticato come <who> nel tenant demo (per preparare i dati). */
