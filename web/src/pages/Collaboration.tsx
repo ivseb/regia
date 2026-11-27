@@ -403,7 +403,7 @@ export function CommentItem({ c, members, refKey }: { c: Comment; members: Membe
   });
   const remove = useMutation({ mutationFn: () => collab.deleteComment(c.id), onSuccess: done });
   return (
-    <li className="flex gap-2.5 border-b border-hair py-3 first:pt-1">
+    <li id={`c-${c.id}`} className="flex scroll-mt-24 gap-2.5 border-b border-hair py-3 first:pt-1">
       <Initials name={c.author_name} />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex flex-wrap items-baseline gap-x-2 text-[12.5px]">

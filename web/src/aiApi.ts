@@ -58,7 +58,17 @@ export type AISettingsView = {
   dev: boolean;
 };
 
-export type AIStatus = { enabled: boolean; ready: boolean; tools: boolean; model?: string; masked: boolean; budget: AIBudget; retention_days: number };
+export type AIStatus = {
+  enabled: boolean;
+  ready: boolean;
+  tools: boolean;
+  model?: string;
+  masked: boolean;
+  budget: AIBudget;
+  retention_days: number;
+  /** Funzioni della scheda pronte (ondata 3): riassunti, mancanze, bozze, classificazione. */
+  features?: Record<string, boolean>;
+};
 
 export type ProviderInput = {
   kind?: string;
@@ -108,6 +118,30 @@ export type GraphResult = {
   first_query?: string;
   first_error?: QueryError;
   error?: QueryError;
+  status: AIStatus;
+};
+
+/** Assistente nella scheda (internal/ai/card.go, ondata 3). */
+export type DraftKind = "descrizione" | "commento" | "risposta";
+export type CardGap = {
+  kind: "campo" | "descrizione" | "relazione" | "domanda" | "incoerenza";
+  text: string;
+  field?: string;
+  field_name?: string;
+  comment_id?: string;
+  comment_by?: string;
+  ref?: Ref;
+  required_by?: string;
+  source: "regia" | "modello";
+};
+export type CardResult = { action: string; draft?: DraftKind; text?: string; gaps?: CardGap[]; refs: Ref[]; unverified?: number; status: AIStatus };
+export type TriageField = { key: string; name: string; value: unknown; display: string; reason: string };
+export type TriageResult = {
+  duplicates: (Ref & { state: string; reason: string })[];
+  fields: TriageField[];
+  links: (Ref & { reason: string })[];
+  candidates: number;
+  unverified?: number;
   status: AIStatus;
 };
 
@@ -180,6 +214,11 @@ export const aiApi = {
   deleteConversation: (id: string) => call<void>("DELETE", `/ai/conversations/${q(id)}`),
   ask: (question: string, conversation_id?: string) => call<AskResult>("POST", "/ai/ask", { question, conversation_id }),
   graph: (question: string) => call<GraphResult>("POST", "/ai/graph", { question }),
+  card: (element: string, action: "riassunto" | "mancanze" | "bozza", draft?: DraftKind, hint?: string) =>
+    call<CardResult>("POST", "/ai/card", { element, action, draft, hint }),
+  cardInsert: (element: string, draft: DraftKind, text: string) => call<Proposal>("POST", "/ai/card/insert", { element, draft, text }),
+  triage: (type: string, title: string, description: string) => call<TriageResult>("POST", "/ai/card/triage", { type, title, description }),
+  cardLinks: (element: string, links: string[]) => call<{ items: { key: string; ok: boolean; error?: string }[] }>("POST", "/ai/card/links", { element, links }),
   confirm: (id: string) => call<Proposal>("POST", `/ai/proposals/${q(id)}/confirm`),
   reject: (id: string) => call<Proposal>("POST", `/ai/proposals/${q(id)}/reject`),
 };

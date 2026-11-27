@@ -9,6 +9,8 @@ import { fieldsApi } from "../fieldsApi";
 import { useTypeNames } from "../typesApi";
 import { CustomFieldsForm, defaultsOf, formFacts, payloadOf } from "../fields";
 import { useT } from "../i18n/react";
+import { aiApi } from "../aiApi";
+import { CreateAssistant } from "./CreateAssistant";
 
 // Nomi dei driver nelle condizioni (come demand.driverNames sul server): valori da confrontare, non testi.
 // i18n-ok: valori delle condizioni
@@ -38,6 +40,8 @@ export function NewRequest() {
   const type = useQuery({ queryKey: ["type", "business_request"], queryFn: () => api.type("business_request"), staleTime: 300_000 });
   const fields = useMemo(() => typeFields.data?.items ?? [], [typeFields.data]);
   const [custom, setCustom] = useState<Record<string, unknown>>({});
+  // Asset logici proposti dall'assistente alla creazione e accettati: si citano dopo il salvataggio.
+  const [links, setLinks] = useState<string[]>([]);
   useEffect(() => setCustom((c) => ({ ...defaultsOf(fields), ...c })), [fields]);
   const initial = type.data ? mainPath(type.data.states)[0]?.name : undefined;
   const facts = formFacts(fields, custom, {
@@ -63,7 +67,9 @@ export function NewRequest() {
       if (Object.keys(fields).length) body.fields = fields;
       return api.createRequest(body);
     },
-    onSuccess: (el) => {
+    onSuccess: async (el) => {
+      // Un collegamento che non riesce non ferma la creazione: la richiesta esiste già.
+      if (links.length) await aiApi.cardLinks(el.key, links).catch(() => null);
       qc.invalidateQueries({ queryKey: ["search"] });
       navigate({ to: "/e/$key", params: { key: el.key } });
     },
@@ -84,6 +90,17 @@ export function NewRequest() {
         <Field label={t("lavoro.newrequest.need")} hint={t("lavoro.newrequest.needHint")} wide>
           <textarea className="field min-h-32" value={f.description} onChange={set("description")} />
         </Field>
+        <CreateAssistant
+          type="business_request"
+          title={f.title}
+          description={f.description}
+          links={links}
+          onLinks={setLinks}
+          onAccept={(p) => {
+            if (p.key === "driver") setF((x) => ({ ...x, driver: String(p.value) }));
+            else setCustom((c) => ({ ...c, [p.key]: p.value }));
+          }}
+        />
         <Field label={t("lavoro.newrequest.sponsor")} hint={t("lavoro.newrequest.sponsorHint")}>
           <EntitySelect kind="member" className="field" noneLabel={t("lavoro.newrequest.tbd")} value={f.sponsor_id} onChange={(v) => setF((x) => ({ ...x, sponsor_id: v }))} />
         </Field>

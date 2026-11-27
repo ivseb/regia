@@ -21,15 +21,25 @@ Grammatica completa e strategia di prestazioni: [architecture.md §6](../../repl
   - Negazione con `-campo:`; `vuoto` e `presente`.
   - Operatori `>`, `>=`, `<`, `<=` e intervalli `a..b`.
 - **Campi di sistema:** `tipo`, `fase` (o `stato`, anche `aperta`/`chiusa`), `spazio`, `chiave`, `numero`, `assegnatario`, `segnalatore`, `genitore`, `aggiornata`, `creata`, `risolta`, `inizio`, `fine`, `osservati: me`.
-- **Campi dei moduli:** `team`, `applicazione`, `asset`, `richiesta`, `scadenza`, `desiderata`.
+- **Campi dei moduli:** `team`, `applicazione`, `asset`, `richiesta`, `scadenza`, `desiderata`, `scadenza_vulnerabilità` (applicazioni: scadenza delle vulnerabilità da correggere; `<oggi` = scadute).
+- **Relazioni** (ondata 3 dell'AI, `internal/engine/query_rel.go`):
+  - `collegata: (sottoquery)` trova gli elementi collegati a quelli della sottoquery tra parentesi, con qualsiasi relazione e nei due versi; anche con chiavi (`collegata: DEM-12`), `presente` e `vuoto`, e negata (`-collegata: presente` = senza collegamenti);
+  - al posto di `collegata` un tipo di relazione per chiave (`depends_on`, nel verso di chi parte) o per nome nel suo verso (`"dipende da"`, `"è prerequisito di"`, anche `dipende_da`);
+  - una sottoquery vale anche per i campi che puntano a elementi: `genitore: (tipo: epic fase: aperta)`, `applicazione: (tipo: application criticità: Alta)`, i campi personalizzati di tipo elemento;
+  - le parentesi aprono una sottoquery solo subito dopo `:` o `,` (nel testo libero restano parole); al massimo due livelli, niente ordinamento dentro;
+  - **visibilità:** la sottoquery si risolve con le stesse regole della ricerca (`visibleWhere`, le regole di `CanRead` in SQL): trova solo elementi che la persona può leggere, e `presente` conta solo i collegamenti verso elementi leggibili, così una condizione non rivela un collegamento con un elemento nascosto; una chiave che la persona non vede vale come inesistente;
+  - **limiti:** una sottoquery trova al massimo `engine.SubqueryMaxIDs` elementi (2000), oltre chiede di restringerla; la condizione usa gli indici `relations_out_idx` e `relations_in_idx`.
 - **Campi personalizzati:** per chiave o alias.
 - **Date:** `2026-11-24`, `oggi`, `ieri`, `settimana`, `mese`, `-7g`, `+30g`.
 - **Testo libero:** ricerca full-text; `parola*` per i prefissi; una chiave come `DEM-12` trova l'elemento.
 - **Ordinamento:** `ordina per: campo [asc|desc]` per qualunque campo ordinabile.
 - **Errori:** 422 `query.invalid` con `pos` ed `end` (unità UTF-16).
 
-Esempio:
-`tipo: business_request fase: Triage, Valutazione urgenza: Alta aggiornata: -30g -assegnatario: me fornitori ordina per: fase`
+Esempi:
+- `tipo: business_request fase: Triage, Valutazione urgenza: Alta aggiornata: -30g -assegnatario: me fornitori ordina per: fase`
+- `tipo: application collegata: (tipo: risk fase: aperta)` (applicazioni collegate a un rischio aperto)
+- `tipo: application scadenza_vulnerabilità: <oggi` (applicazioni con vulnerabilità scadute)
+- `tipo: business_request "dipende da": (tipo: business_request fase: aperta)`
 
 | metodo e percorso | cosa fa |
 | --- | --- |

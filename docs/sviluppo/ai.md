@@ -1,6 +1,6 @@
-# AI: fondamenta (ondata 1), server MCP e domande sul grafo (ondata 2)
+# AI: fondamenta (ondata 1), server MCP e domande sul grafo (ondata 2), assistente nella scheda (ondata 3)
 
-Disegno e decisioni in [replica/ai.md](../../replica/ai.md) (stato nella sezione «Stato»); guida per chi amministra in [ai.md](../ai.md) e, per collegare i client MCP, [ai-mcp.md](../ai-mcp.md). Migrazioni `0083_ai_fondamenta.sql` e `0084_ai_mcp_domande.sql`; test in `internal/itest/ai_test.go` e `internal/itest/ai_ondata2_test.go`, nei package `internal/ai/...` e in `web/e2e/ai.spec.ts` e `web/e2e/ai-ondata2.spec.ts`.
+Disegno e decisioni in [replica/ai.md](../../replica/ai.md) (stato nella sezione «Stato»); guida per chi amministra in [ai.md](../ai.md) e, per collegare i client MCP, [ai-mcp.md](../ai-mcp.md). Migrazioni `0083_ai_fondamenta.sql`, `0084_ai_mcp_domande.sql` e `0086_ai_scheda.sql`; test in `internal/itest/ai_test.go`, `ai_ondata2_test.go`, `ai_scheda_test.go` e `query_relazioni_test.go`, nei package `internal/ai/...` e in `web/e2e/ai.spec.ts`, `ai-ondata2.spec.ts` e `ai-scheda.spec.ts`.
 
 ## Pezzi
 
@@ -17,11 +17,14 @@ Disegno e decisioni in [replica/ai.md](../../replica/ai.md) (stato nella sezione
 | `internal/ai/tools` | strumenti con i permessi della persona (gli stessi del server MCP) |
 | `internal/ai/assistant.go` | assistente: conversazioni, giro con gli strumenti, proposte, conservazione; `AskStream` con gli eventi |
 | `internal/ai/graph.go` | domande sul grafo: traduzione in query, prova con il motore, una correzione |
+| `internal/ai/card.go` | assistente nella scheda: riassunto, mancanze, bozze (`Card`), inserimento (`Insert`), analisi alla creazione (`Triage`), asset accettati (`Links`) |
+| `internal/engine/query_rel.go` | clausola di relazione e sottoquery del linguaggio di query |
 | `internal/ai/mcp.go` | pezzi del livello AI per il server MCP: interruttore, registro, proposte senza conversazione |
 | `internal/ai/mcpserver` | server MCP con l'SDK ufficiale `github.com/modelcontextprotocol/go-sdk` |
 | `internal/engine/notify/ai.go` | notifica `ai` (avviso del budget a chi amministra) |
 | `internal/api/ai.go` | rotte `/api/v1/ai/...` e `/api/v1/mcp`; `aiKinds(dev)` registra i fornitori |
 | `web/src/aiApi.ts`, `pages/AiConfig.tsx`, `pages/AiUsage.tsx`, `pages/Assistente.tsx` | interfaccia (`askStream` legge lo streaming) |
+| `web/src/pages/CardAssistant.tsx`, `pages/CreateAssistant.tsx` | riquadro nella scheda (caricato solo con le funzioni pronte) e analisi nel form della nuova richiesta |
 
 ## Dati (migrazione 0083)
 
@@ -32,6 +35,8 @@ Disegno e decisioni in [replica/ai.md](../../replica/ai.md) (stato nella sezione
 
 Tutte con la RLS per tenant. Le conversazioni e le proposte si cancellano con il membro.
 
+Migrazione 0086: `ai_proposals.feature` (funzione della proposta: `bozze` o `classificazione`; nulla = assistente o client MCP). Migrazione 0085 (registro di audit, non solo AI): l'unicità di `audit_log` è per catena, `(tenant_id, seq, at) nulls not distinct`, al posto della chiave primaria `(at, seq)` che faceva scontrare due tenant con lo stesso numero nello stesso microsecondo (due organizzazioni create insieme davano 500; `internal/itest/audit_chiave_test.go`).
+
 Migrazione 0084: `ai_settings.mcp_enabled` (interruttore del server MCP, spento), `ai_calls.cache_read_tokens` e `cache_write_tokens` (cache del prompt), indice sulle proposte senza conversazione (quelle dei client MCP).
 
 ## Regole
@@ -40,8 +45,9 @@ Migrazione 0084: `ai_settings.mcp_enabled` (interruttore del server MCP, spento)
 - **Chiavi.** `secretbox` con la chiave applicativa e il contesto `ai-provider:<id>`, come i token dei connettori (`integration:<id>`). L'API restituisce solo `has_key`; l'audit (`ai.provider.*`) registra solo `"key": true`. Gli errori del fornitore si traducono in `ProviderError` con un codice breve, senza la risposta grezza.
 - **L'adattatore Anthropic non legge l'ambiente** (`option.WithoutEnvironmentDefaults()`): chiave e indirizzo arrivano solo dal tenant. Ragionamento adattivo dei modelli Claude 5 regolato con `output_config.effort` (`high` per l'approfondito, `low` per il rapido); i blocchi nativi della risposta tornano invariati nel giro successivo (`Message.Native`).
 - **Rete.** Il client HTTP è quello dei connettori (`ghapi.NewHTTPClient`): con `--dev` qualsiasi indirizzo; con `REGIA_CONNECTOR_ALLOW_PRIVATE` anche la rete interna; altrimenti solo indirizzi pubblici in `https`. Un fornitore con indirizzo locale (`localhost`, `.lan`, `.local`, `.home.arpa`, IP privati) è `local`: i dati non escono e il mascheramento non serve.
-- **Livelli e funzioni.** `Features` elenca le funzioni con il livello predefinito (attive `assistente` e, dall'ondata 2, `domande_grafo`, che non chiama strumenti). `Resolve(feature)`: modello preciso della funzione, altrimenti il suo livello; un livello vuoto usa l'altro.
+- **Livelli e funzioni.** `Features` elenca le funzioni con il livello predefinito (attive `assistente`, dall'ondata 2 `domande_grafo`, dall'ondata 3 `riassunti` rapido, `mancanze` approfondito, `bozze` approfondito e `classificazione` rapido; queste non chiamano strumenti). `Status.features` dice quali funzioni della scheda sono pronte, per mostrare solo i pulsanti che funzionano. `Resolve(feature)`: modello preciso della funzione, altrimenti il suo livello; un livello vuoto usa l'altro.
 - **Strumenti.** `Target.Tools` è falso se il modello è in `no_tools_models`: l'assistente non riceve strumenti e lo dice nel prompt e nell'interfaccia (`status.tools`).
+- **Conteggio dei token prima della chiamata.** Con un budget impostato `CallStream` conta i token dell'input: con un adattatore che implementa `ai.TokenCounter` (Anthropic: `Messages.CountTokens` dell'SDK ufficiale, `/v1/messages/count_tokens`, stessi modello, istruzioni, strumenti e messaggi; il finto: la stessa stima di `Chat`, o i token programmati dello scenario), altrimenti, o se il conteggio non riesce, con `EstimateTokens` (quattro caratteri per token, per eccesso). Se il costo dell'input da solo o i token porterebbero oltre il limite, la chiamata non parte: `refused`/`budget` con i token contati nel registro e l'errore `ai.budget_insufficient` (429). Senza budget non si conta niente.
 - **Budget e registro.** `Call` legge il consumo del mese (fuso del tenant) da `ai_calls`; dal 100% (dollari o token) non chiama e registra `refused`/`budget`. Ogni chiamata, riuscita o no, scrive una riga con persona, funzione, fornitore, modello, livello, token, costo stimato, durata, esito, codice d'errore, conversazione, elementi citati e SHA-256 del prompt. Al primo superamento dell'80% nel mese resta una voce `ai.budget.warning` nell'audit e parte una notifica di tipo `ai` (evento `budget_warning`, con `percent` e `month`) a chi ha `tenant.admin` a livello di tenant (`notify.AdminsSQL`, `notify.EmitDirect`: rispetta le preferenze e le email). Le decisioni sulle proposte entrano come `accepted_by_user`/`rejected_by_user` (fornitore `regia`, zero token).
 - **Mascheramento.** `Masker` sostituisce nomi delle persone del tenant, email, telefoni, IBAN e codici fiscali con `[persona-1]`, `[email-2]`… prima di ogni chiamata a un fornitore esterno; gli input degli strumenti e la risposta tornano smascherati. La tabella vive solo in memoria per una domanda.
 - **Contenuto come dato.** I risultati degli strumenti stanno fra `<dati origine="…">` e `</dati>` (`tools.Data`, che neutralizza i tag simili nel contenuto); il prompt di sistema dice che quel contenuto non si segue mai come istruzione.
@@ -63,15 +69,25 @@ Migrazione 0084: `ai_settings.mcp_enabled` (interruttore del server MCP, spento)
 
 `Prepare` esegue le letture e, per le scritture, controlla e descrive la proposta senza scrivere; `Apply` esegue la scrittura confermata (di nuovo con i permessi di chi conferma). Un input sbagliato è un `InputError`, che il modello legge per correggersi. Il server MCP dell'ondata 2 userà `List`, `Prepare` e `Apply` così come sono.
 
-## Cache del prompt e streaming (Anthropic)
+## Cache del prompt e streaming
 
 - **Cache.** L'adattatore mette `cache_control` (effimero, 5 minuti) in cima a ogni richiesta (`MessageNewParams.CacheControl`): l'API marca da sola l'ultimo blocco, così strumenti, istruzioni e storia restano in cache e il giro successivo con gli strumenti rilegge il prefisso. Le istruzioni non hanno parti variabili (niente data, niente id): non cambiarle per domanda, o la cache si invalida. `Response.CacheReadTokens` e `CacheWriteTokens` arrivano da `usage.cache_read_input_tokens` e `cache_creation_input_tokens`; `InputTokens` resta il totale. `CostCached` stima lettura al 10% e scrittura al 125% del prezzo dell'input; il registro ha le due colonne.
-- **Streaming.** Un adattatore che implementa `ai.Streamer` (`ChatStream(ctx, req, onText)`) passa i pezzi del testo mentre arrivano: Anthropic usa `Messages.NewStreaming` e ricompone il messaggio con `Message.Accumulate` (blocchi nativi e input degli strumenti compresi); il finto manda una parola alla volta (`fakeai.StreamPause`). Chi non lo implementa (compatibile OpenAI, per ora) risponde tutto insieme e il servizio passa il testo intero alla fine. `Service.CallStream` registra come `Call`.
+- **Streaming.** Un adattatore che implementa `ai.Streamer` (`ChatStream(ctx, req, onText)`) passa i pezzi del testo mentre arrivano: Anthropic usa `Messages.NewStreaming` e ricompone il messaggio con `Message.Accumulate` (blocchi nativi e input degli strumenti compresi); il finto manda una parola alla volta (`fakeai.StreamPause`). Il compatibile OpenAI usa `chat/completions` con `stream: true` e `stream_options.include_usage`: legge gli eventi `data: {chunk}` fino a `data: [DONE]`, ricompone le chiamate di strumenti per indice e prende l'uso dei token dall'ultimo pezzo; un servizio che ignora lo streaming e risponde in JSON si legge come `Chat`, uno che si interrompe prima della fine è un errore di rete. Chi non implementa `Streamer` risponde tutto insieme e il servizio passa il testo intero alla fine. `Service.CallStream` registra come `Call`.
 - **Eventi dell'assistente.** `AskStream(…, emit)` manda `text` (pezzi già smascherati: un segnaposto spezzato aspetta di essere completo), `tool` (strumento usato) e `step` (il testo finora era un passaggio prima degli strumenti, si ricomincia). `POST /api/v1/ai/ask` con `Accept: text/event-stream` risponde in SSE: `start`, gli eventi, poi `done` con lo stesso corpo della risposta JSON oppure `error` con il problema (stesso formato degli errori). La scadenza di scrittura del server non vale per lo streaming.
 
 ## Domande sul grafo (`internal/ai/graph.go`)
 
-`GraphQuestion` risolve la funzione `domande_grafo`, prepara le istruzioni (sintassi del linguaggio di query, esempi, formato `QUERY:`/`SPIEGAZIONE:`) e il **catalogo del tenant** fra `<dati origine="catalogo">` (tipi di elemento, campi di `Engine.QueryFields` con i valori degli elenchi), chiama il modello senza strumenti e prova la query con `Engine.Search` (limite 1) e i permessi della persona. Se il motore risponde con un `QueryError`, il modello riceve la query, il messaggio e il frammento sbagliato e corregge **una volta**; poi la risposta dice se la query è valida (`valid`, `corrected`, `first_query`, `first_error`, `error`). Le query non si salvano: la persona le salva come vista (pagina `domande`, elenco `/elenco/domande`). Mascheramento come per l'assistente.
+`GraphQuestion` risolve la funzione `domande_grafo`, prepara le istruzioni (sintassi del linguaggio di query con le relazioni e le sottoquery, esempi, formato `QUERY:`/`SPIEGAZIONE:`) e il **catalogo del tenant** fra `<dati origine="catalogo">` (tipi di elemento, campi di `Engine.QueryFields` con i valori degli elenchi, tipi di relazione di `Engine.QueryRelations` con i nomi nei due versi), chiama il modello senza strumenti e prova la query con `Engine.Search` (limite 1) e i permessi della persona. Se il motore risponde con un `QueryError`, il modello riceve la query, il messaggio e il frammento sbagliato e corregge **una volta**; poi la risposta dice se la query è valida (`valid`, `corrected`, `first_query`, `first_error`, `error`). Le query non si salvano: la persona le salva come vista (pagina `domande`, elenco `/elenco/domande`). Mascheramento come per l'assistente.
+
+## Assistente nella scheda (`internal/ai/card.go`)
+
+- **Contesto.** `loadCard` legge l'elemento con i permessi della persona (`Engine.Get`, `FieldViews`, `ElementLinks`, `Collab.Comments`, gli ultimi 30 con alias `c1`, `c2`…) e lo scrive come testo fra `<dati origine="CHIAVE">`; i valori dei campi a elenco e i riferimenti diventano nomi. Il modello non riceve strumenti; le istruzioni (`cardSystem` più il compito) non hanno parti variabili, per la cache del prompt. Mascheramento come per l'assistente.
+- **Riassunto** (`riassunti`): testo; le chiavi del contesto citate diventano `refs` per i link.
+- **Mancanze** (`mancanze`): `regiaGaps` trova da sé campi obbligatori adesso e vuoti, descrizione vuota o sotto i 40 caratteri, nessun collegamento, una richiesta senza impatti; il modello riceve queste fra `<dati origine="già trovate">` e risponde in JSON (`{"mancanze":[{"tipo","testo","campo","commento","elemento"}]}`, al massimo 8). Campo, alias del commento ed elemento si verificano sul contesto: se non esistono la voce resta senza link e `unverified` lo conta.
+- **Bozze** (`bozze`): `descrizione`, `commento`, `risposta` (al richiedente: Regia aggiunge `@Nome` di chi ha aperto l'elemento, così la menzione notifica), con `hint` facoltativo fra `<dati origine="indicazioni della persona">`. `Insert` riceve il testo riletto e lo applica con `proposeAndApply`: `Prepare` dello strumento (`commenta` o `aggiorna`) con i permessi della persona, proposta salvata con `feature = 'bozze'`, `Decide` con la conferma. Nel registro la decisione è `accepted_by_user` con la funzione della proposta; `PendingMCP` esclude le proposte con una funzione.
+- **Alla creazione** (`classificazione`): `similar` trova i candidati con `similarity`/`word_similarity` di `pg_trgm` sul titolo, le parole significative in alternativa (`websearch_to_tsquery` con `or`) sul `search` e, per gli asset, il nome citato nel testo; ogni candidato passa da `Engine.Get` con i permessi della persona. Il modello riceve nuovo elemento, simili, campi a elenco del tipo (più il driver per le richieste) e asset logici, e risponde in JSON; Regia tiene solo chiavi fra i candidati e valori fra le opzioni (restituiti come id dell'opzione, come li vuole il form). `Links` cita gli asset accettati dopo il salvataggio con `Arch.CiteAsset` (regole di «Cita un asset»: chi analizza, il richiedente, il business owner), con l'audit `ai.triage.link` e la decisione nel registro (`proposta:cita_asset`).
+- **API:** `POST /api/v1/ai/card` `{element, action: riassunto|mancanze|bozza, draft, hint}`, `POST /api/v1/ai/card/insert` `{element, draft, text}` → proposta, `POST /api/v1/ai/card/triage` `{type, title, description}` → `{duplicates, fields, links, candidates, unverified}`, `POST /api/v1/ai/card/links` `{element, links}` → `{items: [{key, ok, error}]}`. Card e triage non pubblicano l'evento «changed» (letture in POST).
+- **Interfaccia:** `ElementPage` carica `CardAssistant` (lazy) solo se `status.features` ha una funzione della scheda; i link portano a `#campo-vista-<chiave>`, `#descrizione-scheda` e `#c-<id del commento>` (scheda Attività). `NewRequest` mostra `CreateAssistant`; i valori accettati entrano nello stato del form, gli asset spuntati si citano dopo la creazione.
 
 ## Server MCP (`internal/ai/mcpserver`)
 
@@ -80,7 +96,7 @@ Migrazione 0084: `ai_settings.mcp_enabled` (interruttore del server MCP, spento)
 - **Strumenti.** Quelli di `tools.Services.List()` così come sono, con le annotazioni MCP (`readOnlyHint` per le letture), più `proposte` (lettura), `conferma` (`destructiveHint`) e `rifiuta`. Le letture restituiscono il testo dello strumento (dati fra `<dati>`) con i link `…/e/<chiave>` e `structuredContent.elementi`. Le scritture fanno `Prepare` e salvano una proposta **senza conversazione** (`ProposeMCP`): la risposta dice l'identificativo e che non è applicata. `conferma` chiama `Service.Decide`, che rifà `Apply` con i permessi di adesso.
 - **Registro.** Ogni chiamata è una riga di `ai_calls` con `feature = 'mcp'`, `provider = 'client'`, `model = 'strumento:<nome>'`, zero token e costo, l'impronta dell'input, gli elementi citati, la durata e l'esito (`error_code`: `input`, `not_found`, `forbidden`, `validation`…). Le decisioni entrano come `accepted_by_user`/`rejected_by_user` con `model = 'proposta:<strumento>'`.
 - **Conservazione.** Le proposte MCP ancora lì dopo `retention_days` giorni dalla creazione si cancellano con le conversazioni scadute.
-- **OAuth** per i client MCP non c'è ancora (ondata 3): i client che lo richiedono passano da `mcp-remote` con l'intestazione (vedi [ai-mcp.md](../ai-mcp.md)).
+- **OAuth** per i client MCP non c'è ancora (rimandato dopo l'ondata 3): i client che lo richiedono passano da `mcp-remote` con l'intestazione (vedi [ai-mcp.md](../ai-mcp.md)).
 
 ## API
 
@@ -91,11 +107,12 @@ Lettura e modifica delle impostazioni: `tenant.admin`; le modifiche solo da una 
 - `POST /api/v1/ai/providers`, `PATCH|DELETE /api/v1/ai/providers/{id}`, `GET /api/v1/ai/providers/{id}/models` (verifica la chiave o l'indirizzo e elenca i modelli).
 - `GET /api/v1/ai/usage?month=AAAA-MM`: totali, per funzione, per persona, per modello, ultime 100 chiamate.
 - Assistente (tutti, con i propri permessi): `POST /api/v1/ai/ask` con `{"question", "conversation_id"}` (in SSE con `Accept: text/event-stream`), `GET /api/v1/ai/conversations[/{id}]`, `DELETE /api/v1/ai/conversations/{id}`, `POST /api/v1/ai/proposals/{id}/confirm|reject`.
+- Assistente nella scheda (tutti, con i propri permessi): `POST /api/v1/ai/card`, `/card/insert`, `/card/triage`, `/card/links` (vedi sopra).
 - Domande sul grafo (tutti): `POST /api/v1/ai/graph` con `{"question"}` → `{query, explanation, valid, corrected, first_query, first_error, error, status}`.
 - Server MCP: `/api/v1/mcp` (protocollo MCP, trasporto HTTP «streamable»), solo con un token API.
 - Impostazioni: `mcp_enabled` in `GET|PUT /api/v1/ai/settings`.
 
-Errori: `ai.disabled` (409), `ai.not_configured` (409), `ai.budget_exhausted` (429), `ai.provider_error` (502, `params.reason` con il codice del fornitore), `ai.mcp_disabled` (403), `auth.token_required` (401, server MCP senza token), più i codici di validazione `ai.*`.
+Errori: `ai.disabled` (409), `ai.not_configured` (409), `ai.budget_exhausted` (429), `ai.budget_insufficient` (429, la chiamata da sola supererebbe il budget), `ai.provider_error` (502, `params.reason` con il codice del fornitore), `ai.mcp_disabled` (403), `auth.token_required` (401, server MCP senza token), più i codici di validazione `ai.*`.
 
 ## Fornitore finto
 
@@ -109,7 +126,7 @@ fakeai.Program("maschera",
 reqs := fakeai.Requests("maschera") // ciò che è «uscito» verso il fornitore
 ```
 
-`Step.Err` simula un errore del fornitore, `Step.Refuse` un rifiuto. Con le istruzioni delle domande sul grafo (`fakeai.GraphMarker`) il finto a regole traduce: la query fra apici inversi nella domanda, se c'è; altrimenti parole note («richieste», «aperte», «applicazioni»…) diventano clausole. «critiche» produce apposta un campo inesistente, che il giro di correzione toglie. Il finto implementa anche `ai.Streamer`.
+`Step.Err` simula un errore del fornitore, `Step.Refuse` un rifiuto. Con le istruzioni della scheda («Lavori sulla scheda di un elemento») il finto a regole risponde ai compiti (`CardSummaryMarker`, `CardGapsMarker`, `CardTriageMarker`, bozze): riassunto con chiave, titolo, fase e il primo collegamento; una domanda aperta per ogni commento con «?» (e un elemento inventato se il contesto contiene «inventa»); duplicati con almeno due parole del titolo in comune, il valore di un campo se il testo nomina l'opzione, gli asset nominati nel testo. Implementa anche `ai.TokenCounter`. Con le istruzioni delle domande sul grafo (`fakeai.GraphMarker`) il finto a regole traduce: la query fra apici inversi nella domanda, se c'è; altrimenti parole note («richieste», «aperte», «applicazioni»…) diventano clausole. «critiche» produce apposta un campo inesistente, che il giro di correzione toglie. Il finto implementa anche `ai.Streamer`.
 
 ## Conservazione
 
@@ -118,8 +135,8 @@ reqs := fakeai.Requests("maschera") // ciò che è «uscito» verso il fornitore
 ## Provare
 
 ```bash
-go test ./internal/ai/... && go test ./internal/itest -run 'TestAIFondamenta|TestAIMCP|TestAIOndata2'
-cd web && pnpm exec playwright test e2e/ai.spec.ts e2e/ai-ondata2.spec.ts
+go test ./internal/ai/... && go test ./internal/itest -run 'TestAIFondamenta|TestAIMCP|TestAIOndata2|TestAIScheda|TestQueryRelazioni|TestAuditChiavePerTenant'
+cd web && pnpm exec playwright test e2e/ai.spec.ts e2e/ai-ondata2.spec.ts e2e/ai-scheda.spec.ts
 ```
 
 In sviluppo: Configurazione → Intelligenza artificiale → Aggiungi fornitore → «Fornitore finto», scegli il livello approfondito, accendi l'AI e apri «Chiedi all'assistente» dal menu (anche in modo «Domanda sul grafo»).

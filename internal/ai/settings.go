@@ -64,7 +64,7 @@ var (
 	ErrNotConfigured = &Error{Status: 409, Code: "ai.not_configured", Msg: "manca il modello del livello: l'amministratore deve completare le impostazioni dell'AI"}
 	ErrBudget        = &Error{Status: 429, Code: "ai.budget_exhausted", Msg: "il budget mensile dell'AI è esaurito: le funzioni senza AI restano disponibili"}
 	// ErrBudgetCall: il budget non è ancora esaurito, ma questa chiamata (token contati prima) lo supererebbe.
-	ErrBudgetCall = &Error{Status: 429, Code: "ai.budget_exhausted", Msg: "il budget mensile dell'AI non basta per questa richiesta: prova con meno testo o aspetta il mese prossimo; le funzioni senza AI restano disponibili"}
+	ErrBudgetCall = &Error{Status: 429, Code: "ai.budget_insufficient", Msg: "il budget mensile dell'AI non basta per questa richiesta: prova con meno testo o aspetta il mese prossimo; le funzioni senza AI restano disponibili"}
 	ErrNotFound   = &Error{Status: 404, Code: "ai.not_found", Msg: "non trovato"}
 	ErrForbidden  = &Error{Status: 403, Code: "ai.forbidden", Msg: "operazione non consentita"}
 )

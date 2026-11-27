@@ -7,6 +7,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api, collab, type ElementDetail } from "../api";
+import { aiApi } from "../aiApi";
 import { fieldsApi, type LinkedElement } from "../fieldsApi";
 import { CustomFields, useCanWrite, useSaveField } from "../fields";
 import { Markdown } from "../markdown";
@@ -38,6 +39,8 @@ import { TypeMark } from "./work-ui";
 type T = ReturnType<typeof useT>;
 
 const ReviewsSection = lazy(() => import("./ReviewsSection"));
+// Assistente nella scheda (AI, ondata 3): si carica solo con l'AI accesa e le funzioni pronte.
+const CardAssistant = lazy(() => import("./CardAssistant").then((m) => ({ default: m.CardAssistant })));
 const CodiceSection = lazy(() => import("./CodiceSection"));
 // Status report della richiesta (piano, passo 13): scheda «Stato», caricata alla prima apertura.
 const StatusReportsTab = lazy(() => import("./StatusReports").then((m) => ({ default: m.StatusReportsTab })));
@@ -171,6 +174,7 @@ export function ElementPage({ refKey, tab, onTab }: { refKey: string; tab?: TabK
         </aside>
         <div className="order-1 flex min-w-0 flex-col gap-5 px-4 py-5 md:px-7 lg:order-none lg:col-start-1 lg:row-start-1">
           {(d.element.type === "business_request" || d.element.type === "impact") && <PercorsoPanel refKey={d.element.key || d.element.id} onTab={onTab} compact={active === "approvazioni"} />}
+          <CardAssistantGate detail={d} onTab={onTab} />
           {/* Con la sintesi in primo piano la descrizione sta sotto: prima ciò che serve per decidere. */}
           {active !== "sintesi" && <Description detail={d} />}
           <Tabs tabs={tabs} active={active} onTab={onTab} />
@@ -181,6 +185,20 @@ export function ElementPage({ refKey, tab, onTab }: { refKey: string; tab?: TabK
         </div>
       </div>
     </article>
+  );
+}
+
+/** Senza AI accesa (o senza funzioni della scheda pronte) non compare nulla: la scheda resta identica. */
+function CardAssistantGate({ detail, onTab }: { detail: ElementDetail; onTab: (t: TabKey) => void }) {
+  const me = useMe();
+  const status = useQuery({ queryKey: ["ai-status"], queryFn: aiApi.status, enabled: !!me.data?.active_tenant, staleTime: 60_000, retry: false });
+  const st = status.data;
+  const f = st?.enabled ? (st.features ?? {}) : {};
+  if (!f.riassunti && !f.mancanze && !f.bozze) return null;
+  return (
+    <Suspense fallback={null}>
+      <CardAssistant detail={detail} onTab={onTab} />
+    </Suspense>
   );
 }
 
@@ -368,7 +386,7 @@ function Description({ detail }: { detail: ElementDetail }) {
   const [draft, setDraft] = useState("");
   const body = detail.element.body_text;
   return (
-    <section className="flex flex-col gap-2" aria-label={t("lavoro.elementpage.description")}>
+    <section id="descrizione-scheda" className="flex scroll-mt-24 flex-col gap-2" aria-label={t("lavoro.elementpage.description")}>
       <SectionTitle
         aside={
           canEdit && !editing ? (

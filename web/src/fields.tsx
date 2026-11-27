@@ -521,7 +521,7 @@ export function CustomFields({ detail, only, emptyNote = true }: { detail: Eleme
               const missing = f.required_now && isEmpty(f.value);
               return (
                 <div key={f.key} className="contents">
-                  <dt className="border-b border-hair py-1.5 pr-2 text-muted">
+                  <dt id={`campo-vista-${f.key}`} className="scroll-mt-24 border-b border-hair py-1.5 pr-2 text-muted">
                     <FieldLabel f={f} />
                   </dt>
                   <dd className="m-0 min-w-0 border-b border-hair py-1">
