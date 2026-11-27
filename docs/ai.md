@@ -19,30 +19,87 @@ Nella **conformità** (sezione 10) l'assistente propone i collegamenti fra evide
 
 ## 1. Il fornitore
 
-**Aggiungi fornitore** e scegli il tipo.
+**Aggiungi fornitore** e scegli il tipo. Puoi averne più d'uno (per esempio Ollama sulla tua rete per la wiki e Claude per l'analisi).
 
-| Tipo | Quando | Cosa serve |
-|---|---|---|
-| **Anthropic (Claude)** | i modelli Claude via API | una chiave dell'API, creata nella console di Anthropic |
-| **Servizio compatibile OpenAI** | OpenAI, Mistral, vLLM, LM Studio, Ollama, gli endpoint compatibili di Gemini | l'indirizzo del servizio; la chiave solo se il servizio la chiede |
+| Tipo | Quando | Cosa serve | Dove vanno i dati |
+|---|---|---|---|
+| **Anthropic (Claude)** | i modelli Claude con l'API di Anthropic | una chiave dell'API | Anthropic |
+| **Anthropic via AWS Bedrock** | Claude dal tuo account AWS, in una regione che scegli (per esempio europea) | regione e chiave API di Bedrock o chiavi d'accesso IAM | la regione AWS scelta |
+| **Anthropic via Google Vertex AI** | Claude dal tuo progetto Google Cloud, in una regione che scegli | regione, progetto e chiave JSON di un service account | la regione Google Cloud scelta |
+| **OpenAI** | i modelli GPT con l'API di OpenAI | una chiave dell'API; l'indirizzo solo se OpenAI te ne ha dato un altro | OpenAI |
+| **Google Gemini** | i modelli Gemini con l'API di Google | una chiave dell'API (Google AI Studio) | Google |
+| **Ollama** | modelli installati sul tuo server Ollama | l'indirizzo del server; la chiave solo se un proxy la chiede | la tua rete |
+| **Servizio compatibile OpenAI** | altri servizi con il protocollo di OpenAI: Azure OpenAI, Mistral, vLLM, LM Studio | l'indirizzo con il prefisso dell'API; la chiave se il servizio la chiede | il servizio |
 
-- **La chiave** si cifra con la chiave applicativa della cartella dati (`<data>/keys/secrets.key`, da tenere nel backup) e **non torna mai**: nemmeno chi l'ha inserita la rivede. Lasciando vuoto il campo in una modifica resta quella salvata. Nei log e nel registro di audit c'è solo il fatto che una chiave c'è.
-- **L'indirizzo** di un servizio compatibile è quello con il prefisso dell'API (`https://api.openai.com/v1`). Per Ollama e LM Studio basta `http://192.168.1.20:11434` o `http://localhost:1234`: `/v1` si aggiunge da solo.
-- **Modelli sulla tua rete.** Un indirizzo interno (IP privato, `localhost`, nomi `.lan`, `.local`, `.home.arpa`) richiede che chi gestisce l'installazione lo consenta con `REGIA_CONNECTOR_ALLOW_PRIVATE=true`, come per i connettori. Questi fornitori sono segnati «sulla tua rete»: i dati non escono, quindi non si mascherano.
-- **Verifica e mostra i modelli** controlla chiave e indirizzo senza consumare token: con Anthropic elenca i modelli dell'account, con Ollama e LM Studio quelli installati.
-- **Modelli che non sanno usare gli strumenti.** Il requisito minimo è la chiamata di strumenti. Se un modello locale non la sa fare, scrivilo qui: con quel modello l'assistente non legge i dati di Regia, fa solo riassunti e bozze sul testo che riceve, e il pannello lo dice.
-- **Prezzi** (dollari per milione di token, facoltativi): servono a stimare il costo. Vuoti, Regia usa il listino noto dei modelli Claude e zero per gli altri.
+Regole comuni:
+
+- **Chiavi e credenziali** (anche le chiavi d'accesso AWS e la chiave del service account) si cifrano con la chiave applicativa della cartella dati (`<data>/keys/secrets.key`, da tenere nel backup) e **non tornano mai**: nemmeno chi le ha inserite le rivede. Lasciando vuoti i campi in una modifica restano quelle salvate. Nei log e nel registro di audit c'è solo il fatto che ci sono. Regione e progetto invece si vedono: non sono segreti.
+- **Prova la connessione** (accanto a ogni fornitore) controlla chiave, indirizzo e credenziali e mostra i modelli, senza consumare budget: con Anthropic, OpenAI e Gemini elenca i modelli dell'account, con Ollama e i compatibili quelli installati; con Bedrock e Vertex, che non hanno l'elenco dei modelli, conta i token di una richiesta minima sul modello di un livello (o su quello proposto), così verifica anche che il modello sia abilitato in quella regione. I modelli trovati compaiono nel campo **Modello** dei livelli.
+- **Modelli che non sanno usare gli strumenti.** Il requisito minimo è la chiamata di strumenti. Ollama dichiara le capacità di ogni modello: la prova di connessione segna da sola quelli senza strumenti e lo dice. Per un servizio compatibile scrivili tu nel campo apposito. Con questi modelli l'assistente non legge i dati di Regia, fa solo riassunti e bozze sul testo che riceve, e sia la configurazione sia il pannello lo dicono.
+- **Modelli sulla tua rete.** Un indirizzo interno (IP privato, `localhost`, nomi `.lan`, `.local`, `.home.arpa`) richiede che chi gestisce l'installazione lo consenta con `REGIA_CONNECTOR_ALLOW_PRIVATE=true`, come per i connettori. Questi fornitori sono segnati «sulla tua rete»: i dati non escono, quindi non si mascherano. Verso un servizio esterno serve `https://`.
+- **Prezzi** (dollari per milione di token, facoltativi): servono a stimare il costo. Vuoti, Regia usa il listino noto dei modelli che propone (Claude, GPT, Gemini; per l'input letto dalla cache il prezzo ridotto di ciascuno) e zero per gli altri, per esempio i modelli locali. Su Bedrock e Vertex i prezzi sono quelli del cloud: se servono stime esatte, scrivili.
+
+### Anthropic (Claude)
+
+1. Nella console di Anthropic crea una chiave dell'API.
+2. **Tipo** «Anthropic (Claude)», un nome, la chiave (`sk-ant-…`), **Aggiungi fornitore**, poi **Prova la connessione**.
+
+### Anthropic via AWS Bedrock (dati nella regione UE)
+
+Le richieste vanno all'endpoint Messages di Bedrock nella regione scelta (`https://bedrock-mantle.<regione>.api.aws/anthropic`), con il tuo account AWS.
+
+1. In AWS scegli una regione europea in cui il modello Claude che ti serve è disponibile (per esempio `eu-central-1`, Francoforte, o `eu-south-1`, Milano: la disponibilità dei modelli per regione la dà AWS) e abilita l'accesso al modello in Bedrock.
+2. Credenziali, una delle due:
+   - una **chiave API di Bedrock** (console di Amazon Bedrock);
+   - le **chiavi d'accesso** di un utente IAM dedicato, con il solo permesso di invocare i modelli (ID della chiave `AKIA…` e chiave segreta; il token di sessione solo per credenziali temporanee, che scadono).
+3. **Tipo** «Anthropic via AWS Bedrock», un nome, la **regione** (`eu-central-1`), le credenziali, **Aggiungi fornitore**, poi **Prova la connessione**.
+
+I modelli hanno il prefisso `anthropic.`: Regia propone `anthropic.claude-haiku-5-5` (rapido) e `anthropic.claude-opus-5-5` (approfondito). Regia non usa le credenziali né la regione del server (variabili `AWS_*`, profili, ruolo dell'istanza): solo quelle dell'organizzazione.
+
+### Anthropic via Google Vertex AI (dati nella regione UE)
+
+1. Nel progetto Google Cloud abilita Vertex AI e il modello Claude nel Model Garden, in una regione europea in cui è disponibile (per esempio `europe-west8`, Milano) o nella multiregione `eu`.
+2. Crea un **service account** con il ruolo «Vertex AI User» e scarica la sua **chiave JSON**.
+3. **Tipo** «Anthropic via Google Vertex AI», un nome, la **regione** (`europe-west8` o `eu`), il **progetto** (se lo lasci vuoto si prende dalla chiave), incolla la chiave JSON, **Aggiungi fornitore**, poi **Prova la connessione**.
+
+Su Vertex i modelli hanno il nome di Anthropic (`claude-opus-5-5`). Si accetta solo la chiave di un service account (`"type": "service_account"`) che chiede il token a Google (`https://oauth2.googleapis.com/token`); le credenziali predefinite del server non si usano mai.
+
+### OpenAI
+
+1. Nella piattaforma di OpenAI crea una chiave dell'API.
+2. **Tipo** «OpenAI», un nome, la chiave (`sk-…`). L'**indirizzo** lascialo vuoto (`https://api.openai.com/v1`); cambialo solo se OpenAI te ne ha dato un altro, per esempio per la residenza dei dati in Europa.
+3. **Aggiungi fornitore**, poi **Prova la connessione**.
+
+Regia usa la Responses API: strumenti, ragionamento che resta fra un passo e l'altro, sforzo di ragionamento per livello, cache del prompt. Le risposte non si conservano da OpenAI (`store: false`). Propone `gpt-6-luna` (rapido) e `gpt-6.2-astra` (approfondito).
+
+### Google Gemini
+
+1. In Google AI Studio crea una chiave dell'API.
+2. **Tipo** «Google Gemini», un nome, la chiave, **Aggiungi fornitore**, poi **Prova la connessione**.
+
+La chiave va nell'intestazione della richiesta, mai nell'indirizzo. Regia propone `gemini-4-hydrogen` (rapido) e `gemini-4-carbon` (approfondito).
+
+### Ollama
+
+1. Installa i modelli sul server Ollama (`ollama pull <modello>`), meglio se sanno usare gli strumenti.
+2. **Tipo** «Ollama», un nome, l'**indirizzo** del server senza `/v1` (per esempio `http://ollama.lan:11434`), **Aggiungi fornitore**, poi **Prova la connessione**: compaiono i modelli installati, con il più grande proposto per l'approfondito e il più piccolo per il rapido, e quelli senza strumenti segnati.
+
+Per un Ollama sulla tua rete serve `REGIA_CONNECTOR_ALLOW_PRIVATE=true` (vedi sopra). La chiave serve solo se Ollama sta dietro un proxy che la chiede (va come `Authorization: Bearer`).
+
+### Servizio compatibile OpenAI
+
+Per Azure OpenAI, Mistral, vLLM, LM Studio e gli altri servizi con il protocollo di OpenAI. L'**indirizzo** è quello con il prefisso dell'API (`https://<servizio>/v1`); per LM Studio basta `http://localhost:1234`: `/v1` si aggiunge da solo. Scegli i modelli fra quelli che la prova di connessione elenca e segna a mano quelli senza strumenti.
 
 ## 2. Livelli e funzioni
 
 Le funzioni non scelgono un modello ma un **livello**:
 
-| Livello | Per cosa | Con Anthropic Regia propone |
-|---|---|---|
-| **Approfondito** | analisi, domande sul grafo, bozze, conversazione con l'assistente | `claude-opus-5-5` |
-| **Rapido** | classificare, trovare duplicati, riassunti brevi, aggiornare la wiki | `claude-haiku-5-5` |
+| Livello | Per cosa | Anthropic | OpenAI | Gemini | Ollama |
+|---|---|---|---|---|---|
+| **Approfondito** | analisi, domande sul grafo, bozze, conversazione con l'assistente | `claude-opus-5-5` | `gpt-6.2-astra` | `gemini-4-carbon` | il modello più grande installato |
+| **Rapido** | classificare, trovare duplicati, riassunti brevi, aggiornare la wiki | `claude-haiku-5-5` | `gpt-6-luna` | `gemini-4-hydrogen` | il più piccolo |
 
-Un solo modello per tutti e due va bene: se un livello è vuoto si usa l'altro. Con un servizio compatibile scegli tra i modelli installati (per esempio il più grande per l'approfondito).
+Quando scegli il fornitore di un livello Regia propone il modello (su Bedrock con il prefisso `anthropic.`); lo cambi scrivendo o scegliendo fra quelli trovati dalla prova di connessione. Un solo modello per tutti e due va bene: se un livello è vuoto si usa l'altro, e il rapido propone il modello dell'approfondito se non ne ha uno suo. Con un servizio compatibile scegli tra i modelli installati.
 
 In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello preciso**, anche di un altro fornitore: per esempio la wiki su un Ollama locale e l'analisi su Claude. Sono attive:
 
@@ -58,7 +115,7 @@ In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello 
 | GRC assistito | approfondito | schede di evidenze, controlli e rischi; requisito normativo; notifica DORA dell'incidente (sezione 10) |
  Domande sul grafo, funzioni della scheda, collegamenti del GRC e notifica DORA non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare. La **wiki personale** invece li usa (legge con cerca, query e leggi e scrive le pagine con uno strumento suo): con un modello segnato «senza strumenti» l'aggiornamento non parte, e la wiki resta da scrivere a mano. Le **bozze di policy e runbook** usano gli strumenti di lettura se il modello li sa usare (per cercare gli elementi da citare); senza, si scrivono con i dati che Regia passa.
 
-Con Anthropic Regia usa la **cache del prompt**: istruzioni, strumenti e catalogo restano uguali fra le domande e il fornitore li rilegge dalla cache a una frazione del prezzo. Il consumo lo tiene già in conto nel costo stimato.
+Regia usa la **cache del prompt** dove il fornitore la offre: istruzioni, strumenti e catalogo restano uguali fra le domande e il fornitore li rilegge dalla cache a una frazione del prezzo (Anthropic, anche su Bedrock e Vertex; OpenAI; Gemini con la cache implicita; Ollama tiene il contesto in memoria). I token letti dalla cache sono nel registro e il costo stimato li conta al prezzo ridotto. Il **ragionamento** si regola con il livello: più profondo per l'approfondito, più rapido per il rapido (Claude, GPT e Gemini).
 
 ## 3. Budget
 
@@ -66,7 +123,7 @@ Un budget mensile in dollari (al listino del fornitore) e, se vuoi, un tetto di 
 
 - **All'80%** compare un avviso nella configurazione, nel consumo e nel pannello dell'assistente, chi amministra l'organizzazione riceve una **notifica** (e l'email, se le email sono attive e non le ha silenziate per il tipo «AI»), e resta una voce nel registro di audit (`ai.budget.warning`). Una volta sola al mese.
 - **Al 100%** le chiamate non partono più fino al mese dopo (restano nel registro come rifiutate). Tutto ciò che non usa l'AI funziona come sempre.
-- **Prima di ogni chiamata** Regia conta i token del testo che manda (con Anthropic con l'API ufficiale di conteggio, gratuita; con gli altri fornitori con una stima prudente): una richiesta che da sola porterebbe oltre il budget non parte, e la persona lo vede («il budget non basta per questa richiesta»).
+- **Prima di ogni chiamata** Regia conta i token del testo che manda (con Anthropic, anche su Bedrock e Vertex, con OpenAI e con Gemini con le API ufficiali di conteggio, gratuite; con gli altri fornitori con una stima prudente): una richiesta che da sola porterebbe oltre il budget non parte, e la persona lo vede («il budget non basta per questa richiesta»).
 
 ## 4. Dati personali e conservazione
 
@@ -108,7 +165,7 @@ Compare solo con l'AI accesa e il modello del livello della funzione: senza AI l
 
 L'assistente legge solo ciò che la persona può vedere: un richiedente del portale non riceve come duplicati le richieste degli altri.
 
-Anche nel dialogo **Nuovo elemento** della board e del backlog (task, story, bug, epic) c'è **Cerca duplicati e proponi i campi**: elementi simili dello stesso tipo e i valori dei campi a elenco del tipo, da accettare uno per uno. Nel form **nuova applicazione** dell'architettura, in quelli del **nuovo rischio**, del **nuovo incidente** e del **nuovo requisito** c'è **Cerca duplicati**: elementi simili dello stesso tipo che potrebbero essere lo stesso (per esempio un incidente già aperto per lo stesso guasto). Ogni chiamata è nel registro con la sua funzione; le bozze inserite e gli asset citati vi compaiono come «proposta confermata».
+Anche nel dialogo **Nuovo elemento** della board e del backlog (task, story, bug, epic) c'è **Cerca duplicati e proponi i campi**: elementi simili dello stesso tipo e i valori dei campi a elenco del tipo, da accettare uno per uno. Nel form **nuova applicazione** dell'architettura c'è **Cerca duplicati**. In quelli del **nuovo rischio**, del **nuovo incidente** e del **nuovo requisito** c'è **Cerca duplicati e proponi i campi**: elementi simili dello stesso tipo che potrebbero essere lo stesso (per esempio un incidente già aperto per lo stesso guasto) e i valori degli elenchi del form, ognuno con il motivo e il pulsante **Accetta**: per il rischio probabilità e impatto inerenti fra i livelli della matrice, per l'incidente le applicazioni impattate (si aggiungono a quelle già scelte), per il requisito categoria, ambito e criterio di verifica. Ogni chiamata è nel registro con la sua funzione; le bozze inserite e gli asset citati vi compaiono come «proposta confermata».
 
 ## 9. Wiki personale
 
@@ -133,7 +190,7 @@ Dal **profilo** → **Apri la mia wiki** (indirizzo `/profilo/wiki`). Ogni perso
 
 Serve il modello della funzione **GRC assistito** (livello approfondito). Senza AI accesa le schede dei controlli, delle evidenze, dei rischi e le notifiche degli incidenti sono identiche a prima. Ogni proposta e ogni bozza è dell'assistente: decide la persona, con i suoi permessi.
 
-**Dall'evidenza ai controlli.** Nella scheda di un'evidenza (scheda «Dettagli»), **Proponi i controlli che soddisfa**: l'assistente legge l'evidenza (titolo, nota, link, la pagina Knowledge se è un'evidenza di tipo pagina; degli allegati conta solo quanti sono, il contenuto dei file non lo legge) e i controlli dell'organizzazione con i requisiti che coprono, e propone quelli che l'evidenza dimostra davvero, ognuno con il **motivo** e il **grado di copertura** («piena» se basta da sola, «parziale» se ne dimostra una parte). Ogni proposta si **collega** o si **scarta**: niente si collega da sé. Collega chi amministra la conformità o il responsabile del controllo; il grado e il motivo restano sul collegamento e si vedono nell'evidenza («copertura parziale», «proposta dall'assistente»). La copertura della normativa non cambia per il grado: un'evidenza collegata vale come prima, il grado è un'informazione per chi verifica.
+**Dall'evidenza ai controlli.** Nella scheda di un'evidenza (scheda «Dettagli»), **Proponi i controlli che soddisfa**: l'assistente legge l'evidenza (titolo, nota, link, la pagina Knowledge se è un'evidenza di tipo pagina, e il testo di al massimo tre allegati: file di testo, Word, OpenDocument e PDF con testo; le immagini e i PDF scansionati non hanno testo da leggere, e l'assistente sa quanti allegati non ha letto) e i controlli dell'organizzazione con i requisiti che coprono, e propone quelli che l'evidenza dimostra davvero, ognuno con il **motivo** e il **grado di copertura** («piena» se basta da sola, «parziale» se ne dimostra una parte). Ogni proposta si **collega** o si **scarta**: niente si collega da sé. Collega chi amministra la conformità o il responsabile del controllo; il grado e il motivo restano sul collegamento e si vedono nell'evidenza («copertura parziale», «proposta dall'assistente»). La copertura della normativa non cambia per il grado: un'evidenza collegata vale come prima, il grado è un'informazione per chi verifica.
 
 **Dal controllo alle evidenze.** Nella scheda di un controllo, **Cerca le evidenze e cosa manca**: le evidenze esistenti non ancora collegate che potrebbero dimostrarlo (con motivo e grado, da accettare una per una) e **cosa manca**: prima ciò che Regia sa da sé (perimetri senza evidenza valida, nessuna evidenza valida), poi ciò che vede l'assistente (tipo di prova, periodo, perimetro), legato al requisito quando c'entra. Serve il permesso di leggere la conformità.
 
@@ -157,4 +214,5 @@ Ogni proposta, bozza e notifica preparata è nel registro delle chiamate con la 
 - Il server MCP accetta solo token API: non la sessione del browser. Un token di sola lettura vede solo gli strumenti di lettura.
 - La wiki personale è separata per persona anche nel database (Row Level Security sul membro); l'assistente la aggiorna con i permessi della persona e ogni sua modifica si annulla.
 - Nel GRC l'assistente non collega, non approva e non invia niente: i collegamenti si accettano uno per uno con i permessi della persona (`grc.evidence.link` nel registro di audit), le policy nascono come documenti controllati in bozza (`ai.grc.draft.save`), la notifica DORA si salva come versione (`regulatory_notification.draft_version`) e si invia fuori da Regia.
-- Ogni modifica della configurazione è nel registro di audit (`ai.settings.update`, `ai.provider.*`, `ai.proposal.apply`; `wiki.promote` per le pagine della wiki promosse a Knowledge).
+- Chiavi e credenziali dei fornitori sono dell'organizzazione: Regia non usa mai quelle del server (variabili d'ambiente di Anthropic, AWS o Google, profili, ruolo dell'istanza, chiavi di Ollama sul disco), così un'organizzazione non usa le credenziali di un'altra né quelle di chi gestisce l'installazione.
+- Ogni modifica della configurazione è nel registro di audit (`ai.settings.update`, `ai.provider.*` compresa la prova di connessione `ai.provider.test`, `ai.proposal.apply`; `wiki.promote` per le pagine della wiki promosse a Knowledge).
