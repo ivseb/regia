@@ -118,7 +118,11 @@ test("cabina: linea di taglio, sovraccarico, scenari, verbale e telefono", async
 
   await page.reload();
   const pk = page.locator("[data-cabina-pack]");
-  await scegli(pk.getByRole("combobox", { name: "Seduta" }), title);
+  // Sotto carico gli altri test aggiornano la cabina e l'elenco a comparsa si riposiziona di continuo:
+  // la seduta si sceglie per identificativo, senza aspettare che l'elenco stia fermo.
+  await pk.getByRole("combobox", { name: "Seduta" }).click();
+  await page.locator(`[role=option][data-value="${meeting.id}"]`).click({ force: true });
+  await expect(page.getByRole("listbox")).toHaveCount(0);
   const agenda = pk.locator("[data-cabina-agenda]");
   await expect(agenda.getByRole("row").filter({ hasText: a.key })).toContainText("presa d'atto");
   await pk.getByRole("button", { name: "Genera verbale" }).click();
