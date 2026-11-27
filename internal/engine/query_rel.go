@@ -32,10 +32,39 @@ var linkWords = map[string]bool{"collegata": true, "collegato": true, "collegate
 type relName struct{ ID, Key, Out, In string }
 
 // relSpec è la relazione di una clausola: any = qualsiasi tipo nei due versi; altrimenti i tipi
-// in cui l'elemento è origine (out) o destinazione (in).
+// in cui l'elemento è origine (out) o destinazione (in). virt: relazione che non sta nella tabella
+// delle relazioni ma in quella di un oggetto (gli impatti, ext_impact).
 type relSpec struct {
 	any     bool
 	out, in []string
+	virt    []relEnd
+}
+
+// Relazioni dagli impatti (seguito dell'ondata 3, replica/ai.md): un impatto lega una richiesta a
+// un'applicazione, quindi «quali applicazioni sono impattate da richieste urgenti» si scrive
+//
+//	tipo: application impattata_da: (tipo: business_request urgenza: Alta)
+//	tipo: business_request impatta: APP-12
+//	tipo: application impatti: (tipo: impact fase: Stimato)
+//
+// Valgono solo se il tenant non ha un tipo di relazione con lo stesso nome.
+var impactRels = map[string][]relEnd{
+	"impatta":      {{table: "ext_impact", self: "r.request_id", other: "r.application_id"}},
+	"impacts":      {{table: "ext_impact", self: "r.request_id", other: "r.application_id"}},
+	"impattata_da": {{table: "ext_impact", self: "r.application_id", other: "r.request_id"}},
+	"impattato_da": {{table: "ext_impact", self: "r.application_id", other: "r.request_id"}},
+	"impacted_by":  {{table: "ext_impact", self: "r.application_id", other: "r.request_id"}},
+	"impatti": {{table: "ext_impact", self: "r.application_id", other: "r.element_id"},
+		{table: "ext_impact", self: "r.request_id", other: "r.element_id"}},
+	"impact_items": {{table: "ext_impact", self: "r.application_id", other: "r.element_id"},
+		{table: "ext_impact", self: "r.request_id", other: "r.element_id"}},
+}
+
+// ImpactRelations sono i nomi delle relazioni dagli impatti, per il catalogo delle domande sul grafo.
+var ImpactRelations = []RelationInfo{
+	{Key: "impatta", Outward: "richiesta → applicazioni su cui ha un impatto", Inward: "impattata_da"},
+	{Key: "impattata_da", Outward: "applicazione ← richieste che hanno un impatto su di lei", Inward: "impatta"},
+	{Key: "impatti", Outward: "applicazione o richiesta → elementi impatto (tipo: impact)", Inward: ""},
 }
 
 // RelationInfo descrive un tipo di relazione per il catalogo delle domande sul grafo.
@@ -83,6 +112,9 @@ func (b *binder) relation(name string) (*relSpec, error) {
 		}
 	}
 	if len(rs.out)+len(rs.in) == 0 {
+		if v, ok := impactRels[strings.ReplaceAll(n, " ", "_")]; ok {
+			return &relSpec{virt: v}, nil
+		}
 		return nil, nil
 	}
 	return rs, nil
@@ -180,12 +212,24 @@ func (b *binder) visibleIDs(ids []string) ([]string, error) {
 }
 
 // relEnd è un verso della relazione: la colonna dell'elemento, quella dell'altro estremo e i tipi.
+// table: la tabella (alias «r»), vuota = relations.
 type relEnd struct {
+	table       string
 	self, other string
 	types       []string
 }
 
+func (e relEnd) from() string {
+	if e.table != "" {
+		return e.table + " r"
+	}
+	return "relations r"
+}
+
 func (rs *relSpec) ends() []relEnd {
+	if rs.virt != nil {
+		return rs.virt
+	}
 	if rs.any {
 		return []relEnd{{self: "r.source_id", other: "r.target_id"}, {self: "r.target_id", other: "r.source_id"}}
 	}
@@ -235,7 +279,15 @@ func (b *binder) bindRelation(rs *relSpec, c *QClause) (cond, error) {
 				}
 			}
 			if len(got) == 0 {
-				if k := refKey(v); !keyRe.MatchString(k) && !uuidRe.MatchString(k) {
+				// Un codice del catalogo di architettura (APP-MOB) vale come la chiave dell'elemento.
+				if id := b.svc.catalogCodeID(b.ctx, b.tx, refKey(v)); id != "" {
+					if got, err = b.visibleIDs([]string{id}); err != nil {
+						return cond{}, err
+					}
+				}
+			}
+			if len(got) == 0 {
+				if k := refKey(v); !keyRe.MatchString(k) && !uuidRe.MatchString(k) && b.svc.catalogCodeID(b.ctx, b.tx, k) == "" {
 					return cond{}, b.err(v.Pos, v.End, "«%s» non è una chiave: scrivi ad esempio DEM-12, oppure una sottoquery come (tipo: risk)", v.A)
 				}
 				return cond{}, b.err(v.Pos, v.End, "elemento «%s» inesistente", v.A)
@@ -257,7 +309,7 @@ func (b *binder) bindRelation(rs *relSpec, c *QClause) (cond, error) {
 		arg := sb.arg(ids)
 		var ors []string
 		for _, e := range ends {
-			ors = append(ors, "exists (select 1 from relations r where r.tenant_id = e.tenant_id and "+e.self+" = e.id"+e.typeSQL(sb)+
+			ors = append(ors, "exists (select 1 from "+e.from()+" where r.tenant_id = e.tenant_id and "+e.self+" = e.id"+e.typeSQL(sb)+
 				" and "+e.other+" = any("+arg+"::uuid[]) offset 0)")
 		}
 		return "(" + strings.Join(ors, " or ") + ")"
@@ -265,7 +317,7 @@ func (b *binder) bindRelation(rs *relSpec, c *QClause) (cond, error) {
 	toVisible := func(sb *sqlb) string {
 		var ors []string
 		for _, e := range ends {
-			ors = append(ors, "exists (select 1 from relations r join elements o on o.tenant_id = r.tenant_id and o.id = "+e.other+
+			ors = append(ors, "exists (select 1 from "+e.from()+" join elements o on o.tenant_id = r.tenant_id and o.id = "+e.other+
 				" where r.tenant_id = e.tenant_id and "+e.self+" = e.id"+e.typeSQL(sb)+" and "+strings.Join(visibleWhere(sb, "o", actor, sc), " and ")+" offset 0)")
 		}
 		return "(" + strings.Join(ors, " or ") + ")"
@@ -295,7 +347,7 @@ func (b *binder) bindRelation(rs *relSpec, c *QClause) (cond, error) {
 				if hasIDs && !present {
 					where = e.other + " = any(" + sb.arg(ids) + "::uuid[])"
 				}
-				parts = append(parts, "select "+e.self+" from relations r where "+where+e.typeSQL(sb))
+				parts = append(parts, "select "+e.self+" from "+e.from()+" where "+where+e.typeSQL(sb))
 			}
 			return strings.Join(parts, " union all ")
 		}

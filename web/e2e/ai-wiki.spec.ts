@@ -172,6 +172,24 @@ test.describe("AI, ondata 4: wiki personale", () => {
     expect(usage.by_feature.find((x) => x.key === "wiki")?.calls).toBeGreaterThanOrEqual(1);
   });
 
+  test("seguito dell'ondata 3: duplicati probabili nel form del lavoro", async ({ page }) => {
+    await login(page, "admin", TENANT);
+    await setAI(page.request, true);
+    const team = uniq("Squadra");
+    await call(page.request, "POST", "/api/v1/teams", { name: team });
+    const spaces = await call<{ items: { team: string; key: string }[] }>(page.request, "GET", "/api/v1/work/spaces");
+    const space = spaces.items.find((s) => s.team === team)!.key;
+    const word = uniq("Certificato").replace(/\W/g, "");
+    const old = await call<{ key: string }>(page.request, "POST", `/api/v1/work/spaces/${space}/items`, { type: "task", title: `Rinnovo ${word} portale` });
+    await page.goto(`/delivery/board?spazio=${space}&sprint=tutti`);
+    await page.getByRole("button", { name: "Nuovo elemento" }).click();
+    await page.getByRole("radio", { name: "Task" }).click();
+    await page.getByLabel("Titolo").fill(`Rinnovare ${word} portale`);
+    const box = page.getByTestId("assistente-creazione");
+    await box.getByRole("button", { name: "Cerca duplicati e proponi i campi" }).click();
+    await expect(box.getByRole("list", { name: "Forse esiste già" }).getByRole("link", { name: old.key })).toBeVisible();
+  });
+
   test("a 375 px: niente scorrimento orizzontale, axe e target tattili", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await login(page, "admin", TENANT);

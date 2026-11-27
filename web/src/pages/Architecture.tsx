@@ -13,6 +13,7 @@ import { useTypeNames } from "../typesApi";
 import { tr } from "../i18n/core";
 import { Trans } from "../i18n/Trans";
 import { crumbs } from "../crumbs";
+import { CreateAssistant } from "./CreateAssistant";
 
 // Catalogo di architettura (piano, passo 2): asset logici con la loro composizione,
 // applicazioni con il team owner, team. Le richieste citano gli asset; l'analisi
@@ -322,6 +323,10 @@ function NewApplication() {
       <button type="button" className="btn" onClick={() => setOpen(false)}>{tr("governance.compliance.annulla")}</button>
       <div className="basis-full">
         <ErrorNote error={create.error} />
+      </div>
+      {/* Con l'AI accesa: applicazioni simili che potrebbero essere la stessa (seguito dell'ondata 3). */}
+      <div className="flex min-w-0 basis-full flex-col">
+        <CreateAssistant type="application" title={f.name} description={f.data} />
       </div>
     </form>
   );

@@ -311,6 +311,20 @@ func suggestFields(cat *catalog, sp spot) []Suggestion {
 		}
 		out = append(out, Suggestion{Kind: "field", Label: "collegata", Insert: ins, Detail: "Collegata a elementi: chiavi o sottoquery, es. collegata: (tipo: risk fase: aperta)"})
 	}
+	// Le relazioni dagli impatti (query_rel.go), quando si comincia a scriverle.
+	for _, r := range ImpactRelations {
+		if p == "" || !strings.HasPrefix(r.Key, p) {
+			continue
+		}
+		ins := r.Key
+		if !sp.colonAfter {
+			ins += ": "
+		}
+		if sp.neg {
+			ins = "-" + ins
+		}
+		out = append(out, Suggestion{Kind: "field", Label: r.Key, Insert: ins, Detail: "Dagli impatti: " + r.Outward})
+	}
 	if !sp.neg && !sp.colonAfter && p != "" && (strings.HasPrefix("ordina per", p) || strings.HasPrefix("sort by", p)) {
 		out = append([]Suggestion{{Kind: "sort", Label: "ordina per", Insert: "ordina per: ", Detail: "Ordinamento dei risultati"}}, out...)
 	} else if p == "" && !sp.neg && !sp.colonAfter {

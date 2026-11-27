@@ -6,6 +6,11 @@ export default {
   "ai.tool.wiki": "wiki personale",
   "ai.tool.wiki_scrivi": "scrittura nella wiki",
 
+  // Seguito dell'ondata 3: analisi alla creazione nei form del lavoro e dell'architettura.
+  "ai.triage.helpDuplicates": "Cerca elementi simili dello stesso tipo che potrebbero essere lo stesso, solo fra quelli che vedi.",
+  "ai.triage.helpOther": "Cerca elementi simili dello stesso tipo e propone i valori dei campi: accetti tu, uno per uno.",
+  "ai.triage.runDuplicates": "Cerca duplicati",
+
   "ai.wiki.title": "La mia wiki",
   "ai.wiki.path": "profilo / wiki",
   "ai.wiki.intro": "Le tue pagine di appunti su progetti, comitati, priorità e decisioni. Sono private: le vedi solo tu, finché non ne condividi una.",

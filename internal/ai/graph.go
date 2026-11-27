@@ -130,6 +130,11 @@ func (s *Service) graphCatalog(ctx context.Context, tx pgx.Tx) (string, error) {
 			fmt.Fprintf(&b, "- %s: %s / %s\n", r.Key, r.Outward, r.Inward)
 		}
 	}
+	// Relazioni dagli impatti (non sono tipi di relazione: vengono dall'analisi d'impatto).
+	b.WriteString("\nRelazioni dagli impatti (si usano come i tipi di relazione, con chiavi o sottoquery):\n")
+	for _, r := range engine.ImpactRelations {
+		fmt.Fprintf(&b, "- %s: %s\n", r.Key, r.Outward)
+	}
 	return b.String(), nil
 }
 

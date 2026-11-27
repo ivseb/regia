@@ -18,7 +18,7 @@ Disegno e decisioni in [replica/ai.md](../../replica/ai.md) (stato nella sezione
 | `internal/ai/assistant.go` | assistente: conversazioni, giro con gli strumenti, proposte, conservazione; `AskStream` con gli eventi |
 | `internal/ai/graph.go` | domande sul grafo: traduzione in query, prova con il motore, una correzione |
 | `internal/ai/card.go` | assistente nella scheda: riassunto, mancanze, bozze (`Card`), inserimento (`Insert`), analisi alla creazione (`Triage`), asset accettati (`Links`) |
-| `internal/engine/query_rel.go` | clausola di relazione e sottoquery del linguaggio di query |
+| `internal/engine/query_rel.go` | clausola di relazione e sottoquery del linguaggio di query; relazioni dagli impatti (`impatta`, `impattata_da`, `impatti` su `ext_impact`, dall'ondata 4) |
 | `internal/ai/wiki` | wiki personale: pagine, revisioni (istantanee), annullamento e ripristino, condivisione, fonti a mano, stato dell'aggiornamento, collegamenti (chiavi e codici), pagine pertinenti, esportazione, conservazione; non chiama il modello |
 | `internal/ai/wikiai.go` | aggiornamento della wiki con il modello (`UpdateWiki`), lavoro in background (`RunWiki`), conservazione (`PurgeWiki`), contesto per l'assistente (`wikiContext`), attore di un membro (`MemberActor`) |
 | `internal/api/wiki.go` | rotte `/api/v1/wiki/...` |
@@ -83,7 +83,7 @@ Migrazione 0087 (wiki personale): `wiki_pages` (titolo unico per persona fra le 
 
 ## Domande sul grafo (`internal/ai/graph.go`)
 
-`GraphQuestion` risolve la funzione `domande_grafo`, prepara le istruzioni (sintassi del linguaggio di query con le relazioni e le sottoquery, esempi, formato `QUERY:`/`SPIEGAZIONE:`) e il **catalogo del tenant** fra `<dati origine="catalogo">` (tipi di elemento, campi di `Engine.QueryFields` con i valori degli elenchi, tipi di relazione di `Engine.QueryRelations` con i nomi nei due versi), chiama il modello senza strumenti e prova la query con `Engine.Search` (limite 1) e i permessi della persona. Se il motore risponde con un `QueryError`, il modello riceve la query, il messaggio e il frammento sbagliato e corregge **una volta**; poi la risposta dice se la query è valida (`valid`, `corrected`, `first_query`, `first_error`, `error`). Le query non si salvano: la persona le salva come vista (pagina `domande`, elenco `/elenco/domande`). Mascheramento come per l'assistente.
+`GraphQuestion` risolve la funzione `domande_grafo`, prepara le istruzioni (sintassi del linguaggio di query con le relazioni e le sottoquery, esempi, formato `QUERY:`/`SPIEGAZIONE:`) e il **catalogo del tenant** fra `<dati origine="catalogo">` (tipi di elemento, campi di `Engine.QueryFields` con i valori degli elenchi, tipi di relazione di `Engine.QueryRelations` con i nomi nei due versi e, dall'ondata 4, le relazioni dagli impatti di `engine.ImpactRelations`), chiama il modello senza strumenti e prova la query con `Engine.Search` (limite 1) e i permessi della persona. Se il motore risponde con un `QueryError`, il modello riceve la query, il messaggio e il frammento sbagliato e corregge **una volta**; poi la risposta dice se la query è valida (`valid`, `corrected`, `first_query`, `first_error`, `error`). Le query non si salvano: la persona le salva come vista (pagina `domande`, elenco `/elenco/domande`). Mascheramento come per l'assistente.
 
 ## Assistente nella scheda (`internal/ai/card.go`)
 
@@ -93,6 +93,7 @@ Migrazione 0087 (wiki personale): `wiki_pages` (titolo unico per persona fra le 
 - **Bozze** (`bozze`): `descrizione`, `commento`, `risposta` (al richiedente: Regia aggiunge `@Nome` di chi ha aperto l'elemento, così la menzione notifica), con `hint` facoltativo fra `<dati origine="indicazioni della persona">`. `Insert` riceve il testo riletto e lo applica con `proposeAndApply`: `Prepare` dello strumento (`commenta` o `aggiorna`) con i permessi della persona, proposta salvata con `feature = 'bozze'`, `Decide` con la conferma. Nel registro la decisione è `accepted_by_user` con la funzione della proposta; `PendingMCP` esclude le proposte con una funzione.
 - **Alla creazione** (`classificazione`): `similar` trova i candidati con `similarity`/`word_similarity` di `pg_trgm` sul titolo, le parole significative in alternativa (`websearch_to_tsquery` con `or`) sul `search` e, per gli asset, il nome citato nel testo; ogni candidato passa da `Engine.Get` con i permessi della persona. Il modello riceve nuovo elemento, simili, campi a elenco del tipo (più il driver per le richieste) e asset logici, e risponde in JSON; Regia tiene solo chiavi fra i candidati e valori fra le opzioni (restituiti come id dell'opzione, come li vuole il form). `Links` cita gli asset accettati dopo il salvataggio con `Arch.CiteAsset` (regole di «Cita un asset»: chi analizza, il richiedente, il business owner), con l'audit `ai.triage.link` e la decisione nel registro (`proposta:cita_asset`).
 - **API:** `POST /api/v1/ai/card` `{element, action: riassunto|mancanze|bozza, draft, hint}`, `POST /api/v1/ai/card/insert` `{element, draft, text}` → proposta, `POST /api/v1/ai/card/triage` `{type, title, description}` → `{duplicates, fields, links, candidates, unverified}`, `POST /api/v1/ai/card/links` `{element, links}` → `{items: [{key, ok, error}]}`. Card e triage non pubblicano l'evento «changed» (letture in POST).
+- **Altri form (seguito, ondata 4):** `CreateAssistant` è anche nel dialogo `NewCard` della board e del backlog (duplicati e campi a elenco del tipo; i valori accettati entrano in `fields` della creazione) e in `NewApplication` dell'architettura (solo duplicati: senza `onAccept` e `onLinks` il riquadro non mostra campi né asset). Il servizio è lo stesso (`POST /api/v1/ai/card/triage` con il tipo); test `TestAITriageAltriTipi`.
 - **Interfaccia:** `ElementPage` carica `CardAssistant` (lazy) solo se `status.features` ha una funzione della scheda; i link portano a `#campo-vista-<chiave>`, `#descrizione-scheda` e `#c-<id del commento>` (scheda Attività). `NewRequest` mostra `CreateAssistant`; i valori accettati entrano nello stato del form, gli asset spuntati si citano dopo la creazione.
 
 ## Wiki personale (`internal/ai/wiki`, `internal/ai/wikiai.go`)
@@ -159,7 +160,7 @@ reqs := fakeai.Requests("maschera") // ciò che è «uscito» verso il fornitore
 ## Provare
 
 ```bash
-go test ./internal/ai/... && go test ./internal/itest -run 'TestAIFondamenta|TestAIMCP|TestAIOndata2|TestAIScheda|TestAIWiki|TestQueryRelazioni|TestAuditChiavePerTenant'
+go test ./internal/ai/... && go test ./internal/itest -run 'TestAIFondamenta|TestAIMCP|TestAIOndata2|TestAIScheda|TestAIWiki|TestAITriageAltriTipi|TestQueryRelazioni|TestQueryImpatti|TestAuditChiavePerTenant'
 cd web && pnpm exec playwright test e2e/ai.spec.ts e2e/ai-ondata2.spec.ts e2e/ai-scheda.spec.ts e2e/ai-wiki.spec.ts
 ```
 

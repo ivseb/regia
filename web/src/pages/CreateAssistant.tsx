@@ -13,15 +13,17 @@ export function CreateAssistant({
   title,
   description,
   onAccept,
-  links,
+  links = [],
   onLinks,
 }: {
   type: string;
   title: string;
   description: string;
-  onAccept: (f: TriageField) => void;
-  links: string[];
-  onLinks: (keys: string[]) => void;
+  /** Senza: i valori proposti non si mostrano (il form non ha campi a elenco da riempire). */
+  onAccept?: (f: TriageField) => void;
+  links?: string[];
+  /** Senza: gli asset da citare non si mostrano (solo le richieste citano asset alla creazione). */
+  onLinks?: (keys: string[]) => void;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -42,7 +44,9 @@ export function CreateAssistant({
   const st = status.data;
   if (!st?.enabled || !st.features?.classificazione) return null;
   const blocked = st.budget.state === "blocked";
-  const empty = res && res.duplicates.length + res.fields.length + res.links.length === 0;
+  const fields = onAccept ? (res?.fields ?? []) : [];
+  const assets = onLinks ? (res?.links ?? []) : [];
+  const empty = res && res.duplicates.length + fields.length + assets.length === 0;
   return (
     <section aria-labelledby="assistente-creazione" className="flex min-w-0 flex-col gap-3 border border-hair bg-side p-3 md:col-span-2" data-testid="assistente-creazione">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -50,10 +54,16 @@ export function CreateAssistant({
           {t("ai.triage.title")}
         </h2>
         <button type="button" className="btn touch-44" disabled={blocked || run.isPending || title.trim().length < 3} onClick={() => run.mutate()}>
-          {run.isPending ? t("ai.card.working") : t("ai.triage.run")}
+          {run.isPending ? t("ai.card.working") : onAccept ? t("ai.triage.run") : t("ai.triage.runDuplicates")}
         </button>
       </div>
-      <p className="m-0 text-[12.5px] text-muted">{blocked ? t("ai.panel.budgetBlocked") : t("ai.triage.help")}</p>
+      <p className="m-0 text-[12.5px] text-muted">{blocked
+          ? t("ai.panel.budgetBlocked")
+          : !onAccept
+            ? t("ai.triage.helpDuplicates")
+            : type === "business_request"
+              ? t("ai.triage.help")
+              : t("ai.triage.helpOther")}</p>
       <ErrorNote error={run.error} />
       <div aria-live="polite" className="flex min-w-0 flex-col gap-3">
         {empty && <p className="m-0" role="status">{t("ai.triage.none", { count: res.candidates })}</p>}
@@ -75,11 +85,11 @@ export function CreateAssistant({
             </ul>
           </div>
         )}
-        {res && res.fields.length > 0 && (
+        {fields.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="label">{t("ai.triage.fields")}</span>
             <ul className="m-0 flex list-none flex-col p-0" aria-label={t("ai.triage.fields")} data-testid="campi-proposti">
-              {res.fields.map((f) => {
+              {fields.map((f) => {
                 const on = accepted.includes(f.key);
                 return (
                   <li key={f.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-hair py-1.5">
@@ -97,7 +107,7 @@ export function CreateAssistant({
                         className="btn touch-44"
                         aria-label={t("ai.triage.acceptField", { name: f.name, value: f.display })}
                         onClick={() => {
-                          onAccept(f);
+                          onAccept?.(f);
                           setAccepted((a) => [...a, f.key]);
                         }}
                       >
@@ -110,16 +120,16 @@ export function CreateAssistant({
             </ul>
           </div>
         )}
-        {res && res.links.length > 0 && (
+        {assets.length > 0 && (
           <fieldset className="m-0 flex flex-col gap-1 border-0 p-0" data-testid="asset-proposti">
             <legend className="label mb-1 p-0">{t("ai.triage.links")}</legend>
-            {res.links.map((l) => (
+            {assets.map((l) => (
               <label key={l.id} className="touch-44 flex items-center gap-2">
                 <input
                   type="checkbox"
                   className="size-4 shrink-0 accent-[var(--accent)]"
                   checked={links.includes(l.key)}
-                  onChange={(e) => onLinks(e.target.checked ? [...links, l.key] : links.filter((k) => k !== l.key))}
+                  onChange={(e) => onLinks?.(e.target.checked ? [...links, l.key] : links.filter((k) => k !== l.key))}
                 />
                 <span className="min-w-0 [overflow-wrap:anywhere]">
                   <span className="font-mono">{l.key}</span> {l.title} <span className="text-[12.5px] text-muted">· {l.reason}</span>

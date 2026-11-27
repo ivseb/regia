@@ -7,7 +7,7 @@ Dove: **Configurazione → Intelligenza artificiale** e **Configurazione → Con
 C'è il pannello **«Chiedi all'assistente»** nel menu, con due modi:
 
 - **Conversazione:** si fanno domande sui dati, l'assistente cerca e legge con i permessi della persona e risponde con i link agli elementi. Le risposte lunghe si vedono crescere mentre arrivano. Commenti, ore, nuovi elementi, modifiche e collegamenti arrivano come **proposte**: non cambia niente finché la persona non preme **Conferma**.
-- **Domanda sul grafo:** la persona chiede quali elementi vuole vedere («Quali richieste aperte sono urgenti?», «Quali applicazioni hanno vulnerabilità scadute?», «Applicazioni collegate a rischi aperti») e l'assistente scrive la **query di Regia**, anche con le relazioni (`collegata: (tipo: risk fase: aperta)`). La query resta visibile: la persona la cambia, la riesegue, apre il risultato nell'elenco **Domande sul grafo** e la **salva come vista**. Se la prima query non è valida, l'assistente la corregge una volta sola e lo dice; se non ci riesce nemmeno così, lo dice e la query si corregge a mano. La query si scrive anche senza AI, nello stesso elenco.
+- **Domanda sul grafo:** la persona chiede quali elementi vuole vedere («Quali richieste aperte sono urgenti?», «Quali applicazioni hanno vulnerabilità scadute?», «Applicazioni collegate a rischi aperti») e l'assistente scrive la **query di Regia**, anche con le relazioni (`collegata: (tipo: risk fase: aperta)`) e con gli impatti dell'analisi (`tipo: application impattata_da: (tipo: business_request urgenza: Alta)`). La query resta visibile: la persona la cambia, la riesegue, apre il risultato nell'elenco **Domande sul grafo** e la **salva come vista**. Se la prima query non è valida, l'assistente la corregge una volta sola e lo dice; se non ci riesce nemmeno così, lo dice e la query si corregge a mano. La query si scrive anche senza AI, nello stesso elenco.
 
 Nella **scheda di ogni elemento** (richiesta, progetto, applicazione, attività…) c'è il riquadro **Assistente**, e nel form di una **nuova richiesta** l'assistente cerca i duplicati e propone i campi (sezione 8).
 
@@ -104,7 +104,9 @@ Compare solo con l'AI accesa e il modello del livello della funzione: senza AI l
 - **Valori proposti:** driver, urgenza e gli altri campi a elenco, ognuno con il motivo e il pulsante **Accetta**: un valore entra nel form solo se lo accetti;
 - **Asset che potrebbe riguardare:** quelli spuntati si citano nella richiesta dopo il salvataggio.
 
-L'assistente legge solo ciò che la persona può vedere: un richiedente del portale non riceve come duplicati le richieste degli altri. Ogni chiamata è nel registro con la sua funzione; le bozze inserite e gli asset citati vi compaiono come «proposta confermata».
+L'assistente legge solo ciò che la persona può vedere: un richiedente del portale non riceve come duplicati le richieste degli altri.
+
+Anche nel dialogo **Nuovo elemento** della board e del backlog (task, story, bug, epic) c'è **Cerca duplicati e proponi i campi**: elementi simili dello stesso tipo e i valori dei campi a elenco del tipo, da accettare uno per uno. Nel form **nuova applicazione** dell'architettura c'è **Cerca duplicati**: applicazioni simili che potrebbero essere la stessa. Ogni chiamata è nel registro con la sua funzione; le bozze inserite e gli asset citati vi compaiono come «proposta confermata».
 
 ## 9. Wiki personale
 

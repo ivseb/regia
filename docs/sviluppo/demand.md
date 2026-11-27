@@ -40,6 +40,7 @@ Esempi:
 - `tipo: application collegata: (tipo: risk fase: aperta)` (applicazioni collegate a un rischio aperto)
 - `tipo: application scadenza_vulnerabilità: <oggi` (applicazioni con vulnerabilità scadute)
 - `tipo: business_request "dipende da": (tipo: business_request fase: aperta)`
+- `tipo: application impattata_da: (tipo: business_request urgenza: Alta)` (applicazioni con un impatto da richieste urgenti); `tipo: business_request impatta: APP-MOB`; `tipo: application impatti: (tipo: impact)`. Le relazioni dagli impatti (`impatta`, `impattata_da`, `impatti`, in inglese `impacts`, `impacted_by`, `impact_items`) leggono `ext_impact` invece di `relations` e valgono solo se il tenant non ha un tipo di relazione con lo stesso nome; nella clausola di relazione un codice del catalogo (`APP-MOB`) vale come la chiave dell'elemento, con la visibilità della persona.
 
 | metodo e percorso | cosa fa |
 | --- | --- |

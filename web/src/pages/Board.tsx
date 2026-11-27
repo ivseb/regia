@@ -26,6 +26,7 @@ import { useT } from "../i18n/react";
 import { useStateName } from "../stateLabels";
 import { tr, type Key } from "../i18n/core";
 import { crumbs } from "../crumbs";
+import { CreateAssistant } from "./CreateAssistant";
 
 export type BoardSearch = { spazio?: string; sprint?: string; q?: string; corsie?: Swimlane };
 
@@ -1027,6 +1028,8 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
   const [inSprint, setInSprint] = useState(!!target);
   // Dal backlog il dialogo ha il selettore dello sprint (ondata 2): si sceglie dove nasce l'elemento.
   const [sprintPick, setSprintPick] = useState(sprint ?? "");
+  // Valori accettati dall'assistente alla creazione (seguito dell'ondata 3 dell'AI).
+  const [custom, setCustom] = useState<Record<string, unknown>>({});
   const create = useMutation({
     mutationFn: () =>
       workApi.createItem(spaceKey, {
@@ -1035,7 +1038,12 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
         parent: parent || undefined,
         assignee_id: mine ? me : undefined,
         sprint: sprints ? (type !== "epic" && sprintPick ? sprintPick : undefined) : inSprint && target && type !== "epic" ? target : undefined,
-        fields: points && cur?.points ? { punti: Number(points.replace(",", ".")) } : undefined,
+        fields:
+          points && cur?.points
+            ? { ...custom, punti: Number(points.replace(",", ".")) }
+            : Object.keys(custom).length
+              ? custom
+              : undefined,
       }),
     onSuccess: (el) => {
       qc.invalidateQueries({ queryKey: ["work"] });
@@ -1064,6 +1072,8 @@ export function NewCard({ spaceKey, b, onClose, onCreated, sprint, sprints }: { 
           <span className="label">{t("lavoro.board.titleLabel")}</span>
           <input className="field" required maxLength={500} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
+        {/* Con l'AI accesa: duplicati probabili e valori dei campi a elenco, da accettare uno per uno. */}
+        <CreateAssistant key={type} type={type} title={title} description="" onAccept={(p) => setCustom((c) => ({ ...c, [p.key]: p.value }))} />
         {cur?.parents.includes("epic") && epics.length > 0 && (
           <label className="flex flex-col gap-1">
             {/* i18n-ok: nome del tipo, riserva se la configurazione non è ancora arrivata */}
