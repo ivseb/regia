@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../api";
-import { aiApi, usd, type AIKind, type AIModel, type AIProvider, type AISettings, type AISettingsView, type Route, type TierChoice, type TierKey } from "../aiApi";
+import { aiApi, usd, type AIKind, type AIModel, type AIProvider, type AISettings, type AISettingsView, type ProviderInput, type Route, type TierChoice, type TierKey } from "../aiApi";
 import { PageHeader } from "../shell";
 import { Select } from "../select";
 import { ErrorNote, Loading, SectionTitle } from "../ui";
@@ -14,15 +14,33 @@ import { useT } from "../i18n/react";
 import { lookup } from "../i18n/core";
 import { fmtNumber } from "../i18n/format";
 
+/** Regioni d'esempio (codici dei cloud, non testi): una europea per ciascuno. */
+const REGION_EXAMPLE = { aws: "eu-central-1", gcp: "europe-west8" } as const;
+
 const kindName = (k: string) => lookup(`ai.kind.${k}`) ?? k;
 const featureName = (k: string) => lookup(`ai.feature.${k}`) ?? k;
 const tierName = (k: string) => lookup(`ai.tier.${k}`) ?? k;
 
-/** Modelli del fornitore: quelli proposti da Regia subito, quelli del servizio su richiesta. */
+/** Modelli del fornitore: quelli proposti da Regia subito, quelli del servizio dopo la prova. */
 function useModels(view: AISettingsView | undefined, providerId: string, loaded: Record<string, AIModel[]>): AIModel[] {
   const p = view?.providers.find((x) => x.id === providerId);
   if (!p) return [];
   return loaded[p.id] ?? view?.kinds.find((k) => k.key === p.kind)?.proposed ?? [];
+}
+
+/** Modello proposto per un livello: quello segnato dal servizio o da Regia; per il rapido, se
+ *  manca, quello dell'approfondito (un solo modello per tutti e due i livelli va bene). */
+function proposedFor(models: AIModel[], tier: TierKey | undefined): string {
+  if (!tier) return "";
+  const pick = models.find((m) => m.tier === tier)?.id;
+  if (pick) return pick;
+  return tier === "rapido" ? (models.find((m) => m.tier === "approfondito")?.id ?? "") : "";
+}
+
+/** Il modello non sa usare gli strumenti: lo dice il servizio o l'ha segnato chi amministra. */
+function noTools(p: AIProvider | undefined, models: AIModel[], id: string): boolean {
+  if (!p || !id) return false;
+  return p.no_tools_models.includes(id) || models.some((m) => m.id === id && m.tools === false);
 }
 
 function TierPicker(props: {
@@ -38,6 +56,7 @@ function TierPicker(props: {
   const t = useT();
   const { id, value, view, onChange } = props;
   const models = useModels(view, value.provider_id, props.loaded);
+  const prov = view.providers.find((x) => x.id === value.provider_id);
   return (
     <fieldset className="m-0 flex flex-col gap-2 border border-hair p-3" data-testid={`livello-${id}`}>
       <legend className="px-1 font-semibold">{props.label}</legend>
@@ -51,9 +70,8 @@ function TierPicker(props: {
             onChange={(e) => {
               const pid = e.target.value;
               const p = view.providers.find((x) => x.id === pid);
-              const proposed = view.kinds.find((k) => k.key === p?.kind)?.proposed ?? [];
-              const pick = proposed.find((m) => m.tier === props.tier)?.id ?? "";
-              onChange({ provider_id: pid, model: pid ? pick : "" });
+              const known = props.loaded[pid] ?? view.kinds.find((k) => k.key === p?.kind)?.proposed ?? [];
+              onChange({ provider_id: pid, model: pid ? proposedFor(known, props.tier) : "" });
             }}
           >
             <option value="">{t("ai.cfg.none")}</option>
@@ -74,11 +92,16 @@ function TierPicker(props: {
           />
           <datalist id={`modelli-${id}`}>
             {models.map((m) => (
-              <option key={m.id} value={m.id}>{m.name ?? m.id}</option>
+              <option key={m.id} value={m.id}>
+                {(m.name ?? m.id) + (noTools(prov, models, m.id) ? ` · ${t("ai.cfg6.noToolsTag")}` : "")}
+              </option>
             ))}
           </datalist>
         </label>
       </div>
+      {noTools(prov, models, value.model) && (
+        <span className="text-[12.5px]" data-testid="modello-senza-strumenti">{t("ai.cfg6.modelNoTools")}</span>
+      )}
     </fieldset>
   );
 }
@@ -105,28 +128,61 @@ function ProviderForm({ kinds, provider, onDone, onCancel }: { kinds: AIKind[]; 
   const [noTools, setNoTools] = useState((provider?.no_tools_models ?? []).join(", "));
   const [priceIn, setPriceIn] = useState(provider?.price_input_usd?.toString() ?? "");
   const [priceOut, setPriceOut] = useState(provider?.price_output_usd?.toString() ?? "");
+  const [region, setRegion] = useState(provider?.region ?? "");
+  const [projectId, setProjectId] = useState(provider?.project_id ?? "");
+  const [awsMode, setAwsMode] = useState<"key" | "iam">("key");
+  const [awsKeyId, setAwsKeyId] = useState("");
+  const [awsSecret, setAwsSecret] = useState("");
+  const [awsToken, setAwsToken] = useState("");
+  const [saJSON, setSaJSON] = useState("");
   const k = kinds.find((x) => x.key === kind);
+  const cloud = k?.cloud ?? "";
   const num = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
   const save = useMutation({
     mutationFn: () => {
-      const body = {
+      const body: ProviderInput = {
         name,
         base_url: baseURL,
-        api_key: key,
+        api_key: cloud === "aws" && awsMode === "iam" ? "" : key,
         remove_key: removeKey,
         no_tools_models: noTools.split(/[,\n]/).map((s) => s.trim()).filter(Boolean),
         price_input_usd: num(priceIn),
         price_output_usd: num(priceOut),
+        region,
+        project_id: projectId,
       };
+      if (cloud === "aws" && awsMode === "iam") Object.assign(body, { aws_access_key_id: awsKeyId, aws_secret_access_key: awsSecret, aws_session_token: awsToken });
+      if (cloud === "gcp") body.service_account_json = saJSON;
       return provider ? aiApi.updateProvider(provider.id, body) : aiApi.createProvider({ ...body, kind });
     },
     onSuccess: () => {
       setKey("");
+      setAwsSecret("");
+      setAwsToken("");
+      setSaJSON("");
       onDone();
     },
   });
   const err = save.error instanceof ApiError ? save.error : null;
   const bad = (f: string) => err?.field === f;
+  const savedHint = provider?.has_key ? t("ai.cfg6.credsSaved") : "";
+  const secretInput = (id: string, label: string, value: string, set: (v: string) => void, field: string, help?: string) => (
+    <label className="flex flex-col gap-1">
+      <span className="label">{label}</span>
+      <input
+        className="field font-mono"
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        data-testid={id}
+        value={value}
+        aria-invalid={bad(field)}
+        placeholder={savedHint}
+        onChange={(e) => set(e.target.value)}
+      />
+      {help && <span className="text-[12.5px] text-muted">{help}</span>}
+    </label>
+  );
   return (
     <form
       className="flex flex-col gap-3 border-2 border-rule p-3"
@@ -151,14 +207,88 @@ function ProviderForm({ kinds, provider, onDone, onCancel }: { kinds: AIKind[]; 
         <span className="label">{t("ai.cfg.name")}</span>
         <input className="field" required maxLength={80} value={name} aria-invalid={bad("name")} onChange={(e) => setName(e.target.value)} />
       </label>
-      {k?.needs_url && (
+      {(k?.needs_url || k?.optional_url) && (
         <label className="flex flex-col gap-1">
-          <span className="label">{t("ai.cfg.baseUrl")}</span>
-          <input className="field" required type="url" value={baseURL} aria-invalid={bad("base_url")} placeholder={t("ai.cfg.baseUrlPlaceholder")} onChange={(e) => setBaseURL(e.target.value)} />
-          <span className="text-[12.5px] text-muted">{t("ai.cfg.baseUrlHelp")}</span>
+          <span className="label">{k?.needs_url ? t("ai.cfg.baseUrl") : t("ai.cfg6.baseUrlOptional")}</span>
+          <input
+            className="field"
+            required={k?.needs_url}
+            type="url"
+            value={baseURL}
+            aria-invalid={bad("base_url")}
+            placeholder={k?.default_url || t("ai.cfg.baseUrlPlaceholder")}
+            onChange={(e) => setBaseURL(e.target.value)}
+          />
+          <span className="text-[12.5px] text-muted">{lookup(`ai.kind.${kind}.url`) ?? t("ai.cfg.baseUrlHelp")}</span>
         </label>
       )}
-      {(k?.needs_key || k?.needs_url) && (
+      {cloud !== "" && (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <label className="flex flex-col gap-1">
+            <span className="label">{t("ai.cfg6.region")}</span>
+            <input
+              className="field font-mono"
+              required
+              maxLength={40}
+              value={region}
+              aria-invalid={bad("region")}
+              placeholder={REGION_EXAMPLE[cloud]}
+              onChange={(e) => setRegion(e.target.value.trim())}
+            />
+            <span className="text-[12.5px] text-muted">{cloud === "aws" ? t("ai.cfg6.regionAws") : t("ai.cfg6.regionGcp")}</span>
+          </label>
+          {cloud === "gcp" && (
+            <label className="flex flex-col gap-1">
+              <span className="label">{t("ai.cfg6.project")}</span>
+              <input className="field font-mono" maxLength={30} value={projectId} aria-invalid={bad("project_id")} onChange={(e) => setProjectId(e.target.value.trim())} />
+              <span className="text-[12.5px] text-muted">{t("ai.cfg6.projectHelp")}</span>
+            </label>
+          )}
+        </div>
+      )}
+      {cloud === "aws" && (
+        <fieldset className="m-0 flex flex-col gap-2 border border-hair p-3">
+          <legend className="px-1 font-semibold">{t("ai.cfg6.awsCreds")}</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {(["key", "iam"] as const).map((m) => (
+              <label key={m} className="flex min-h-[44px] items-center gap-2">
+                <input type="radio" name="aws-mode" checked={awsMode === m} onChange={() => setAwsMode(m)} />
+                {t(m === "key" ? "ai.cfg6.awsModeKey" : "ai.cfg6.awsModeIam")}
+              </label>
+            ))}
+          </div>
+          {awsMode === "key" ? (
+            secretInput("bedrock-chiave", t("ai.cfg6.awsApiKey"), key, setKey, "api_key", t("ai.cfg6.awsApiKeyHelp"))
+          ) : (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className="label">{t("ai.cfg6.awsKeyId")}</span>
+                <input className="field font-mono" autoComplete="off" spellCheck={false} value={awsKeyId} aria-invalid={bad("aws_access_key_id")} placeholder={savedHint} onChange={(e) => setAwsKeyId(e.target.value.trim())} />
+              </label>
+              {secretInput("bedrock-segreta", t("ai.cfg6.awsSecret"), awsSecret, setAwsSecret, "aws_secret_access_key")}
+              {secretInput("bedrock-sessione", t("ai.cfg6.awsToken"), awsToken, setAwsToken, "aws_session_token", t("ai.cfg6.awsTokenHelp"))}
+            </>
+          )}
+          <span className="text-[12.5px] text-muted">{t("ai.cfg.keyHelp")}</span>
+        </fieldset>
+      )}
+      {cloud === "gcp" && (
+        <label className="flex flex-col gap-1">
+          <span className="label">{t("ai.cfg6.serviceAccount")}</span>
+          <textarea
+            className="field min-h-[7rem] font-mono text-[12.5px]"
+            autoComplete="off"
+            spellCheck={false}
+            data-testid="vertex-chiave"
+            value={saJSON}
+            aria-invalid={bad("service_account_json")}
+            placeholder={savedHint || t("ai.cfg6.serviceAccountPlaceholder")}
+            onChange={(e) => setSaJSON(e.target.value)}
+          />
+          <span className="text-[12.5px] text-muted">{t("ai.cfg6.serviceAccountHelp")}</span>
+        </label>
+      )}
+      {cloud === "" && (k?.needs_key || k?.needs_url || k?.optional_url) && (
         <label className="flex flex-col gap-1">
           <span className="label">{k?.needs_key ? t("ai.cfg.key") : t("ai.cfg.keyOptional")}</span>
           <input
@@ -197,7 +327,7 @@ function ProviderForm({ kinds, provider, onDone, onCancel }: { kinds: AIKind[]; 
           <input className="field" inputMode="decimal" value={priceOut} onChange={(e) => setPriceOut(e.target.value)} />
         </label>
       </div>
-      <span className="text-[12.5px] text-muted">{t("ai.cfg.priceHelp")}</span>
+      <span className="text-[12.5px] text-muted">{cloud ? t("ai.cfg6.priceHelpCloud") : t("ai.cfg.priceHelp")}</span>
       <ErrorNote error={save.error} />
       <div className="flex flex-wrap gap-2">
         <button className="btn btn-primary" type="submit" disabled={save.isPending}>
@@ -211,10 +341,23 @@ function ProviderForm({ kinds, provider, onDone, onCancel }: { kinds: AIKind[]; 
   );
 }
 
+/** Motivo dell'errore del fornitore (ai.ProviderError.Code) nelle parole di chi amministra. */
+function ProviderReason({ error }: { error: unknown }) {
+  if (!(error instanceof ApiError) || error.code !== "ai.provider_error") return null;
+  const reason = lookup(`ai.reason.${String(error.params?.reason ?? "")}`);
+  return reason ? <p className="m-0 text-[13px]">{reason}</p> : null;
+}
+
 function ProviderRow({ p, view, onModels, onChanged }: { p: AIProvider; view: AISettingsView; onModels: (id: string, m: AIModel[]) => void; onChanged: () => void }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
-  const models = useMutation({ mutationFn: () => aiApi.models(p.id), onSuccess: (r) => onModels(p.id, r.items) });
+  const test = useMutation({
+    mutationFn: () => aiApi.testProvider(p.id),
+    onSuccess: (r) => {
+      onModels(p.id, r.models);
+      if (r.no_tools.length > 0) onChanged();
+    },
+  });
   const del = useMutation({ mutationFn: () => aiApi.deleteProvider(p.id), onSuccess: onChanged });
   if (editing) {
     return <ProviderForm kinds={view.kinds} provider={p} onDone={() => { setEditing(false); onChanged(); }} onCancel={() => setEditing(false)} />;
@@ -225,23 +368,29 @@ function ProviderRow({ p, view, onModels, onChanged }: { p: AIProvider; view: AI
         <span className="font-semibold">{p.name}</span>
         <span className="text-[12.5px] text-muted">{kindName(p.kind)}</span>
         {p.base_url && <span className="font-mono text-[12px] text-muted [overflow-wrap:anywhere]">{p.base_url}</span>}
+        {p.region && <span className="font-mono text-[12px] text-muted" data-testid="fornitore-regione">{p.project_id ? `${p.project_id} · ${p.region}` : p.region}</span>}
         <span className="text-[12.5px] text-muted">{p.has_key ? t("ai.cfg.hasKey") : t("ai.cfg.noKey")}</span>
         <span className="text-[12.5px] text-muted">{p.local ? t("ai.cfg.local") : t("ai.cfg.external")}</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        <button className="btn py-1" disabled={models.isPending} onClick={() => models.mutate()}>
-          {models.isPending ? t("ai.cfg.checking") : t("ai.cfg.check")}
+        <button className="btn py-1" disabled={test.isPending} onClick={() => test.mutate()}>
+          {test.isPending ? t("ai.cfg.checking") : t("ai.cfg6.test")}
         </button>
         <button className="btn py-1" onClick={() => setEditing(true)}>{t("ai.cfg.edit")}</button>
         <button className="btn btn-danger py-1" disabled={del.isPending} onClick={() => del.mutate()}>{t("ai.cfg.remove")}</button>
       </div>
-      {models.data && (
-        <span className="text-[12.5px] text-ok" role="status">
-          {t("ai.cfg.modelsFound", { count: models.data.items.length })}
-          {models.data.items.length > 0 ? `: ${models.data.items.slice(0, 12).map((m) => m.id).join(", ")}` : ""}
-        </span>
+      {test.data && (
+        <div className="flex flex-col gap-1 text-[12.5px]" role="status" data-testid="prova-esito">
+          <span className="text-ok">
+            {t("ai.cfg6.testOk", { ms: fmtNumber(test.data.latency_ms) })} {t("ai.cfg.modelsFound", { count: test.data.models.length })}
+            {test.data.models.length > 0 ? `: ${test.data.models.slice(0, 12).map((m) => m.id).join(", ")}` : ""}
+          </span>
+          {test.data.model && <span>{t("ai.cfg6.testModel", { model: test.data.model })}</span>}
+          {test.data.no_tools.length > 0 && <span>{t("ai.cfg6.testNoTools", { models: test.data.no_tools.join(", ") })}</span>}
+        </div>
       )}
-      <ErrorNote error={models.error ?? del.error} />
+      <ErrorNote error={test.error ?? del.error} />
+      <ProviderReason error={test.error} />
     </li>
   );
 }

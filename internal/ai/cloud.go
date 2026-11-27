@@ -63,6 +63,10 @@ func noSpace(s string, max int) bool {
 // segreto da cifrare (in.secret). Credenziali vuote in modifica = invariate.
 func cleanCloud(k Kind, in *ProviderInput, prev *ProviderRow) error {
 	in.Region, in.ProjectID = strings.TrimSpace(in.Region), strings.TrimSpace(in.ProjectID)
+	// In modifica regione e progetto non indicati restano quelli salvati.
+	if prev != nil && in.Region == "" {
+		in.Region = prev.Region
+	}
 	switch k.Cloud {
 	case "aws":
 		in.ProjectID, in.RemoveKey = "", false
@@ -123,6 +127,9 @@ func cleanCloud(k Kind, in *ProviderInput, prev *ProviderRow) error {
 			in.secret = string(b)
 		} else if prev == nil || !prev.HasKey {
 			return invalid("service_account_json", "ai.key_required", "serve la chiave JSON del service account")
+		}
+		if in.ProjectID == "" && prev != nil {
+			in.ProjectID = prev.ProjectID
 		}
 		if !gcpProjectRe.MatchString(in.ProjectID) {
 			return invalid("project_id", "ai.project_invalid", "ID del progetto Google Cloud non valido")

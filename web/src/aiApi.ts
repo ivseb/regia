@@ -33,10 +33,28 @@ export type AIProvider = {
   price_input_usd: number | null;
   price_output_usd: number | null;
   local: boolean;
+  /** Regione del cloud (Bedrock, Vertex) e progetto Google Cloud (Vertex): non sono segreti. */
+  region: string;
+  project_id: string;
 };
 
-export type AIModel = { id: string; name?: string; tier?: TierKey };
-export type AIKind = { key: string; needs_key: boolean; needs_url: boolean; external: boolean; tools: boolean; proposed: AIModel[] };
+/** Modello del fornitore; tools: il servizio dichiara se sa usare gli strumenti (Ollama). */
+export type AIModel = { id: string; name?: string; tier?: TierKey; tools?: boolean; thinking?: boolean; size?: number };
+export type AIKind = {
+  key: string;
+  needs_key: boolean;
+  needs_url: boolean;
+  /** L'indirizzo si può cambiare (OpenAI); default_url è quello proposto. */
+  optional_url: boolean;
+  default_url: string;
+  /** «aws» (Bedrock) o «gcp» (Vertex): regione e credenziali del cloud al posto della chiave. */
+  cloud: "" | "aws" | "gcp";
+  external: boolean;
+  tools: boolean;
+  proposed: AIModel[];
+};
+/** Esito della prova di connessione (ondata 6). */
+export type ProviderTest = { ok: boolean; models: AIModel[]; model?: string; no_tools: string[]; latency_ms: number };
 export type AIFeature = { key: string; tier: TierKey; needs_tools: boolean; active: boolean };
 
 export type AIBudget = {
@@ -79,6 +97,12 @@ export type ProviderInput = {
   no_tools_models?: string[];
   price_input_usd?: number | null;
   price_output_usd?: number | null;
+  region?: string;
+  project_id?: string;
+  aws_access_key_id?: string;
+  aws_secret_access_key?: string;
+  aws_session_token?: string;
+  service_account_json?: string;
 };
 
 export type UsageRow = { key: string; label: string; calls: number; input_tokens: number; output_tokens: number; cost_usd: number; errors: number };
@@ -208,6 +232,7 @@ export const aiApi = {
   updateProvider: (id: string, p: ProviderInput) => call<AIProvider>("PATCH", `/ai/providers/${q(id)}`, p),
   deleteProvider: (id: string) => call<void>("DELETE", `/ai/providers/${q(id)}`),
   models: (id: string) => call<{ items: AIModel[] }>("GET", `/ai/providers/${q(id)}/models`),
+  testProvider: (id: string, model?: string) => call<ProviderTest>("POST", `/ai/providers/${q(id)}/test`, model ? { model } : {}),
   usage: (month?: string) => call<AIUsage>("GET", `/ai/usage${month ? `?month=${q(month)}` : ""}`),
   conversations: () => call<{ items: Conversation[] }>("GET", "/ai/conversations"),
   conversation: (id: string) => call<{ conversation: Conversation; messages: ChatMessage[] }>("GET", `/ai/conversations/${q(id)}`),

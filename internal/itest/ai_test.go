@@ -106,7 +106,7 @@ func TestAIFondamenta(t *testing.T) {
 	for _, k := range list(cfg["kinds"]) {
 		kinds += obj(k)["key"].(string) + ","
 	}
-	if kinds != "anthropic,openai_compat,fake," {
+	if kinds != "anthropic,anthropic_bedrock,anthropic_vertex,openai,gemini,ollama,openai_compat,fake," {
 		t.Fatalf("tipi di fornitore: %s", kinds)
 	}
 
@@ -170,7 +170,7 @@ func TestAIFondamenta(t *testing.T) {
 	fake := admin.do("POST", "/api/v1/ai/providers", map[string]any{"kind": "fake", "name": "Finto"}, http.StatusCreated)
 	fakeID := fake["id"].(string)
 	models := list(admin.do("GET", "/api/v1/ai/providers/"+fakeID+"/models", nil, http.StatusOK)["items"])
-	if len(models) != 2 || obj(models[1])["tier"] != ai.TierDeep {
+	if len(models) != 3 || obj(models[1])["tier"] != ai.TierDeep || obj(models[2])["tools"] != false {
 		t.Fatalf("modelli del finto: %v", models)
 	}
 
