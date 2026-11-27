@@ -107,8 +107,8 @@ func scanReport(row pgx.Row) (*Report, error) {
 	return r, nil
 }
 
-// request: la richiesta letta dall'attore. Gli status report sono interni: servono i
-// permessi di lettura del tenant (il richiedente del portale non li vede).
+// request: la richiesta (o il progetto, passo 5 dei progetti) letta dall'attore. Gli status report
+// sono interni: servono i permessi di lettura del tenant (il richiedente del portale non li vede).
 func (s *Service) request(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) (*engine.Element, error) {
 	if !actor.Has(rbac.ElementRead) {
 		return nil, engine.ErrNotFound
@@ -117,7 +117,7 @@ func (s *Service) request(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 	if err != nil {
 		return nil, err
 	}
-	if el.TypeKey != requestType {
+	if el.TypeKey != requestType && (el.TypeKey != projectType || s.ProjectSnapshot == nil) {
 		return nil, engine.ErrNotFound
 	}
 	return el, nil
@@ -172,6 +172,10 @@ func (s *Service) schedule(ctx context.Context, tx pgx.Tx, el *engine.Element, s
 			sc.Expected = el.ResolvedAt == nil
 		}
 	}
+	// Il progetto: il report è atteso mentre è in corso.
+	if el.TypeKey == projectType {
+		sc.Expected = el.ResolvedAt == nil && el.StateCategory == "in_progress"
+	}
 	sc.Overdue = sc.Expected && next != nil && next.Before(today)
 	return sc, nil
 }
@@ -216,6 +220,9 @@ func (s *Service) List(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref s
 	for _, r := range out.Items {
 		r.CanEdit = out.CanEdit && r.Status == "draft"
 		r.CanAcknowledge = ack && r.Status == "submitted" && r.AcknowledgedAt == nil && (r.AuthorID == nil || *r.AuthorID != actor.MemberID)
+		if err := s.redactProject(ctx, tx, actor, r); err != nil {
+			return nil, err
+		}
 	}
 	st, err := GetSettings(ctx, tx)
 	if err != nil {
@@ -257,7 +264,7 @@ func (s *Service) Get(ctx context.Context, tx pgx.Tx, actor engine.Actor, id str
 		return nil, err
 	}
 	r.CanAcknowledge = ack && r.Status == "submitted" && r.AcknowledgedAt == nil && (r.AuthorID == nil || *r.AuthorID != actor.MemberID)
-	return r, nil
+	return r, s.redactProject(ctx, tx, actor, r)
 }
 
 func uuidOK(s string) bool {
@@ -359,6 +366,11 @@ func (s *Service) Preview(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 	el, err := s.request(ctx, tx, actor, ref)
 	if err != nil {
 		return nil, err
+	}
+	if ok, err := s.canEdit(ctx, tx, actor, el.ID); err != nil {
+		return nil, err
+	} else if !ok && el.TypeKey == projectType {
+		return nil, engine.ErrForbidden // la precompilazione porta i numeri dell'autore
 	}
 	return s.prefill(ctx, tx, actor, el, end)
 }
@@ -678,7 +690,7 @@ func (s *Service) SetSchedule(ctx context.Context, tx pgx.Tx, actor engine.Actor
 		el.ID, freq, next, nullable(actor.MemberID), in.NextDue != nil || freq == "off"); err != nil {
 		return nil, err
 	}
-	if err := audit.Append(ctx, tx, audit.Event{Action: "status_report.schedule", EntityType: requestType, EntityID: el.ID,
+	if err := audit.Append(ctx, tx, audit.Event{Action: "status_report.schedule", EntityType: el.TypeKey, EntityID: el.ID,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP, Payload: map[string]any{"frequency": freq, "next_due": next}}); err != nil {
 		return nil, err
 	}
@@ -779,14 +791,33 @@ func changes(a, b *Report) []Change {
 		x := float64(*v)
 		return &x
 	}
+	project := a.Data.Project != nil && b.Data.Project != nil
 	num("actual_pct", "Lavoro completato (%)", a.Data.Schedule.ActualPct, b.Data.Schedule.ActualPct, true)
 	num("planned_pct", "Avanzamento atteso (%)", a.Data.Schedule.PlannedPct, b.Data.Schedule.PlannedPct, true)
-	num("tasks_late", "Impatti in ritardo", f(a.Data.Schedule.TasksLate), f(b.Data.Schedule.TasksLate), false)
+	if project {
+		num("tasks_late", "Work package in ritardo", f(a.Data.Schedule.TasksLate), f(b.Data.Schedule.TasksLate), false)
+	} else {
+		num("tasks_late", "Impatti in ritardo", f(a.Data.Schedule.TasksLate), f(b.Data.Schedule.TasksLate), false)
+	}
 	num("consumption_pct", "Consumo del budget (%)", a.Data.Cost.ConsumptionPct, b.Data.Cost.ConsumptionPct, false)
 	num("actual_cents", "Consuntivo", fc(&a.Data.Cost.ActualCents), fc(&b.Data.Cost.ActualCents), false)
 	num("approved_cents", "Budget approvato", fc(a.Data.Cost.ApprovedCents), fc(b.Data.Cost.ApprovedCents), true)
 	num("cpi", "CPI", a.Data.Cost.CPI, b.Data.Cost.CPI, true)
 	num("spi", "SPI", a.Data.Cost.SPI, b.Data.Cost.SPI, true)
+	if project {
+		pa, pb := a.Data.Project, b.Data.Project
+		var va, vb *float64
+		if pa.VarianceDays != nil {
+			va = f(*pa.VarianceDays)
+		}
+		if pb.VarianceDays != nil {
+			vb = f(*pb.VarianceDays)
+		}
+		num("variance_days", "Scostamento dalla baseline (giorni)", va, vb, false)
+		num("scope_changes", "Voci fuori dalla baseline", f(len(pa.ScopeAdded)+len(pa.ScopeRemoved)), f(len(pb.ScopeAdded)+len(pb.ScopeRemoved)), false)
+		num("risks", "Rischi aperti", f(len(pa.Risks)), f(len(pb.Risks)), false)
+		return out
+	}
 	num("reviews_late", "Valutazioni in ritardo", f(len(a.Data.ReviewsLate)), f(len(b.Data.ReviewsLate)), false)
 	num("impacts_blocked", "Impatti bloccati", f(len(a.Data.ImpactsBlocked)), f(len(b.Data.ImpactsBlocked)), false)
 	return out
@@ -866,7 +897,18 @@ func Markdown(r *Report) string {
 	if d.Schedule.ActualPct != nil {
 		fmt.Fprintf(&b, "- Lavoro completato: %.0f%% (atteso %.0f%%)\n", *d.Schedule.ActualPct, *d.Schedule.PlannedPct)
 	}
-	fmt.Fprintf(&b, "- Impatti: %d, rilasciati %d, in ritardo %d\n", d.Schedule.Tasks, d.Schedule.TasksDone, d.Schedule.TasksLate)
+	if pd := d.Project; pd != nil {
+		fmt.Fprintf(&b, "- Work package: %d, chiusi %d, in ritardo %d\n", d.Schedule.Tasks, d.Schedule.TasksDone, d.Schedule.TasksLate)
+		fmt.Fprintf(&b, "- Milestone: %d, raggiunte %d\n", pd.Milestones, pd.MilestonesDone)
+		if pd.Baseline != nil && pd.VarianceDays != nil {
+			fmt.Fprintf(&b, "- Baseline %d: fine prevista %+d giorni lavorativi\n", *pd.Baseline, *pd.VarianceDays)
+		}
+		if n := len(pd.ScopeAdded) + len(pd.ScopeRemoved); n > 0 {
+			fmt.Fprintf(&b, "- Perimetro: %d voci aggiunte, %d tolte rispetto alla baseline\n", len(pd.ScopeAdded), len(pd.ScopeRemoved))
+		}
+	} else {
+		fmt.Fprintf(&b, "- Impatti: %d, rilasciati %d, in ritardo %d\n", d.Schedule.Tasks, d.Schedule.TasksDone, d.Schedule.TasksLate)
+	}
 	if d.Schedule.End != nil {
 		fmt.Fprintf(&b, "- Fine pianificata: %s\n", *d.Schedule.End)
 	}
@@ -876,7 +918,9 @@ func Markdown(r *Report) string {
 	if d.Cost.ApprovedCents != nil {
 		fmt.Fprintf(&b, "- Budget approvato: %s\n", euros(*d.Cost.ApprovedCents, d.Cost.Currency))
 	}
-	fmt.Fprintf(&b, "- Consuntivo: %s; impegnato: %s\n", euros(d.Cost.ActualCents, d.Cost.Currency), euros(d.Cost.CommittedCents, d.Cost.Currency))
+	if !d.Cost.Hidden {
+		fmt.Fprintf(&b, "- Consuntivo: %s; impegnato: %s\n", euros(d.Cost.ActualCents, d.Cost.Currency), euros(d.Cost.CommittedCents, d.Cost.Currency))
+	}
 	if d.Cost.ConsumptionPct != nil {
 		fmt.Fprintf(&b, "- Consumo del budget: %.0f%%\n", *d.Cost.ConsumptionPct)
 	}
@@ -889,7 +933,9 @@ func Markdown(r *Report) string {
 		}
 		fmt.Fprintf(&b, "- Earned value: CPI %s, SPI %s\n", f(d.Cost.CPI), f(d.Cost.SPI))
 	}
-	fmt.Fprintf(&b, "- Valutazioni in ritardo: %d; impatti bloccati: %d\n", len(d.ReviewsLate), len(d.ImpactsBlocked))
+	if d.Project == nil {
+		fmt.Fprintf(&b, "- Valutazioni in ritardo: %d; impatti bloccati: %d\n", len(d.ReviewsLate), len(d.ImpactsBlocked))
+	}
 	if r.AcknowledgedAt != nil && r.Acknowledger != nil {
 		fmt.Fprintf(&b, "\nPresa visione: %s, %s\n", *r.Acknowledger, r.AcknowledgedAt.Format("02/01/2006"))
 	}

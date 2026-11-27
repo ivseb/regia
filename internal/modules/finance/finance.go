@@ -36,6 +36,18 @@ const (
 type Service struct {
 	eng *engine.Service
 	ap  *approval.Service
+	// Changed, se impostata, riceve l'elemento il cui budget in vigore è cambiato (versione
+	// approvata, previsione pubblicata, trasferimento approvato): il modulo dei progetti la usa per
+	// confrontare il budget con la baseline e aprire la change request oltre la tolleranza.
+	Changed func(ctx context.Context, tx pgx.Tx, actor engine.Actor, elementID string) error
+}
+
+// changed avvisa chi segue i budget (se c'è qualcuno).
+func (s *Service) changed(ctx context.Context, tx pgx.Tx, actor engine.Actor, elementID string) error {
+	if s.Changed == nil {
+		return nil
+	}
+	return s.Changed(ctx, tx, actor, elementID)
 }
 
 // New crea il servizio senza registrare reazioni (per il job giornaliero).

@@ -3,7 +3,7 @@
 // impatti) e corretti dal PM; storico, confronto con il precedente, presa visione dello
 // sponsor, export in PDF (stampa del browser) e Markdown.
 import { Select } from "../select";
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,11 @@ import {
   FREQUENCIES,
   RAG_LABEL,
   reportApi,
+  reportsOf,
   type Comparison,
+  type ProjRef,
+  type ReportCalls,
+  type ReportKind,
   type Frequency,
   type RAG,
   type ReportList,
@@ -66,9 +70,26 @@ function period(r: { period_start: string | null; period_end: string }) {
 
 // ---------------------------------------------------------------------
 
-export function StatusReportsTab({ refKey }: { refKey: string }) {
+// Le chiamate dipendono da cosa porta i report: la richiesta (predefinita) o il progetto (passo 5).
+const ApiCtx = createContext<ReportCalls>(reportApi);
+const useReports = () => useContext(ApiCtx);
+const KindCtx = createContext<ReportKind>("request");
+
+export function StatusReportsTab({ refKey, kind = "request" }: { refKey: string; kind?: ReportKind }) {
+  const api = useMemo(() => reportsOf(kind), [kind]);
+  return (
+    <ApiCtx.Provider value={api}>
+      <KindCtx.Provider value={kind}>
+        <ReportsBody refKey={refKey} />
+      </KindCtx.Provider>
+    </ApiCtx.Provider>
+  );
+}
+
+function ReportsBody({ refKey }: { refKey: string }) {
   const t = useT();
   const qc = useQueryClient();
+  const reportApi = useReports();
   const list = useQuery({ queryKey: ["status-reports", refKey], queryFn: () => reportApi.list(refKey) });
   const [open, setOpen] = useState<string | null>(null);
   const [compare, setCompare] = useState<string | null>(null);
@@ -105,6 +126,8 @@ export function StatusReportsTab({ refKey }: { refKey: string }) {
 
 function ScheduleBar({ refKey, data }: { refKey: string; data: ReportList }) {
   const t = useT();
+  const kind = useContext(KindCtx);
+  const reportApi = useReports();
   const qc = useQueryClient();
   const s = data.schedule;
   const save = useMutation({
@@ -148,7 +171,8 @@ function ScheduleBar({ refKey, data }: { refKey: string; data: ReportList }) {
           )}
         </div>
         {s.overdue && <span className="font-semibold text-danger">{t("lavoro.statusreports.reportLate")}</span>}
-        {!s.expected && (
+        {!s.expected && kind === "project" && <span className="text-[12px] text-muted">{t("progetti.passo5.report.reminder", { days: s.reminder_days })}</span>}
+        {!s.expected && kind !== "project" && (
           <span className="text-[12px] text-muted">
             {t("lavoro.statusreports.reminder", {
               phases: s.expected_in_phases.map((p) => t("lavoro.statusreports.quoted", { text: p })).join(", ") || t("lavoro.statusreports.configured"),
@@ -167,6 +191,7 @@ function ScheduleBar({ refKey, data }: { refKey: string; data: ReportList }) {
 
 function DraftEditor({ report, refKey }: { report: StatusReport; refKey: string }) {
   const t = useT();
+  const reportApi = useReports();
   const qc = useQueryClient();
   const [r, setR] = useState(report);
   const [dirty, setDirty] = useState(false);
@@ -347,6 +372,97 @@ function Progress({ actual, planned }: { actual: number | null; planned: number 
 }
 
 function DataPanel({ report }: { report: StatusReport }) {
+  const d = report.data;
+  if (d.project) return <ProjectDataPanel report={report} />;
+  return <RequestDataPanel report={report} />;
+}
+
+/** I numeri del progetto fotografati nel report (passo 5): gli stessi della Panoramica. */
+function ProjectDataPanel({ report }: { report: StatusReport }) {
+  const t = useT();
+  const d = report.data;
+  const pd = d.project!;
+  const c = d.cost;
+  const sc = d.schedule;
+  const ref = (r: ProjRef) => (
+    <>
+      <Link to="/e/$key" params={{ key: r.key }} className="font-mono text-accent no-underline hover:underline">{r.key}</Link>{" "}
+      {r.restricted ? <span className="text-muted">{t("progetti.restricted")}</span> : r.title}
+    </>
+  );
+  const rows: { key: string; body: ReactNode }[] = [
+    ...pd.late.map((r) => ({ key: "l" + r.id, body: <>{ref(r)} — <span className="text-danger">{t("progetti.passo5.report.late", { count: r.days_late })}</span></> })),
+    ...pd.over_tolerance.map((r) => ({ key: "o" + r.id, body: <>{ref(r)} — <span className="text-danger">{t("progetti.passo5.report.overTolerance", { count: r.days_late })}</span></> })),
+    ...pd.scope_added.map((r) => ({ key: "a" + r.id, body: <>{ref(r)} — <span className="font-semibold">{t("progetti.passo5.scope.added")}</span></> })),
+    ...pd.scope_removed.map((r) => ({ key: "r" + r.id, body: <>{ref(r)} — <span className="font-semibold">{t("progetti.passo5.scope.removed")}</span></> })),
+    ...pd.risks.map((r) => ({ key: "k" + r.id, body: <>{t("progetti.passo5.report.risk")} {ref(r)}</> })),
+  ];
+  const counters = [
+    pd.blocked > 0 && t("progetti.passo5.report.blocked", { count: pd.blocked }),
+    pd.claims_pending > 0 && t("progetti.passo5.report.claims", { count: pd.claims_pending }),
+    pd.conflicts > 0 && t("progetti.passo5.report.conflicts", { count: pd.conflicts }),
+    pd.open_change_requests > 0 && t("progetti.passo5.report.changes", { count: pd.open_change_requests }),
+    pd.missing_roles.length > 0 && t("progetti.passo5.report.roles", { roles: pd.missing_roles.join(", ") }),
+  ].filter(Boolean) as string[];
+  return (
+    <section className="flex flex-col gap-4" aria-label={t("lavoro.statusreports.periodData")} data-testid="report-dati-progetto">
+      <SectionTitle aside={<span className="font-mono text-[11.5px] text-muted">{t("lavoro.statusreports.asOfPhase", { date: date(d.as_of), phase: d.phase })}</span>}>{t("lavoro.statusreports.data")}</SectionTitle>
+      <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-3 2xl:grid-cols-4">
+        <Fact
+          label={t("progetti.passo5.report.workPackages")}
+          value={`${pd.work_packages_done}/${pd.work_packages}`}
+          note={t("progetti.passo5.report.milestones", { done: pd.milestones_done, total: pd.milestones })}
+          tone={sc.tasks_late ? "danger" : undefined}
+        />
+        <Fact
+          label={t("lavoro.statusreports.plannedEnd")}
+          value={sc.end ? date(sc.end) : "—"}
+          note={
+            pd.baseline != null && pd.variance_days != null
+              ? t("progetti.passo5.report.variance", { number: pd.baseline, sign: pd.variance_days > 0 ? "+" : pd.variance_days < 0 ? "−" : "", count: Math.abs(pd.variance_days) })
+              : t("progetti.passo5.report.noBaseline")
+          }
+          tone={pd.variance_days != null && pd.variance_days > pd.tolerance_days ? "danger" : undefined}
+        />
+        {c.hidden ? (
+          <Fact label={t("progetti.overview.budget")} value="—" note={t("progetti.passo5.report.budgetHidden")} />
+        ) : (
+          <>
+            <Fact
+              label={t("lavoro.statusreports.approvedBudget")}
+              value={money(c.approved_cents, c.currency)}
+              note={
+                pd.budget_variance_pct != null
+                  ? t("progetti.baseline.budgetVariance", { pct: pd.budget_variance_pct > 0 ? `+${pd.budget_variance_pct}` : `${pd.budget_variance_pct}` })
+                  : c.forecast_cents != null
+                    ? t("lavoro.statusreports.forecast", { value: money(c.forecast_cents, c.currency) })
+                    : undefined
+              }
+              tone={pd.budget_variance_pct != null && pd.budget_variance_pct > pd.tolerance_budget_pct ? "danger" : undefined}
+            />
+            <Fact
+              label={t("lavoro.statusreports.actual")}
+              value={money(c.actual_cents, c.currency)}
+              note={t("lavoro.statusreports.committed", { value: money(c.committed_cents, c.currency) })}
+              tone={c.consumption_pct != null && c.consumption_pct > 100 ? "danger" : undefined}
+            />
+          </>
+        )}
+      </dl>
+      <Progress actual={sc.actual_pct} planned={sc.planned_pct} />
+      {counters.length > 0 && <p className="m-0 text-[12.5px]">{counters.join(" · ")}</p>}
+      {rows.length > 0 && (
+        <ul className="m-0 flex list-none flex-col p-0 text-[12.5px]">
+          {rows.map((r) => (
+            <li key={r.key} className="border-b border-hair py-1.5">{r.body}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function RequestDataPanel({ report }: { report: StatusReport }) {
   const t = useT();
   const d = report.data;
   const sc = d.schedule;
@@ -456,6 +572,7 @@ function ReportBody({ report }: { report: StatusReport }) {
 
 function ReportView({ report, refKey, onCompare }: { report: StatusReport; refKey: string; onCompare: () => void }) {
   const t = useT();
+  const reportApi = useReports();
   const qc = useQueryClient();
   const [printing, setPrinting] = useState(false);
   const ack = useMutation({
@@ -599,6 +716,7 @@ function fmtChange(field: string, v: unknown, currency: string): ReactNode {
 
 function CompareView({ id, onClose }: { id: string; onClose: () => void }) {
   const t = useT();
+  const reportApi = useReports();
   const cmp = useQuery({ queryKey: ["status-report-compare", id], queryFn: () => reportApi.compare(id) });
   if (cmp.error) return <ErrorNote error={cmp.error} />;
   if (!cmp.data) return <Loading className="m-0 text-muted" />;

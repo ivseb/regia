@@ -26,6 +26,7 @@ import (
 )
 
 const (
+	projectType = "project"
 	requestType = "business_request"
 	impactType  = "impact"
 	reviewType  = "review"
@@ -37,6 +38,11 @@ type Service struct {
 	fin  *finance.Service
 	// Now è l'orologio (sostituibile nei test).
 	Now func() time.Time
+	// Status report del progetto (progetti.md, passo 5): la fotografia viene dai numeri del
+	// progetto (modulo projects), che il server collega qui; senza, il report resta della sola
+	// richiesta. BudgetVisible dice se chi legge vede il budget del progetto.
+	ProjectSnapshot      func(ctx context.Context, tx pgx.Tx, actor engine.Actor, el *engine.Element, asOf time.Time) (*Snapshot, error)
+	ProjectBudgetVisible func(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID string) (bool, error)
 }
 
 // Register crea il servizio e registra i campi di query del cruscotto sul motore.

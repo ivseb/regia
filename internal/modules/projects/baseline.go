@@ -86,14 +86,18 @@ func snapshotOf(p *Plan) snapshot {
 // budgetSnapshot legge il budget aggregato delle richieste del progetto, senza i limiti
 // dell'attore: entra nella baseline così com'è.
 func (s *Service) budgetSnapshot(ctx context.Context, tx pgx.Tx, p *Plan) (*Budget, error) {
-	if s.Budget == nil || len(p.Project.Requests) == 0 {
+	if s.Budget == nil {
 		return nil, nil
 	}
 	ids := make([]string, len(p.Project.Requests))
 	for i, r := range p.Project.Requests {
 		ids[i] = r.ID
 	}
-	return s.Budget(ctx, tx, engine.Actor{Permissions: []string{"*"}}, ids)
+	b, err := s.Budget(ctx, tx, engine.Actor{Permissions: []string{"*"}}, p.Project.ID, ids)
+	if b != nil {
+		b.Budgets = nil // la baseline tiene solo gli importi
+	}
+	return b, err
 }
 
 // writeBaseline scrive la nuova baseline (numero successivo) e aggiorna la data di baseline
@@ -158,20 +162,24 @@ func loadBaseline(ctx context.Context, tx pgx.Tx, p *Plan) error {
 		b.budget = &Budget{Currency: *cur, ApprovedCents: approved, ForecastCents: forecast}
 	}
 	p.Baseline = b
-	rows, err := tx.Query(ctx, `select item_id::text, start_date::timestamptz, end_date::timestamptz from plan_baseline_items where baseline_id = $1`, b.ID)
+	rows, err := tx.Query(ctx, `select item_id::text, start_date::timestamptz, end_date::timestamptz, kind, key, title
+		from plan_baseline_items where baseline_id = $1 order by end_date nulls last, key`, b.ID)
 	if err != nil {
 		return err
 	}
 	type bd struct{ s, e *string }
 	dates := map[string]bd{}
 	for rows.Next() {
-		var id string
+		var id, kind, key, title string
 		var s, e *time.Time
-		if err := rows.Scan(&id, &s, &e); err != nil {
+		if err := rows.Scan(&id, &s, &e, &kind, &key, &title); err != nil {
 			rows.Close()
 			return err
 		}
 		dates[id] = bd{dateStr(s), dateStr(e)}
+		if kind == TypeWorkPackage || kind == TypeMilestone {
+			b.scope = append(b.scope, BaselineItem{ID: id, Kind: kind, Key: key, Title: title, End: dateStr(e)})
+		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -373,20 +381,53 @@ func (s *Service) readBaseline(ctx context.Context, tx pgx.Tx, actor engine.Acto
 	return b, nil
 }
 
-// budgetVisible: l'attore vede il budget del progetto se ne vede almeno una richiesta (lo
-// stesso criterio dei numeri del progetto).
+// BudgetVisibleTo dice se l'attore vede il budget del progetto (lo usa lo status report).
+func (s *Service) BudgetVisibleTo(ctx context.Context, tx pgx.Tx, actor engine.Actor, projectID string) (bool, error) {
+	return s.budgetVisible(ctx, tx, actor, &engine.Element{ID: projectID})
+}
+
+// budgetRoles vedono il budget del progetto oltre a chi lo pianifica (progetti.md §5): sponsor,
+// business owner, PMO, program manager e responsabile operations. Il team e il contatto del
+// fornitore no.
+var budgetRoles = []string{"sponsor", "business_owner", "pmo", "program_manager", "operations_manager"}
+
+// budgetVisible: l'attore vede il budget del progetto se ha finance.read, se pianifica il progetto,
+// se ha sul progetto (o sul suo programma) uno dei ruoli che lo vedono, oppure se legge una delle
+// richieste confluite (lo stesso criterio dei totali della richiesta, che sono aggregati).
 func (s *Service) budgetVisible(ctx context.Context, tx pgx.Tx, actor engine.Actor, proj *engine.Element) (bool, error) {
 	if s.Budget == nil {
 		return false, nil
+	}
+	if actor.Has("finance.read") {
+		return true, nil
+	}
+	if ok, err := canPlan(ctx, tx, actor, proj.ID); err != nil || ok {
+		return ok, err
+	}
+	if ok, err := engine.HasRole(ctx, tx, proj.ID, actor.MemberID, budgetRoles); err != nil || ok {
+		return ok, err
+	}
+	var programID *string
+	if err := tx.QueryRow(ctx, "select program_id::text from ext_project where element_id = $1", proj.ID).Scan(&programID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+	if programID != nil {
+		if ok, err := engine.HasRole(ctx, tx, *programID, actor.MemberID, []string{"program_manager", "sponsor"}); err != nil || ok {
+			return ok, err
+		}
 	}
 	rows, err := tx.Query(ctx, "select request_id::text from project_requests where project_id = $1", proj.ID)
 	if err != nil {
 		return false, err
 	}
 	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil || len(ids) == 0 {
+	if err != nil {
 		return false, err
 	}
-	b, err := s.Budget(ctx, tx, actor, ids)
-	return b != nil, err
+	for _, id := range ids {
+		if ok, err := s.eng.CanRead(ctx, tx, actor, id); err != nil || ok {
+			return ok, err
+		}
+	}
+	return false, nil
 }

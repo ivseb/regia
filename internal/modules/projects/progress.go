@@ -231,7 +231,14 @@ type Numbers struct {
 	OpenChangeRequests int       `json:"open_change_requests"`
 	Risks              []ItemRef `json:"risks"`
 	MissingRoles       []RoleRef `json:"missing_roles"`
-	Budget             *Budget   `json:"budget"`
+	// Perimetro (passo 5): work package e milestone nati dopo la baseline in vigore (ScopeAdded) e
+	// quelli della baseline poi annullati o tolti dal piano (ScopeRemoved). Contano come scostamento.
+	ScopeAdded   []ItemRef `json:"scope_added"`
+	ScopeRemoved []ItemRef `json:"scope_removed"`
+	// Budget del progetto (passo 5): i budget del progetto e delle sue richieste, con consuntivo e
+	// impegnato; nil per chi non lo vede. BudgetVisible dice se l'attore vede il budget, anche vuoto.
+	Budget        *Budget `json:"budget"`
+	BudgetVisible bool    `json:"budget_visible"`
 	// Signal: green | amber | red | none (piano vuoto); Reasons sono i codici del perché.
 	Signal  string   `json:"signal"`
 	Reasons []string `json:"reasons"`
@@ -268,13 +275,30 @@ type Blocked struct {
 	Kind    string  `json:"dep_kind"`
 }
 
-// Budget sono gli importi delle richieste confluite (aggregati, senza voci né tariffe).
+// Budget è il budget del progetto (passo 5): previsto (approvato), in lavorazione, impegnato,
+// speso e previsione a finire, dai budget del progetto e delle richieste confluite. Solo aggregati,
+// senza voci né tariffe.
 type Budget struct {
-	Currency       string `json:"currency"`
-	ApprovedCents  *int64 `json:"approved_cents"`
-	SpentCents     int64  `json:"spent_cents"`
-	CommittedCents int64  `json:"committed_cents"`
-	ForecastCents  *int64 `json:"forecast_cents"`
+	Currency       string   `json:"currency"`
+	ApprovedCents  *int64   `json:"approved_cents"`
+	PendingCents   *int64   `json:"pending_cents,omitempty"`
+	SpentCents     int64    `json:"spent_cents"`
+	CommittedCents int64    `json:"committed_cents"`
+	ForecastCents  *int64   `json:"forecast_cents"`
+	ConsumptionPct *float64 `json:"consumption_pct,omitempty"`
+	// Budgets: le versioni in vigore (non sostituite), del progetto e delle richieste.
+	Budgets []BudgetRef `json:"budgets,omitempty"`
+}
+
+// BudgetRef è una versione di budget che concorre a quello del progetto.
+type BudgetRef struct {
+	ID         string `json:"id"`
+	ElementKey string `json:"element_key"`
+	FiscalYear string `json:"fiscal_year"`
+	Kind       string `json:"kind"`
+	Version    int    `json:"version"`
+	Status     string `json:"status"`
+	TotalCents int64  `json:"total_cents"`
 }
 
 func ref(it *Item) ItemRef {
@@ -295,7 +319,7 @@ func parse(s *string) *time.Time {
 // computeNumbers calcola i numeri del piano già caricato: è l'unica funzione che li calcola.
 func computeNumbers(p *Plan, now time.Time) Numbers {
 	n := Numbers{Late: []ItemRef{}, Blocked: []Blocked{}, Risks: []ItemRef{}, MissingRoles: []RoleRef{}, ByMode: []ModeStat{}, Reasons: []string{},
-		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance, Conflicts: []Conflict{}}
+		OverTolerance: []ItemRef{}, Tolerance: p.Tolerance, Conflicts: []Conflict{}, ScopeAdded: []ItemRef{}, ScopeRemoved: []ItemRef{}}
 	wps, ws := wpWeights(p)
 	vs := make([]float64, len(wps))
 	byMode := map[string]*struct {
@@ -450,6 +474,7 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 			}
 		}
 		sort.SliceStable(n.OverTolerance, func(i, j int) bool { return n.OverTolerance[i].DaysLate > n.OverTolerance[j].DaysLate })
+		n.ScopeAdded, n.ScopeRemoved = scopeChanges(p)
 	}
 	// Semaforo.
 	switch {
@@ -484,6 +509,9 @@ func computeNumbers(p *Plan, now time.Time) Numbers {
 		}
 		if len(n.Conflicts) > 0 {
 			amber = append(amber, "conflicts")
+		}
+		if len(n.ScopeAdded)+len(n.ScopeRemoved) > 0 {
+			amber = append(amber, "scope_changed")
 		}
 		if n.Signal == "green" && len(amber) > 0 {
 			n.Signal = "amber"
@@ -566,9 +594,15 @@ func (s *Service) numbersOf(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 	if n.Risks, err = limitRefs(ctx, tx, s.reader(actor), n.Risks); err != nil {
 		return nil, err
 	}
-	if withBudget && s.Budget != nil && len(reqIDs) > 0 {
-		if n.Budget, err = s.Budget(ctx, tx, actor, reqIDs); err != nil {
+	if withBudget && s.Budget != nil {
+		proj := &engine.Element{ID: p.Project.ID}
+		if n.BudgetVisible, err = s.budgetVisible(ctx, tx, actor, proj); err != nil {
 			return nil, err
+		}
+		if n.BudgetVisible {
+			if n.Budget, err = s.Budget(ctx, tx, actor, p.Project.ID, reqIDs); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if p.Baseline != nil && n.Budget != nil {
@@ -604,4 +638,73 @@ func budgetVariance(base, cur *Budget) *float64 {
 	}
 	pct := round1(float64(*c-*b) * 100 / float64(*b))
 	return &pct
+}
+
+// scopeChanges confronta il perimetro del piano con quello della baseline in vigore: work package
+// e milestone nati dopo la baseline, e quelli della baseline annullati o tolti dal piano. Le
+// attività restano fuori: sono il dettaglio di un work package a cascata, che il PM raffina.
+func scopeChanges(p *Plan) (added, removed []ItemRef) {
+	added, removed = []ItemRef{}, []ItemRef{}
+	if p.Baseline == nil {
+		return
+	}
+	byID := map[string]*Item{}
+	for i := range p.Items {
+		it := &p.Items[i]
+		byID[it.ID] = it
+		if (it.Kind == TypeWorkPackage || it.Kind == TypeMilestone) && !it.InBaseline && it.StateCategory != "cancelled" {
+			added = append(added, ref(it))
+		}
+	}
+	for _, bi := range p.Baseline.scope {
+		if bi.Kind != TypeWorkPackage && bi.Kind != TypeMilestone {
+			continue
+		}
+		it, ok := byID[bi.ID]
+		switch {
+		case ok && it.StateCategory != "cancelled":
+			continue
+		case ok:
+			r := ref(it)
+			r.Date = bi.End
+			removed = append(removed, r)
+		default:
+			removed = append(removed, ItemRef{ID: bi.ID, Key: bi.Key, Title: bi.Title, Kind: bi.Kind, Date: bi.End, State: "removed", Restricted: bi.Restricted})
+		}
+	}
+	return
+}
+
+// PlannedPct è l'avanzamento atteso alla data: per ogni work package con date, la parte di finestra
+// già trascorsa (in giorni lavorativi), pesata come l'avanzamento del progetto. Serve al confronto
+// «fatto contro atteso» dello status report; nil senza work package datati.
+func PlannedPct(p *Plan, asOf time.Time) *float64 {
+	wps, ws := wpWeights(p)
+	var num, den float64
+	for i, it := range wps {
+		st, en := parse(it.Start), parse(it.End)
+		if st == nil || en == nil {
+			continue
+		}
+		den += ws[i]
+		switch {
+		case asOf.After(*en):
+			num += ws[i]
+		case !asOf.Before(*st):
+			all := float64(calendar.Workdays(*st, *en))
+			if all < 1 {
+				all = 1
+			}
+			f := float64(calendar.Workdays(*st, asOf)) / all
+			if f > 1 {
+				f = 1
+			}
+			num += ws[i] * f
+		}
+	}
+	if den == 0 {
+		return nil
+	}
+	v := round1(num * 100 / den)
+	return &v
 }

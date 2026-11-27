@@ -23,7 +23,8 @@ Disegno: `replica/budget.md` §2 («Collegamento con i budget di progetto»). AP
 - Go: `go test ./internal/itest -run 'TestBudgetOpzioniCollegamento|TestBudgetImpegno'` (opzioni, percorso per profilo, area estranea, esercizio estraneo, budget collegato e approvato, scollegamento).
 - e2e: `web/e2e/lacune-budget.spec.ts` (scelta e scollegamento dalla scheda della richiesta, creazione con nodo, residuo e avviso, scollegamento con conferma e annullamento, ricollegamento, scheda del nodo, invio rifiutato oltre il nodo, 375 px).
 
+- **Nella Panoramica del progetto** (passo 5 dei progetti, `docs/sviluppo/progetti.md`): lo stesso `RequestBudgetSource` sull'elemento del progetto, per chi ha `finance.read`.
+
 ## Non fatto
 
-- «Attinge da» nella pagina di un progetto (fuori da Finanza e dalla scheda della richiesta).
 - Spostare un budget approvato da un nodo a un altro con un solo passaggio (si scollega e si ricollega; il servizio ricontrolla lo stanziamento).

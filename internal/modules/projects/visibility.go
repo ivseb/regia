@@ -93,6 +93,18 @@ func (s *Service) limitPlan(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 			rq.Restricted, rq.Title, rq.State = true, "", ""
 		}
 	}
+	// Perimetro della baseline: le voci tolte che l'attore non legge restano senza titolo.
+	if b := p.Baseline; b != nil {
+		for i := range b.scope {
+			ok, err := r.can(ctx, tx, b.scope[i].ID)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				b.scope[i].Restricted, b.scope[i].Title = true, ""
+			}
+		}
+	}
 	if pg := p.Project.Program; pg != nil {
 		ok, err := r.can(ctx, tx, pg.ID)
 		if err != nil {

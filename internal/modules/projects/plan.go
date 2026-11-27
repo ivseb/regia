@@ -123,6 +123,16 @@ type Plan struct {
 	// Baseline in vigore (nil se il piano non ne ha) e tolleranze del progetto.
 	Baseline  *BaselineHead `json:"baseline"`
 	Tolerance Tolerance     `json:"tolerance"`
+	// ProjectTolerance: le tolleranze proprie del progetto (nil = quelle del tenant), e se l'attore
+	// può cambiarle (passo 5).
+	ProjectTolerance ProjectTolerance `json:"project_tolerance"`
+	CanEditTolerance bool             `json:"can_edit_tolerance"`
+}
+
+// ProjectTolerance sono le tolleranze del singolo progetto: nil vuol dire quella del tenant.
+type ProjectTolerance struct {
+	Days      *int     `json:"days"`
+	BudgetPct *float64 `json:"budget_pct"`
 }
 
 // BaselineHead è la baseline in vigore, senza le voci.
@@ -135,6 +145,8 @@ type BaselineHead struct {
 	CreatedBy *string `json:"created_by"`
 	// Budget della baseline: lo vede solo chi vede il budget del progetto (numbersOf).
 	budget *Budget
+	// scope: work package e milestone della baseline (passo 5, scostamento di perimetro).
+	scope []BaselineItem
 }
 
 // Tolerance sono le tolleranze del progetto: quelle del tenant, se il progetto non ne ha di sue.
@@ -167,6 +179,9 @@ func (s *Service) GetPlan(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 		return nil, err
 	}
 	if p.CanEdit, err = canPlan(ctx, tx, actor, el.ID); err != nil {
+		return nil, err
+	}
+	if p.CanEditTolerance, err = canEditTolerance(ctx, tx, actor, el.ID); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -267,6 +282,7 @@ func (s *Service) loadPlan(ctx context.Context, tx pgx.Tx, el *engine.Element) (
 	if tolBudget != nil {
 		p.Tolerance.BudgetPct = *tolBudget
 	}
+	p.ProjectTolerance = ProjectTolerance{Days: tolDays, BudgetPct: tolBudget}
 	if errors.Is(err, pgx.ErrNoRows) {
 		h.Template = "mixed"
 	} else if err != nil {

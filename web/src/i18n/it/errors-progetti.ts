@@ -33,6 +33,7 @@ export default {
   "errors.validation.projects.not_work_package": "SAL e deliverable stanno su un work package.",
   "errors.validation.projects.reason_required": "Scrivi il motivo: il fornitore lo legge.",
   "errors.validation.projects.cr_status": "La change request non è più da inviare.",
+  "errors.validation.projects.cr_withdraw": "Si ritira solo una change request da inviare o in approvazione.",
   "errors.validation.work.epic_agile_only": "L'epic serve solo ai work package agili.",
   "errors.validation.work.wp_no_team": "Il work package non ha un team responsabile.",
 } satisfies Source;

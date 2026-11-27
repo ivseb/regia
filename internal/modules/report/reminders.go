@@ -13,7 +13,8 @@ import (
 )
 
 // Promemoria degli status report. Per ogni richiesta aperta in una delle fasi in cui il
-// report è atteso (impostazioni del tenant):
+// report è atteso (impostazioni del tenant), e che non è confluita in un progetto, e per ogni
+// progetto in corso (passo 5 dei progetti: il report passa sul progetto):
 //   - alla prima volta nasce la periodicità, con la prima scadenza a un periodo da oggi;
 //   - reminder_days giorni prima della scadenza parte un promemoria al project manager
 //     (o, se manca, al demand manager), una volta sola per scadenza (reminded_for);
@@ -76,9 +77,6 @@ func (s *Service) CheckRemindersTenant(ctx context.Context, tx pgx.Tx) (int, err
 	if err != nil {
 		return 0, err
 	}
-	if len(st.Phases) == 0 {
-		return 0, nil
-	}
 	c, err := s.clock(ctx, tx)
 	if err != nil {
 		return 0, err
@@ -94,7 +92,19 @@ func (s *Service) CheckRemindersTenant(ctx context.Context, tx pgx.Tx) (int, err
 			join element_types t on t.tenant_id = e.tenant_id and t.id = e.type_id and t.key = $3
 			join options o on o.tenant_id = e.tenant_id and o.id = e.state_id
 			where e.deleted_at is null and not e.is_draft and e.resolved_at is null and o.name = any($1)
+			  and not exists (select 1 from project_requests pr where pr.request_id = e.id)
 			on conflict (tenant_id, element_id) do nothing`, st.Phases, first, requestType); err != nil {
+			return 0, err
+		}
+		// Progetti in corso (passo 5 dei progetti): il report si fa sul progetto.
+		if _, err := tx.Exec(ctx, `
+			insert into status_report_schedules (tenant_id, element_id, next_due)
+			select app_tenant(), e.id, $1::date
+			from elements e
+			join element_types t on t.tenant_id = e.tenant_id and t.id = e.type_id and t.key = $2
+			join options o on o.tenant_id = e.tenant_id and o.id = e.state_id
+			where e.deleted_at is null and not e.is_draft and e.resolved_at is null and o.category = 'in_progress'
+			on conflict (tenant_id, element_id) do nothing`, first, projectType); err != nil {
 			return 0, err
 		}
 	}
@@ -102,10 +112,13 @@ func (s *Service) CheckRemindersTenant(ctx context.Context, tx pgx.Tx) (int, err
 		select sc.element_id, sc.next_due
 		from status_report_schedules sc
 		join elements e on e.tenant_id = sc.tenant_id and e.id = sc.element_id and e.deleted_at is null and e.resolved_at is null
+		join element_types t on t.tenant_id = e.tenant_id and t.id = e.type_id
 		join options o on o.tenant_id = e.tenant_id and o.id = e.state_id
-		where o.name = any($1) and sc.next_due is not null and coalesce(sc.frequency, $2) <> 'off'
+		where ((t.key = $5 and o.name = any($1) and not exists (select 1 from project_requests pr where pr.request_id = e.id))
+		       or (t.key = $6 and o.category = 'in_progress'))
+		  and sc.next_due is not null and coalesce(sc.frequency, $2) <> 'off'
 		  and sc.next_due - $3::int <= $4::date and sc.reminded_for is distinct from sc.next_due
-		for update of sc skip locked`, st.Phases, st.Frequency, st.ReminderDays, c.today)
+		for update of sc skip locked`, st.Phases, st.Frequency, st.ReminderDays, c.today, requestType, projectType)
 	if err != nil {
 		return 0, err
 	}

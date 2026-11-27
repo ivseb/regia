@@ -46,7 +46,7 @@ export default {
   "progetti.baseline.span": "{from} to {to}",
   "progetti.baseline.by": "set on {date} by {who}",
   "progetti.baseline.settings.title": "Baseline tolerances",
-  "progetti.baseline.settings.help": "When a plan change moves a milestone or the project end beyond the given days against the baseline, a change request to approve is raised on its own. A budget beyond the percentage turns the signal red.",
+  "progetti.baseline.settings.help": "When a plan change moves a milestone or the project end beyond the given days against the baseline, a change request to approve is raised on its own. The same happens when the forecast budget goes beyond the percentage, or when work packages and milestones are added or removed. A single project can have its own tolerances, from the «Plan» tab.",
   "progetti.baseline.settings.days": "Working days on milestones and end",
   "progetti.baseline.settings.budget": "Percentage on the budget",
 } satisfies Translation<typeof it>;
