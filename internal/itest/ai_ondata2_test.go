@@ -3,9 +3,11 @@ package itest
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -15,7 +17,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"regia/internal/ai"
 	"regia/internal/api"
+	"regia/internal/devtools/fakeai"
 	"regia/internal/engine"
 	"regia/internal/engine/approval"
 	"regia/internal/modules/architecture"
@@ -296,4 +300,139 @@ func TestAIMCP(t *testing.T) {
 	if c := post(edTok); c != http.StatusForbidden {
 		t.Fatalf("MCP spento: %d", c)
 	}
+}
+
+// Domande sul grafo, streaming dell'assistente, avviso del budget e cache nel registro
+// (replica/ai.md, ondata 2), tutto con il fornitore finto.
+func TestAIOndata2(t *testing.T) {
+	e := newOndata2(t, "aig")
+	dem := e.admin.do("POST", "/api/v1/demand/requests", map[string]any{"title": "Nuovo portale fornitori sigma", "description": "Testo."}, http.StatusCreated)
+	demKey := dem["key"].(string)
+	fake := e.admin.do("POST", "/api/v1/ai/providers", map[string]any{"kind": "fake", "name": "Finto"}, http.StatusCreated)
+	fakeID := fake["id"].(string)
+	settings := func(extra map[string]any) {
+		body := map[string]any{"enabled": true, "deep": map[string]any{"provider_id": fakeID, "model": fakeai.ModelDeep}}
+		for k, v := range extra {
+			body[k] = v
+		}
+		e.admin.do("PUT", "/api/v1/ai/settings", body, http.StatusOK)
+	}
+	// Spenta: la domanda sul grafo non parte.
+	e.ed.do("POST", "/api/v1/ai/graph", map[string]any{"question": "Quali richieste aperte?"}, http.StatusConflict)
+	settings(nil)
+
+	// --- Traduzione valida al primo colpo: la query trova la richiesta con la ricerca normale.
+	g := e.ed.do("POST", "/api/v1/ai/graph", map[string]any{"question": "Quali richieste aperte ci sono?"}, http.StatusOK)
+	if g["query"] != "tipo: business_request fase: aperta" || g["valid"] != true || g["corrected"] != false || g["explanation"] == "" {
+		t.Fatalf("traduzione: %v", g)
+	}
+	found := e.ed.do("GET", "/api/v1/elements?q="+url.QueryEscape(g["query"].(string)), nil, http.StatusOK)
+	if !strings.Contains(fmtJSON(found), demKey) {
+		t.Fatalf("la query non trova la richiesta: %v", found)
+	}
+	if n := e.count(t, `select count(*) from ai_calls where feature = 'domande_grafo' and outcome = 'ok' and tier = 'approfondito'`); n != 1 {
+		t.Fatalf("chiamate della domanda sul grafo: %d", n)
+	}
+	// Il prompt porta il catalogo del tenant come dato.
+	reqs := fakeai.Requests(fakeai.ModelDeep)
+	if last := reqs[len(reqs)-1]; !strings.Contains(last.System, "business_request") || !strings.Contains(last.System, "<dati origine=\"catalogo\">") || len(last.Tools) != 0 {
+		t.Fatalf("istruzioni della domanda sul grafo: %.300s", last.System)
+	}
+
+	// --- Query non valida: una correzione sola, e si vede.
+	g = e.ed.do("POST", "/api/v1/ai/graph", map[string]any{"question": "Quali applicazioni critiche abbiamo?"}, http.StatusOK)
+	if g["valid"] != true || g["corrected"] != true || g["query"] != "tipo: application" || g["first_query"] == "" || g["first_error"] == nil {
+		t.Fatalf("correzione: %v", g)
+	}
+	if n := e.count(t, `select count(*) from ai_calls where feature = 'domande_grafo'`); n != 3 {
+		t.Fatalf("chiamate dopo la correzione: %d", n)
+	}
+
+	// --- Ancora non valida dopo la correzione: niente terzo tentativo, la query resta da correggere a mano.
+	fakeai.Program("grafo",
+		fakeai.Step{Text: "QUERY: campo_finto: uno\nSPIEGAZIONE: prima prova"},
+		fakeai.Step{Text: "QUERY: altro_campo_finto: due\nSPIEGAZIONE: seconda prova"},
+		fakeai.Step{Text: "QUERY: tipo: business_request\nSPIEGAZIONE: terza prova, da non usare"})
+	settings(map[string]any{"routes": map[string]any{"domande_grafo": map[string]any{"provider_id": fakeID, "model": "scenario:grafo"}}})
+	g = e.ed.do("POST", "/api/v1/ai/graph", map[string]any{"question": "Una domanda impossibile"}, http.StatusOK)
+	if g["valid"] != false || g["corrected"] != true || g["query"] != "altro_campo_finto: due" || g["error"] == nil {
+		t.Fatalf("doppio errore: %v", g)
+	}
+	if n := len(fakeai.Requests("grafo")); n != 2 {
+		t.Fatalf("tentativi: %d", n)
+	}
+	// Il secondo tentativo ha visto l'errore del motore.
+	if fix := fakeai.Requests("grafo")[1].Messages; !strings.Contains(fix[len(fix)-1].Text, "campo_finto") {
+		t.Fatalf("correzione senza l'errore: %v", fix)
+	}
+	settings(nil)
+
+	// --- Streaming: eventi mentre arriva la risposta, poi lo stesso risultato della risposta JSON.
+	body, _ := json.Marshal(map[string]any{"question": "cerca portale fornitori sigma"})
+	req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/ai/ask", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	resp, err := e.ed.c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	stream := string(raw)
+	if resp.Header.Get("Content-Type") != "text/event-stream" || !strings.Contains(stream, "event: tool") || strings.Count(stream, "event: text") < 2 ||
+		!strings.Contains(stream, "event: done") || !strings.Contains(stream, demKey) {
+		t.Fatalf("streaming: %s", stream)
+	}
+	if strings.Index(stream, "event: text") > strings.Index(stream, "event: done") {
+		t.Fatalf("il testo arriva dopo la fine: %s", stream)
+	}
+	// Errore in streaming: l'evento «error» porta il codice dell'API.
+	fakeai.Program("rotto", fakeai.Step{Err: &ai.ProviderError{Code: "rate_limit", Msg: "troppe richieste"}})
+	e.admin.do("PUT", "/api/v1/ai/settings", map[string]any{"enabled": true, "deep": map[string]any{"provider_id": fakeID, "model": "scenario:rotto"}}, http.StatusOK)
+	req, _ = http.NewRequest("POST", e.srv.URL+"/api/v1/ai/ask", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	resp, err = e.ed.c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if s := string(raw); !strings.Contains(s, "event: error") || !strings.Contains(s, "ai.provider_error") {
+		t.Fatalf("errore in streaming: %s", s)
+	}
+	settings(nil)
+
+	// --- Avviso all'80%: una notifica a chi amministra, una sola volta nel mese; non agli altri.
+	settings(map[string]any{"monthly_budget_usd": 0.01})
+	if err := e.d.InTenant(e.ctx, e.tid, db.TenantOpts{}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(e.ctx, `insert into ai_calls (tenant_id, feature, provider, model, cost_usd, outcome) values (app_tenant(), 'assistente', 'fake', 'x', 0.0085, 'ok')`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	notes := func(u *user) int {
+		n := 0
+		for _, it := range e.list(u.do("GET", "/api/v1/notifications", nil, http.StatusOK)["items"]) {
+			if m := e.obj(it); m["kind"] == "ai" && e.obj(m["payload"])["event"] == "budget_warning" {
+				n++
+			}
+		}
+		return n
+	}
+	e.ed.do("POST", "/api/v1/ai/ask", map[string]any{"question": "cerca sigma"}, http.StatusOK)
+	e.ed.do("POST", "/api/v1/ai/ask", map[string]any{"question": "cerca sigma"}, http.StatusOK)
+	if notes(e.admin) != 1 || notes(e.ed) != 0 {
+		t.Fatalf("notifiche del budget: amministratore %d, editor %d", notes(e.admin), notes(e.ed))
+	}
+
+	// --- Cache del prompt: le colonne nuove del registro ci sono e partono da zero.
+	if n := e.count(t, `select count(*) from ai_calls where cache_read_tokens = 0 and cache_write_tokens = 0`); n == 0 {
+		t.Fatal("colonne della cache assenti")
+	}
+}
+
+func fmtJSON(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
 }

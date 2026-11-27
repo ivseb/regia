@@ -71,6 +71,7 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+b+"/conversations/{id}", inTenant(s.aiConversation))
 	mux.HandleFunc("DELETE "+b+"/conversations/{id}", inTenant(s.aiDeleteConversation))
 	mux.HandleFunc("POST "+b+"/ask", inTenant(s.aiAsk))
+	mux.HandleFunc("POST "+b+"/graph", inTenant(s.aiGraph))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/confirm", inTenant(s.aiConfirm))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/reject", inTenant(s.aiReject))
 	// Server MCP (ondata 2): solo con un token API, nel tenant del token.
@@ -250,14 +251,7 @@ func (s *Server) aiAsk(w http.ResponseWriter, r *http.Request, p *auth.Principal
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	lang := i18n.Default
-	_ = s.db.InTenant(r.Context(), p.TenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
-		l, err := i18n.MemberLang(r.Context(), tx, p.MemberID)
-		if err == nil {
-			lang = l
-		}
-		return nil
-	})
+	lang := s.memberLang(r, p)
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 		s.aiAskStream(w, r, p, lang, in)
 		return
@@ -302,6 +296,32 @@ func (s *Server) aiAskStream(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	send("done", res)
+}
+
+// memberLang è la lingua della persona (per le risposte del modello).
+func (s *Server) memberLang(r *http.Request, p *auth.Principal) string {
+	lang := i18n.Default
+	_ = s.db.InTenant(r.Context(), p.TenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
+		if l, err := i18n.MemberLang(r.Context(), tx, p.MemberID); err == nil {
+			lang = l
+		}
+		return nil
+	})
+	return lang
+}
+
+// aiGraph traduce una domanda sul grafo in una query (funzione «domande_grafo»).
+func (s *Server) aiGraph(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ai.GraphInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.ai.GraphQuestion(r.Context(), p.TenantID, actorOf(r, p), s.memberLang(r, p), in)
+	if err != nil {
+		s.aiError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) aiDecide(w http.ResponseWriter, r *http.Request, p *auth.Principal, confirm bool) {

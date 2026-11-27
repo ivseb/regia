@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -189,8 +190,69 @@ var (
 	readRe    = regexp.MustCompile(`(?m)^chiave: (\S+)\n(?:.*\n)*?titolo: (.+)$`)
 )
 
+// GraphMarker è la riga del formato che il prompt delle domande sul grafo chiede al modello:
+// con questa nelle istruzioni il finto traduce la domanda in una query.
+const GraphMarker = "QUERY: la query"
+
+var (
+	graphFixRe   = regexp.MustCompile(`(?s)^La query «(.*)» non è valida: .*\(frammento: «(.*)»\)`)
+	graphQuoteRe = regexp.MustCompile("`([^`]+)`")
+	clauseRe     = regexp.MustCompile(`-?[^\s:"]+:\s*(?:"[^"]*"|\S+)|"[^"]*"|\S+`)
+	graphWords   = []struct{ prefix, clause string }{
+		{"applicazion", "tipo: application"},
+		{"richiest", "tipo: business_request"},
+		{"rischi", "tipo: risk"},
+		{"incident", "tipo: incident"},
+		{"attivit", "tipo: task"},
+		{"apert", "fase: aperta"},
+		{"chius", "fase: chiusa"},
+		{"mie", "assegnatario: me"},
+		{"miei", "assegnatario: me"},
+		// Un campo che non esiste: il motore lo rifiuta e la correzione lo toglie.
+		{"critic", "criticità: alta"},
+	}
+)
+
+// graphRules: la query tra apici inversi nella domanda, se c'è; altrimenti le parole note
+// della domanda diventano clausole. Nel giro di correzione toglie la clausola sbagliata.
+func graphRules(req ai.Request) Step {
+	last := req.Messages[len(req.Messages)-1].Text
+	if m := graphFixRe.FindStringSubmatch(last); m != nil {
+		var keep []string
+		dropped := false
+		for _, c := range clauseRe.FindAllString(m[1], -1) {
+			if !dropped && m[2] != "" && strings.Contains(c, strings.TrimSpace(m[2])) {
+				dropped = true
+				continue
+			}
+			keep = append(keep, c)
+		}
+		return Step{Text: "QUERY: " + strings.Join(keep, " ") + "\nSPIEGAZIONE: Ho tolto «" + m[2] + "», che il catalogo non conosce."}
+	}
+	if m := graphQuoteRe.FindStringSubmatch(last); m != nil {
+		return Step{Text: "QUERY: " + m[1] + "\nSPIEGAZIONE: Ho usato la query che hai scritto."}
+	}
+	var clauses []string
+	for _, w := range strings.Fields(strings.ToLower(last)) {
+		w = strings.Trim(w, "?.,;:!«»\"'")
+		for _, g := range graphWords {
+			if strings.HasPrefix(w, g.prefix) && !slices.Contains(clauses, g.clause) {
+				clauses = append(clauses, g.clause)
+				break
+			}
+		}
+	}
+	if len(clauses) == 0 {
+		clauses = []string{strings.Trim(last, "?")}
+	}
+	return Step{Text: "QUERY: " + strings.Join(clauses, " ") + "\nSPIEGAZIONE: Ho cercato gli elementi che la domanda nomina."}
+}
+
 // rules è il comportamento a regole dei modelli non programmati.
 func rules(req ai.Request) Step {
+	if strings.Contains(req.System, GraphMarker) {
+		return graphRules(req)
+	}
 	last := req.Messages[len(req.Messages)-1]
 	if len(last.ToolResults) > 0 {
 		var found, errs, props []string

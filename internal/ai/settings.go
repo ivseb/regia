@@ -37,7 +37,8 @@ type Feature struct {
 // Features sono le funzioni dell'AI (replica/ai.md §2 e §4).
 var Features = []Feature{
 	{Key: "assistente", Tier: TierDeep, NeedsTools: true, Active: true},
-	{Key: "domande_grafo", Tier: TierDeep, NeedsTools: true},
+	// Domande sul grafo (ondata 2): il modello scrive una query, Regia la prova; non chiama strumenti.
+	{Key: "domande_grafo", Tier: TierDeep, Active: true},
 	{Key: "riassunti", Tier: TierFast},
 	{Key: "classificazione", Tier: TierFast},
 	{Key: "bozze", Tier: TierDeep},
