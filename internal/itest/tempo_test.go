@@ -142,7 +142,7 @@ func TestTempoETeam(t *testing.T) {
 	}
 	cells(dev, w2, http.StatusUnprocessableEntity, cell(k1, day(w2, 0), "tanto"))
 	cells(dev, w2, http.StatusUnprocessableEntity, cell(k1, day(w2, 0), "25"))
-	cells(dev, w2, http.StatusUnprocessableEntity, cell(k1, mon.AddDate(0, 0, 5).Format(time.DateOnly), "1"))
+	cells(dev, w2, http.StatusUnprocessableEntity, cell(k1, today.AddDate(0, 0, 2).Format(time.DateOnly), "1"))
 	// Tetto giornaliero (16 ore di default): la somma di tutti gli elementi del giorno.
 	cells(dev, w2, http.StatusUnprocessableEntity, cell(k3, day(w2, 0), "15"))
 	if ts = dev.do("GET", "/api/v1/work/timesheet?week="+w2, nil, http.StatusOK); len(ts["rows"].([]any)) != 2 {
