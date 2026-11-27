@@ -160,6 +160,8 @@ export type CardGap = {
 };
 export type CardResult = { action: string; draft?: DraftKind; text?: string; gaps?: CardGap[]; refs: Ref[]; unverified?: number; status: AIStatus };
 export type TriageField = { key: string; name: string; value: unknown; display: string; reason: string };
+/** Elenco proprio del form (ondata 6): il modello propone un valore fra questi. */
+export type TriageFormField = { key: string; name: string; multi?: boolean; options: { value: string; label: string }[] };
 export type TriageResult = {
   duplicates: (Ref & { state: string; reason: string })[];
   fields: TriageField[];
@@ -242,7 +244,8 @@ export const aiApi = {
   card: (element: string, action: "riassunto" | "mancanze" | "bozza", draft?: DraftKind, hint?: string) =>
     call<CardResult>("POST", "/ai/card", { element, action, draft, hint }),
   cardInsert: (element: string, draft: DraftKind, text: string) => call<Proposal>("POST", "/ai/card/insert", { element, draft, text }),
-  triage: (type: string, title: string, description: string) => call<TriageResult>("POST", "/ai/card/triage", { type, title, description }),
+  triage: (type: string, title: string, description: string, fields?: TriageFormField[]) =>
+    call<TriageResult>("POST", "/ai/card/triage", { type, title, description, fields: fields?.filter((f) => f.options.length > 0) }),
   cardLinks: (element: string, links: string[]) => call<{ items: { key: string; ok: boolean; error?: string }[] }>("POST", "/ai/card/links", { element, links }),
   confirm: (id: string) => call<Proposal>("POST", `/ai/proposals/${q(id)}/confirm`),
   reject: (id: string) => call<Proposal>("POST", `/ai/proposals/${q(id)}/reject`),

@@ -135,6 +135,26 @@ test.describe("AI: fornitori nativi", () => {
     await expect(fast.getByLabel("Modello")).toHaveValue("finto-rapido");
   });
 
+  test("nuovo rischio: probabilità e impatto proposti fra i valori della matrice, accettati uno per uno", async ({ page }) => {
+    await login(page, "admin", TENANT);
+    await resetAI(page.request);
+    const p = await call<{ id: string }>(page.request, "POST", "/api/v1/ai/providers", { kind: "fake", name: "Finto rischi" });
+    await call(page.request, "PUT", "/api/v1/ai/settings", { enabled: true, deep: { provider_id: p.id, model: "finto-approfondito" } });
+    type Level = { value: number; name: string };
+    const cfg = await call<{ matrices: { is_default: boolean; likelihood: Level[]; impact: Level[] }[] }>(page.request, "GET", "/api/v1/risk-config");
+    const m = cfg.matrices.find((x) => x.is_default) ?? cfg.matrices[0];
+    const lik = m.likelihood[m.likelihood.length - 1];
+    await page.goto("/rischi?tab=rischi");
+    await page.getByRole("button", { name: /rischio$/i }).first().click();
+    await page.getByLabel("Rischio", { exact: true }).fill(uniq("Fornitore") + " " + lik.name.toLowerCase());
+    const box = page.getByTestId("assistente-creazione");
+    await box.getByRole("button", { name: "Cerca duplicati e proponi i campi" }).click();
+    const proposed = box.getByRole("list", { name: "Valori proposti" });
+    await expect(proposed).toContainText(`${lik.value} · ${lik.name}`);
+    await proposed.getByRole("button", { name: /^Accetta/ }).first().click();
+    await expect(page.getByLabel("Probabilità inerente")).toContainText(`${lik.value} · ${lik.name}`);
+  });
+
   test("a 375 px il modulo del cloud non scorre in orizzontale, è accessibile e i target sono grandi", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await login(page, "admin", TENANT);

@@ -349,8 +349,14 @@ func cardRules(req ai.Request) Step {
 		for _, m := range fieldLnRe.FindAllStringSubmatch(bl["campi"], -1) {
 			for _, o := range strings.Split(m[2], ",") {
 				o = strings.TrimSpace(o)
-				if o != "" && slices.Contains(words, strings.ToLower(o)) {
-					fields = append(fields, map[string]string{"campo": m[1], "valore": o, "motivo": "Il testo dice «" + strings.ToLower(o) + "»."})
+				// Il valore si propone se il testo lo nomina: una parola, un nome di più parole
+				// (un'applicazione), o il nome dopo il numero di una scala («3 · Probabile»).
+				name := strings.ToLower(o)
+				if i := strings.LastIndex(name, "· "); i >= 0 {
+					name = strings.TrimSpace(name[i+len("· "):])
+				}
+				if o != "" && (slices.Contains(words, name) || (strings.Contains(name, " ") && strings.Contains(nuovo, name))) {
+					fields = append(fields, map[string]string{"campo": m[1], "valore": o, "motivo": "Il testo dice «" + name + "»."})
 					break
 				}
 			}

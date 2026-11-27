@@ -409,7 +409,30 @@ function CreateForm({ refKey, matrix, isImpact, onDone }: { refKey: string; matr
       {baseline.data && <p className="m-0 text-[12.5px] text-muted">{baseline.data.created.length ? tr("governance.requirements.creati_requisiti", { count: baseline.data.created.length }) : tr("governance.requirements.nessun_requisito_nuovo_le_baseline")}</p>}
       <ErrorNote error={create.error ?? baseline.error} />
       {/* Con l'AI accesa: requisiti simili che potrebbero essere lo stesso (seguito dell'ondata 3, fatto nell'ondata 5). */}
-      <CreateAssistant type="requirement" title={f.title} description={f.text ?? ""} />
+      {/* Con l'AI accesa: requisiti simili (ondata 5) e categoria, ambito e criterio di verifica
+          proposti fra i valori del form, da accettare uno per uno (ondata 6). */}
+      <CreateAssistant
+        type="requirement"
+        title={f.title}
+        description={f.text ?? ""}
+        fields={[
+          { key: "category", name: tr("governance.requirements.categoria"), options: matrix.categories.map((c) => ({ value: c, label: c })) },
+          ...(isImpact
+            ? []
+            : [{ key: "scope", name: tr("governance.requirements.ambito"),
+                options: matrix.columns.map((c) => ({ value: c.impact_key, label: tr("governance.requirements.solo", { application: c.application, impact_key: c.impact_key }) })) }]),
+          { key: "verification_method", name: tr("governance.requirements.criterio_di_verifica"), options: [
+            { value: "manual", label: tr("governance.requirements.manuale_con_la_firma_di") },
+            { value: "evidence", label: tr("governance.requirements.automatico_da_evidenza_devsecops") },
+          ] },
+        ]}
+        onAccept={(p) => {
+          const val = String(p.value);
+          if (p.key === "category") setF((x) => ({ ...x, category: val }));
+          if (p.key === "scope") setF((x) => ({ ...x, scope: "application", impact: val }));
+          if (p.key === "verification_method" && (val === "manual" || val === "evidence")) setF((x) => ({ ...x, verification_method: val }));
+        }}
+      />
     </form>
   );
 }

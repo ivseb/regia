@@ -254,3 +254,32 @@ func TestAIOndata6(t *testing.T) {
 		t.Fatalf("stato con un modello senza strumenti: %v", st)
 	}
 }
+
+// Seguito delle ondate 3-5: alla creazione il form passa i suoi elenchi (probabilità della
+// matrice, applicazioni impattate...) e il modello propone un valore fra quelli dati; ciò che
+// non è fra i valori si scarta. Elenchi non validi rifiutati.
+func TestAITriageFormFields(t *testing.T) {
+	e := newOndata2(t, "ai6f")
+	p := e.admin.do("POST", "/api/v1/ai/providers", map[string]any{"kind": "fake", "name": "Finto"}, http.StatusCreated)
+	e.admin.do("PUT", "/api/v1/ai/settings", map[string]any{"enabled": true, "deep": map[string]any{"provider_id": p["id"], "model": "finto-approfondito"}}, http.StatusOK)
+	fields := []map[string]any{
+		{"key": "likelihood", "name": "Probabilità inerente", "options": []map[string]string{{"value": "1", "label": "1 · Rara"}, {"value": "3", "label": "3 · Probabile"}}},
+		{"key": "impacted", "name": "Applicazioni impattate", "multi": true, "options": []map[string]string{{"value": "id-mb", "label": "Mobile Banking"}, {"value": "id-crm", "label": "CRM"}}},
+	}
+	res := e.ed.do("POST", "/api/v1/ai/card/triage", map[string]any{"type": "business_request", "title": "Guasto probabile su Mobile Banking",
+		"description": "Si ferma il login.", "fields": fields}, http.StatusOK)
+	got := map[string]string{}
+	for _, f := range e.list(res["fields"]) {
+		got[e.obj(f)["key"].(string)] = fmt.Sprint(e.obj(f)["value"]) + " | " + e.obj(f)["display"].(string)
+	}
+	if got["likelihood"] != "3 | 3 · Probabile" || got["impacted"] != "[id-mb] | Mobile Banking" {
+		t.Fatalf("valori proposti: %v", res["fields"])
+	}
+	e.ed.do("POST", "/api/v1/ai/card/triage", map[string]any{"type": "business_request", "title": "Guasto probabile",
+		"fields": []map[string]any{{"key": "Chiave Sbagliata", "options": []map[string]string{{"value": "1"}}}}}, http.StatusUnprocessableEntity)
+	many := make([]map[string]any, 9)
+	for i := range many {
+		many[i] = map[string]any{"key": fmt.Sprintf("f%d", i), "options": []map[string]string{{"value": "1"}}}
+	}
+	e.ed.do("POST", "/api/v1/ai/card/triage", map[string]any{"type": "business_request", "title": "Guasto probabile", "fields": many}, http.StatusUnprocessableEntity)
+}

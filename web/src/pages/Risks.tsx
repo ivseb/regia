@@ -535,8 +535,22 @@ function NewRisk({ onDone }: { onDone: () => void }) {
         <button type="button" className="btn" onClick={onDone}>{tr("governance.compliance.annulla")}</button>
       </div>
       <ErrorNote error={create.error} />
-      {/* Con l'AI accesa: rischi simili già nel registro (seguito dell'ondata 3, fatto nell'ondata 5). */}
-      <CreateAssistant type="risk" title={title} description={desc} />
+      {/* Con l'AI accesa: rischi simili già nel registro (ondata 5) e probabilità e impatto inerenti
+          proposti fra i valori della matrice, da accettare uno per uno (ondata 6). */}
+      <CreateAssistant
+        type="risk"
+        title={title}
+        description={desc}
+        fields={[
+          { key: "likelihood", name: tr("governance.riskdetail.probabilita_inerente"), options: (m?.likelihood ?? []).map((x) => ({ value: String(x.value), label: `${x.value} · ${x.name}` })) },
+          { key: "impact", name: tr("governance.riskdetail.impatto_inerente"), options: (m?.impact ?? []).map((x) => ({ value: String(x.value), label: `${x.value} · ${x.name}` })) },
+        ]}
+        onAccept={(f) => {
+          const n = Number(f.value);
+          if (f.key === "likelihood" && n > 0) setL(n);
+          if (f.key === "impact" && n > 0) setI(n);
+        }}
+      />
     </form>
   );
 }
@@ -871,8 +885,20 @@ function NewIncident({ onDone }: { onDone: () => void }) {
         <button type="button" className="btn" onClick={onDone}>{tr("governance.compliance.annulla")}</button>
       </div>
       <ErrorNote error={create.error} />
-      {/* Con l'AI accesa: incidenti simili già aperti (seguito dell'ondata 3, fatto nell'ondata 5). */}
-      <CreateAssistant type="incident" title={title} description={desc} />
+      {/* Con l'AI accesa: incidenti simili già aperti (ondata 5) e applicazioni impattate proposte,
+          da accettare (si aggiungono a quelle già scelte; ondata 6). */}
+      <CreateAssistant
+        type="incident"
+        title={title}
+        description={desc}
+        fields={[
+          { key: "impacted", name: tr("governance.risks.applicazioni_impattate"), multi: true, options: (apps.data?.items ?? []).map((a) => ({ value: a.id, label: a.name })) },
+        ]}
+        onAccept={(f) => {
+          const ids = Array.isArray(f.value) ? f.value.map(String) : [String(f.value)];
+          if (f.key === "impacted") setPicked((p) => [...p, ...ids.filter((id) => !p.includes(id))]);
+        }}
+      />
     </form>
   );
 }

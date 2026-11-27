@@ -690,6 +690,57 @@ type TriageInput struct {
 	Type        string `json:"type"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	// Fields sono gli elenchi propri del form (non campi del motore): probabilità e impatto della
+	// matrice del rischio, applicazioni impattate dall'incidente, categoria e criterio di verifica
+	// del requisito. Il modello propone un valore fra quelli dati; la persona accetta uno per uno.
+	Fields []TriageFormField `json:"fields"`
+}
+
+// TriageFormField è un elenco del form: chiave, nome mostrato e valori ammessi.
+type TriageFormField struct {
+	Key     string `json:"key"`
+	Name    string `json:"name"`
+	Multi   bool   `json:"multi"`
+	Options []struct {
+		Value string `json:"value"`
+		Label string `json:"label"`
+	} `json:"options"`
+}
+
+var formFieldKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
+
+// formFields controlla gli elenchi del form e li aggiunge ai campi da proporre (dopo quelli del
+// motore, senza sostituirli): al massimo 8 elenchi da 200 valori, testi accorciati.
+func formFields(in []TriageFormField, fields []triageField) ([]triageField, error) {
+	if len(in) > 8 {
+		return nil, invalid("fields", "ai.fields_invalid", "al massimo 8 elenchi")
+	}
+	for _, f := range in {
+		if !formFieldKeyRe.MatchString(f.Key) || len(f.Options) == 0 || len(f.Options) > 200 {
+			return nil, invalid("fields", "ai.fields_invalid", "elenco del form non valido")
+		}
+		if slices.ContainsFunc(fields, func(x triageField) bool { return x.key == f.Key }) {
+			continue
+		}
+		tf := triageField{key: f.Key, name: clipRunes(strings.TrimSpace(f.Name), 80), multi: f.Multi}
+		if tf.name == "" {
+			tf.name = f.Key
+		}
+		for _, o := range f.Options {
+			v, l := clipRunes(strings.TrimSpace(o.Value), 200), clipRunes(strings.TrimSpace(o.Label), 200)
+			if v == "" {
+				continue
+			}
+			if l == "" {
+				l = v
+			}
+			tf.options = append(tf.options, engine.OptionView{ID: v, Name: l})
+		}
+		if len(tf.options) > 0 {
+			fields = append(fields, tf)
+		}
+	}
+	return fields, nil
 }
 
 // TriageDuplicate è un elemento esistente che potrebbe essere lo stesso.
@@ -858,7 +909,8 @@ func (s *Service) Triage(ctx context.Context, tenantID string, actor engine.Acto
 			opts := slices.DeleteFunc(slices.Clone(f.Options), func(o engine.OptionView) bool { return o.Archived })
 			fields = append(fields, triageField{key: f.Key, name: f.Name, multi: f.Multi, options: opts})
 		}
-		return nil
+		fields, err = formFields(in.Fields, fields)
+		return err
 	})
 	if err != nil {
 		return nil, err

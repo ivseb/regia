@@ -4,7 +4,7 @@
 // asset da citare dopo il salvataggio. Senza AI accesa il form non cambia.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { aiApi, type TriageField, type TriageResult } from "../aiApi";
+import { aiApi, type TriageField, type TriageFormField, type TriageResult } from "../aiApi";
 import { ErrorNote } from "../ui";
 import { useT } from "../i18n/react";
 
@@ -15,10 +15,13 @@ export function CreateAssistant({
   onAccept,
   links = [],
   onLinks,
+  fields: formFields,
 }: {
   type: string;
   title: string;
   description: string;
+  /** Elenchi propri del form (non campi del motore) per cui proporre un valore, con onAccept. */
+  fields?: TriageFormField[];
   /** Senza: i valori proposti non si mostrano (il form non ha campi a elenco da riempire). */
   onAccept?: (f: TriageField) => void;
   links?: string[];
@@ -31,7 +34,7 @@ export function CreateAssistant({
   const [accepted, setAccepted] = useState<string[]>([]);
   const [res, setRes] = useState<TriageResult | null>(null);
   const run = useMutation({
-    mutationFn: () => aiApi.triage(type, title, description),
+    mutationFn: () => aiApi.triage(type, title, description, formFields),
     onMutate: () => {
       setRes(null);
       setAccepted([]);
