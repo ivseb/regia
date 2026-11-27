@@ -85,6 +85,11 @@ function TierPicker(props: {
 
 type Draft = Omit<AISettings, "saved" | "regulated">;
 
+/** Indirizzo del server MCP di questa installazione (internal/api/ai.go, MCPPath). */
+export function mcpURL(): string {
+  return `${window.location.origin}/api/v1/mcp`;
+}
+
 function toDraft(s: AISettings): Draft {
   const { saved: _s, regulated: _r, ...d } = s;
   return { ...d, routes: { ...d.routes } };
@@ -436,6 +441,23 @@ export function AiConfig() {
                     <span className="text-[13px] text-muted">{t("ai.cfg.enableHelp")}</span>
                   </span>
                 </label>
+              </section>
+
+              <section aria-labelledby="ai-mcp" className="flex flex-col gap-3">
+                <SectionTitle><span id="ai-mcp">{t("ai.mcp.title")}</span></SectionTitle>
+                <p className="m-0 text-[13px] text-muted">{t("ai.mcp.intro")}</p>
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" className="mt-1" checked={draft.mcp_enabled} onChange={(e) => set({ mcp_enabled: e.target.checked })} />
+                  <span className="flex flex-col gap-1">
+                    <span className="font-semibold">{t("ai.mcp.enable")}</span>
+                    <span className="text-[13px] text-muted">{t("ai.mcp.enableHelp")}</span>
+                  </span>
+                </label>
+                <div className="flex flex-col gap-1">
+                  <span className="label">{t("ai.mcp.url")}</span>
+                  <code className="block border border-hair bg-side px-2 py-1 font-mono text-[13px] [overflow-wrap:anywhere]" data-testid="mcp-indirizzo">{mcpURL()}</code>
+                  <span className="text-[12.5px] text-muted">{t("ai.mcp.urlHelp")}</span>
+                </div>
               </section>
 
               <ErrorNote error={save.error} />

@@ -1,5 +1,5 @@
 // API dell'AI (replica/ai.md, ondata 1). Rispecchia internal/api/ai.go.
-import { call } from "./api";
+import { ApiError, call } from "./api";
 import { fmtCurrency } from "./i18n/format";
 
 const q = encodeURIComponent;
@@ -17,6 +17,8 @@ export type AISettings = {
   fast: TierChoice;
   deep: TierChoice;
   routes: Record<string, Route>;
+  /** Server MCP acceso (interruttore suo, ondata 2). */
+  mcp_enabled: boolean;
   saved: boolean;
   regulated: boolean;
 };
@@ -94,6 +96,75 @@ export type ChatMessage = { id: string; role: "user" | "assistant"; text: string
 export type Conversation = { id: string; title: string; created_at: string; updated_at: string };
 export type AskResult = { conversation: Conversation; messages: ChatMessage[]; status: AIStatus };
 
+/** Errore della query con la posizione (unità UTF-16), come engine.QueryError. */
+export type QueryError = { message: string; pos: number; end: number };
+/** Domanda sul grafo tradotta in query (internal/ai/graph.go). */
+export type GraphResult = {
+  question: string;
+  query: string;
+  explanation: string;
+  valid: boolean;
+  corrected: boolean;
+  first_query?: string;
+  first_error?: QueryError;
+  error?: QueryError;
+  status: AIStatus;
+};
+
+/** Evento della risposta in streaming (internal/ai/assistant.go, AskEvent). */
+export type AskEvent = { type: "text"; text: string } | { type: "tool"; tool: string } | { type: "step" };
+
+/** Errore dell'evento «error» dello streaming: stesso formato degli errori dell'API. */
+function streamError(p: { status?: number; code?: string; detail?: string; field?: string; params?: Record<string, string | number> }): ApiError {
+  return new ApiError(p.status ?? 500, p.code ?? "unknown", p.detail ?? "", p.field, undefined, undefined, p.params);
+}
+
+/**
+ * Domanda all'assistente con la risposta in streaming (Server-Sent Events): onEvent riceve i
+ * pezzi del testo e gli strumenti usati, la promessa il risultato finale. Se lo streaming non
+ * arriva (un proxy che lo blocca), si ripiega sulla domanda normale.
+ */
+export async function askStream(question: string, conversation_id: string | undefined, onEvent: (e: AskEvent) => void, signal?: AbortSignal): Promise<AskResult> {
+  const res = await fetch("/api/v1/ai/ask", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify({ question, conversation_id }),
+    signal,
+  });
+  if (!res.ok || !res.body || !(res.headers.get("Content-Type") ?? "").startsWith("text/event-stream")) {
+    if (!res.ok) {
+      const problem = await res.json().catch(() => ({ status: res.status }));
+      throw streamError({ status: res.status, ...problem });
+    }
+    return aiApi.ask(question, conversation_id);
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    let i: number;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const block = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      let event = "message";
+      let data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ")) data += line.slice(6);
+      }
+      if (!data) continue;
+      const payload = JSON.parse(data);
+      if (event === "done") return payload as AskResult;
+      if (event === "error") throw streamError(payload);
+      if (event === "text" || event === "tool" || event === "step") onEvent(payload as AskEvent);
+    }
+  }
+  throw streamError({ status: 502, code: "ai.stream_interrupted" });
+}
+
 export const aiApi = {
   status: () => call<AIStatus>("GET", "/ai/status"),
   settings: () => call<AISettingsView>("GET", "/ai/settings"),
@@ -107,6 +178,7 @@ export const aiApi = {
   conversation: (id: string) => call<{ conversation: Conversation; messages: ChatMessage[] }>("GET", `/ai/conversations/${q(id)}`),
   deleteConversation: (id: string) => call<void>("DELETE", `/ai/conversations/${q(id)}`),
   ask: (question: string, conversation_id?: string) => call<AskResult>("POST", "/ai/ask", { question, conversation_id }),
+  graph: (question: string) => call<GraphResult>("POST", "/ai/graph", { question }),
   confirm: (id: string) => call<Proposal>("POST", `/ai/proposals/${q(id)}/confirm`),
   reject: (id: string) => call<Proposal>("POST", `/ai/proposals/${q(id)}/reject`),
 };

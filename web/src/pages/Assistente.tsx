@@ -5,7 +5,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { aiApi, type AskResult, type ChatMessage, type Proposal, type Ref } from "../aiApi";
+import { aiApi, askStream, type AskEvent, type AskResult, type ChatMessage, type GraphResult, type Proposal, type Ref } from "../aiApi";
+import { api } from "../api";
+import { viewsApi } from "../views/viewsApi";
 import { Select } from "../select";
 import { ErrorNote, Loading } from "../ui";
 import { useT } from "../i18n/react";
@@ -104,6 +106,103 @@ function Message({ m, onProposal }: { m: ChatMessage; onProposal: (p: Proposal) 
   );
 }
 
+/** Risposta a una domanda sul grafo: la query visibile e modificabile, l'elenco con i link, il salvataggio come vista. */
+function GraphAnswer({ r }: { r: GraphResult }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [query, setQuery] = useState(r.query);
+  const [run, setRun] = useState(r.valid ? r.query : "");
+  const [name, setName] = useState(r.question.length > 80 ? `${r.question.slice(0, 79)}…` : r.question);
+  const found = useQuery({ queryKey: ["ai-graph-run", run], queryFn: () => api.search(run, undefined, 25), enabled: !!run, retry: false });
+  const save = useMutation({
+    mutationFn: () => viewsApi.create({ page: "domande", name: name.trim(), kind: "table", query: run, settings: {}, scope: "private" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["views"] }),
+  });
+  const items = found.data?.items ?? [];
+  return (
+    <div className="mr-4 flex flex-col gap-3" data-testid="risposta-grafo">
+      <span className="label">{t("ai.panel.assistant")}</span>
+      {r.explanation && <p className="m-0 [overflow-wrap:anywhere]">{r.explanation}</p>}
+      {r.corrected && r.valid && (
+        <p className="m-0 text-[12.5px] text-muted" role="note">
+          {t("ai.graph.corrected", { query: r.first_query ?? "", error: r.first_error?.message ?? "" })}
+        </p>
+      )}
+      {!r.valid && (
+        <p className="m-0 text-[12.5px] font-semibold text-danger" role="alert">
+          {t("ai.graph.invalid", { error: r.error?.message ?? "" })}
+        </p>
+      )}
+      <form
+        className="flex flex-col gap-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setRun(query.trim());
+          save.reset();
+        }}
+      >
+        <label className="flex flex-col gap-1">
+          <span className="label">{t("ai.graph.query")}</span>
+          <textarea className="field min-h-[56px] font-mono text-[13px]" value={query} maxLength={1000} onChange={(e) => setQuery(e.target.value)} data-testid="query-grafo" />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="submit" className="btn py-1" disabled={!query.trim()}>{t("ai.graph.run")}</button>
+          {run && (
+            <Link to="/elenco/$lista" params={{ lista: "domande" }} search={{ q: run }} className="text-[12.5px]">
+              {t("ai.graph.openList")}
+            </Link>
+          )}
+        </div>
+      </form>
+      {run && found.isPending && <Loading rows={2} />}
+      <ErrorNote error={found.error} />
+      {run && found.data && (
+        <>
+          <span className="text-[12.5px] text-muted" role="status">
+            {items.length === 0 ? t("ai.graph.none") : t("ai.graph.count", { count: items.length, more: found.data.next ? "+" : "" })}
+          </span>
+          {items.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t("ai.graph.results")}>
+              {items.map((el) => (
+                <li key={el.id} className="text-[13px] [overflow-wrap:anywhere]">
+                  <Link to="/e/$key" params={{ key: el.key }}>
+                    <span className="font-mono">{el.key}</span> {el.title}
+                  </Link>
+                  <span className="text-muted"> · {el.type_name} · {el.state}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="flex flex-col gap-1 border-t border-hair pt-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (name.trim()) save.mutate();
+            }}
+          >
+            <label className="flex flex-col gap-1">
+              <span className="label">{t("ai.graph.viewName")}</span>
+              <input className="field py-1" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="submit" className="btn py-1" disabled={!name.trim() || save.isPending || save.isSuccess}>{t("ai.graph.save")}</button>
+              {save.isSuccess && (
+                <span className="text-[12.5px] text-ok" role="status">
+                  {t("ai.graph.saved")}{" "}
+                  <Link to="/elenco/$lista" params={{ lista: "domande" }} search={{ v: save.data.id }}>{t("ai.graph.openView")}</Link>
+                </span>
+              )}
+            </div>
+            <ErrorNote error={save.error} />
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+type Draft = { text: string; tools: string[] };
+
 export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
@@ -112,6 +211,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [convId, setConvId] = useState<string>("");
   const conv = useQuery({ queryKey: ["ai-conversation", convId], queryFn: () => aiApi.conversation(convId), enabled: !!convId });
   const [question, setQuestion] = useState("");
+  const [mode, setMode] = useState<"chat" | "graph">("chat");
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [graph, setGraph] = useState<{ question: string; result: GraphResult }[]>([]);
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
 
@@ -124,8 +226,25 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const onEvent = (e: AskEvent) =>
+    setDraft((d) => {
+      const cur = d ?? { text: "", tools: [] };
+      switch (e.type) {
+        case "text":
+          return { ...cur, text: cur.text + e.text };
+        case "tool":
+          return { text: "", tools: cur.tools.includes(e.tool) ? cur.tools : [...cur.tools, e.tool] };
+        case "step":
+          return { ...cur, text: "" };
+      }
+      return cur;
+    });
   const ask = useMutation({
-    mutationFn: (q: string) => aiApi.ask(q, convId || undefined),
+    mutationFn: (q: string) => {
+      setDraft({ text: "", tools: [] });
+      return askStream(q, convId || undefined, onEvent);
+    },
+    onSettled: () => setDraft(null),
     onSuccess: (res: AskResult) => {
       qc.setQueryData(["ai-status"], res.status);
       qc.setQueryData(["ai-conversation", res.conversation.id], (old: { messages: ChatMessage[] } | undefined) => ({
@@ -135,6 +254,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       setConvId(res.conversation.id);
       setQuestion("");
       qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+    },
+  });
+  const askGraph = useMutation({
+    mutationFn: (q: string) => aiApi.graph(q),
+    onSuccess: (res, q) => {
+      qc.setQueryData(["ai-status"], res.status);
+      setGraph((g) => [...g, { question: q, result: res }]);
+      setQuestion("");
     },
   });
   const remove = useMutation({
@@ -148,7 +275,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     // Graffe: in Chrome recenti scrollIntoView restituisce una Promise, che React prenderebbe per la pulizia.
     end.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+  }, [messages.length, graph.length, mode]);
 
   const onProposal = (p: Proposal) => {
     qc.setQueryData(["ai-conversation", convId], (old: { conversation: unknown; messages: ChatMessage[] } | undefined) =>
@@ -158,9 +285,12 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
   const st = status.data;
   const blocked = st?.budget.state === "blocked";
+  const pending = ask.isPending || askGraph.isPending;
   const submit = () => {
     const q = question.trim();
-    if (q && !ask.isPending) ask.mutate(q);
+    if (!q || pending) return;
+    if (mode === "graph") askGraph.mutate(q);
+    else ask.mutate(q);
   };
 
   return (
@@ -176,6 +306,24 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         <button className="btn py-1" onClick={onClose}>{t("ai.panel.close")}</button>
       </div>
       <div className="flex flex-col gap-2 border-b border-hair px-4 py-2 text-[12.5px] text-muted">
+        <div className="flex flex-wrap gap-1" role="radiogroup" aria-label={t("ai.graph.mode")}>
+          {(["chat", "graph"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              className={`btn py-1 ${mode === m ? "btn-primary" : ""}`}
+              onClick={() => {
+                setMode(m);
+                input.current?.focus();
+              }}
+            >
+              {t(m === "chat" ? "ai.graph.modeChat" : "ai.graph.modeGraph")}
+            </button>
+          ))}
+        </div>
+        {mode === "chat" && (
         <div className="flex flex-wrap items-center gap-2">
           <Select
             aria-label={t("ai.panel.conversations")}
@@ -194,6 +342,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             </button>
           )}
         </div>
+        )}
         {st && (
           <span>
             {t("ai.panel.info", { model: st.model ?? "—", days: st.retention_days })}
@@ -205,13 +354,42 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         {blocked && <span className="font-semibold text-danger" role="note">{t("ai.panel.budgetBlocked")}</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label={t("ai.panel.log")}>
-        {convId && conv.isPending && <Loading rows={2} />}
-        <ErrorNote error={conv.error} />
-        {messages.length === 0 && !conv.isPending && <p className="m-0 text-muted">{t("ai.panel.empty")}</p>}
-        {messages.map((m) => (
-          <Message key={m.id} m={m} onProposal={onProposal} />
-        ))}
-        {ask.isPending && <p className="m-0 text-muted" role="status">{t("ai.panel.thinking")}</p>}
+        {mode === "chat" && (
+          <>
+            {convId && conv.isPending && <Loading rows={2} />}
+            <ErrorNote error={conv.error} />
+            {messages.length === 0 && !conv.isPending && !draft && <p className="m-0 text-muted">{t("ai.panel.empty")}</p>}
+            {messages.map((m) => (
+              <Message key={m.id} m={m} onProposal={onProposal} />
+            ))}
+            {ask.isPending && draft?.text && (
+              <div className="mr-4 flex flex-col gap-2" data-testid="risposta-in-arrivo" aria-busy="true">
+                <span className="label">{t("ai.panel.assistant")}</span>
+                <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{draft.text}</p>
+              </div>
+            )}
+            {ask.isPending && !draft?.text && (
+              <p className="m-0 text-muted" role="status">
+                {draft?.tools.length ? t("ai.panel.usingTools", { tools: draft.tools.map((n) => lookup(`ai.tool.${n}`) ?? n).join(", ") }) : t("ai.panel.thinking")}
+              </p>
+            )}
+          </>
+        )}
+        {mode === "graph" && (
+          <>
+            {graph.length === 0 && <p className="m-0 text-muted">{t("ai.graph.empty")}</p>}
+            {graph.map((g, i) => (
+              <div key={i} className="flex flex-col gap-3">
+                <div className="ml-8 flex flex-col gap-1 self-end border border-hair bg-side px-3 py-2" data-testid="domanda">
+                  <span className="sr-only">{t("ai.panel.you")}</span>
+                  <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{g.question}</p>
+                </div>
+                <GraphAnswer r={g.result} />
+              </div>
+            ))}
+            {askGraph.isPending && <p className="m-0 text-muted" role="status">{t("ai.graph.thinking")}</p>}
+          </>
+        )}
         <div ref={end} />
       </div>
       <form
@@ -221,16 +399,16 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
           submit();
         }}
       >
-        <ErrorNote error={ask.error} />
+        <ErrorNote error={mode === "graph" ? askGraph.error : ask.error} />
         <label className="flex flex-col gap-1">
-          <span className="label">{t("ai.panel.question")}</span>
+          <span className="label">{t(mode === "graph" ? "ai.graph.question" : "ai.panel.question")}</span>
           <textarea
             ref={input}
             className="field min-h-[72px]"
             maxLength={4000}
             value={question}
             disabled={blocked}
-            placeholder={t("ai.panel.placeholder")}
+            placeholder={t(mode === "graph" ? "ai.graph.placeholder" : "ai.panel.placeholder")}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -241,8 +419,8 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
           />
         </label>
         <div className="flex items-center gap-2">
-          <button type="submit" className="btn btn-primary" disabled={!question.trim() || ask.isPending || blocked}>
-            {ask.isPending ? t("ai.panel.asking") : t("ai.panel.ask")}
+          <button type="submit" className="btn btn-primary" disabled={!question.trim() || pending || blocked}>
+            {pending ? t("ai.panel.asking") : t("ai.panel.ask")}
           </button>
           <span className="text-[12px] text-muted">{t("ai.panel.hint")}</span>
         </div>

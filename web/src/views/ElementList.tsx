@@ -144,7 +144,8 @@ export function ElementList({
   }, [group, mode, hasNextPage, isFetching, fetchNextPage, items.length]);
 
   const tn = useTypeNames();
-  const type = useQuery({ queryKey: ["type", config.typeKey], queryFn: () => api.type(config.typeKey), staleTime: 300_000 });
+  // Una lista senza tipo principale (domande sul grafo) non chiede il tipo.
+  const type = useQuery({ queryKey: ["type", config.typeKey], queryFn: () => api.type(config.typeKey), staleTime: 300_000, enabled: !!config.typeKey });
   const fields = useQuery({ queryKey: ["query-fields"], queryFn: queryApi.fields, staleTime: 300_000 });
 
   // --- Indirizzo: ogni cambio tiene agganciata la vista attiva, anche se arrivava dalla predefinita.

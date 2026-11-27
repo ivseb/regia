@@ -5,7 +5,7 @@
 // creata apposta, così l'AI accesa e le richieste create non cambiano le pagine degli altri test.
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createRequire } from "node:module";
-import { apiAs, call, expectNoHorizontalScroll, login, scegli, uniq } from "./fixtures";
+import { apiAs, call, createTenant, expectNoHorizontalScroll, login, scegli, uniq } from "./fixtures";
 
 // axe-core come in a11y.spec.ts: la CSP dell'app blocca lo script iniettato, solo nei test la si ignora.
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -55,7 +55,7 @@ test.describe("AI: fondamenta e assistente", () => {
   test.beforeAll(async ({ playwright, baseURL }) => {
     const { req } = await apiAs(playwright, baseURL!, "admin");
     const slug = `ai-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
-    await call(req, "POST", "/api/v1/platform/tenants", { name: uniq("Org AI"), slug });
+    await createTenant(req, uniq("Org AI"), slug);
     // login() resta nel demo se non trova l'organizzazione: qui si verifica che l'amministratore ci sia.
     const me = await call<{ tenants: { slug: string }[] }>(req, "GET", "/api/v1/me");
     expect(me.tenants.map((t) => t.slug)).toContain(slug);
