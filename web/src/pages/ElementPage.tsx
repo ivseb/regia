@@ -55,6 +55,8 @@ const EaSection = lazy(() => import("./ea/EaSection").then((m) => ({ default: m.
 // Rischi, incidenti e fornitori ICT (piano, passo 20).
 const GrcDetail = lazy(() => import("./RiskDetail"));
 const GRC_TYPES = ["risk", "incident", "ict_provider"];
+// GRC assistito (AI, ondata 5): solo con l'AI accesa e la funzione «grc» pronta.
+const GrcElementAssist = lazy(() => import("./GrcAssistant"));
 
 // DevSecOps (piano, passo 21): scheda «Produzione» dell'asset e «Servizi e rilasci» dell'applicazione.
 const ProductionPanel = lazy(() => import("./Devsecops").then((m) => ({ default: m.ProductionPanel })));
@@ -541,6 +543,7 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
           <Suspense fallback={<Loading className="text-muted" />}>
             {el.type === "control" && <ControlSection refKey={key} />}
             {el.type === "evidence" && <EvidenceSection refKey={key} />}
+            {(el.type === "control" || el.type === "evidence" || el.type === "risk") && <GrcElementAssist type={el.type} refKey={key} />}
             {detail.application && <ApplicationCompliance appKey={key} />}
             {el.type === "requirement" && <RequirementLinks refKey={key} />}
           </Suspense>

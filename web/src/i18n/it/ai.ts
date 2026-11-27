@@ -25,11 +25,11 @@ export default {
   "ai.feature.classificazione": "Classificazione e duplicati",
   "ai.feature.classificazione.d": "Alla creazione: duplicati probabili e valori proposti per i campi, da accettare uno per uno.",
   "ai.feature.bozze": "Bozze",
-  "ai.feature.bozze.d": "Bozze di descrizioni, commenti e risposte al richiedente nella scheda; poi policy, runbook e notifiche.",
+  "ai.feature.bozze.d": "Bozze di descrizioni, commenti e risposte al richiedente nella scheda.",
   "ai.feature.wiki": "Wiki personale",
   "ai.feature.wiki.d": "Le pagine che l'AI tiene aggiornate per ogni persona.",
   "ai.feature.grc": "GRC assistito",
-  "ai.feature.grc.d": "Evidenze collegate ai controlli e bozze per la conformità.",
+  "ai.feature.grc.d": "Evidenze proposte per i controlli (e viceversa), bozze di policy e runbook, bozza della notifica DORA di un incidente.",
 
   "ai.tool.cerca": "cerca",
   "ai.tool.query": "query",

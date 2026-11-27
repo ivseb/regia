@@ -239,7 +239,7 @@ export type EvidenceView = EvidenceRef & {
   signature_ok: boolean;
   status_note: string;
   created_by: string;
-  linked_controls: { id: string; key: string; title: string }[];
+  linked_controls: { id: string; key: string; title: string; coverage?: "full" | "partial"; via?: "manual" | "ai" }[];
   attachments: number;
   can: { validate: boolean; reject: boolean; revoke: boolean };
 };

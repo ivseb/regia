@@ -293,6 +293,8 @@ export default {
   "governance.compliancesections.valida_e_firma": "Valida e firma",
   "governance.compliancesections.valida_fino_al_vuoto_la": "Valida fino al (vuoto = la frequenza del controllo)",
   "governance.compliancesections.validata_da": " · validata da {validated_by}",
+  "governance.compliancesections.copertura_parziale": "copertura parziale",
+  "governance.compliancesections.collegata_con_assistente": "proposta dall'assistente",
   "governance.compliancesections.validita": "Validità",
   "governance.compliancesections.valuta_l_efficacia": "Valuta l'efficacia",
   "governance.compliancesections.versione_superata": "versione superata",

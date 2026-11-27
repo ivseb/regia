@@ -4,7 +4,7 @@
 // CSV e JSON, versioni, corrispondenze) e regole di applicabilità. Pacchetto per l'audit
 // (zip) e report stampabile.
 import { EntitySelect, Select } from "../select";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -472,6 +472,9 @@ function PairsTable({ pairs }: { pairs: PairView[] }) {
   );
 }
 
+// GRC assistito (AI, ondata 5): bozza di policy o runbook dal requisito, solo con l'AI accesa.
+const RequirementAssist = lazy(() => import("./GrcAssistant").then((m) => ({ default: m.RequirementAssist })));
+
 function RequirementPanel({ id, summary, pairs }: { id: string; summary: string; pairs: PairView[] }) {
   const qc = useQueryClient();
   const det = useQuery({ queryKey: ["grc", "requirement", id], queryFn: () => grcApi.requirement(id) });
@@ -562,6 +565,11 @@ function RequirementPanel({ id, summary, pairs }: { id: string; summary: string;
             </div>
           )}
         </div>
+      )}
+      {r && (
+        <Suspense fallback={null}>
+          <RequirementAssist id={id} />
+        </Suspense>
       )}
     </div>
   );

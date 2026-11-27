@@ -292,6 +292,8 @@ export default {
   "governance.compliancesections.valida_e_firma": "Validate and sign",
   "governance.compliancesections.valida_fino_al_vuoto_la": "Valid until (empty = the control's frequency)",
   "governance.compliancesections.validata_da": " · validated by {validated_by}",
+  "governance.compliancesections.copertura_parziale": "partial coverage",
+  "governance.compliancesections.collegata_con_assistente": "proposed by the assistant",
   "governance.compliancesections.validita": "Validity",
   "governance.compliancesections.valuta_l_efficacia": "Assess effectiveness",
   "governance.compliancesections.versione_superata": "superseded version",

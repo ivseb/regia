@@ -1,7 +1,7 @@
 // Schede di dettaglio di rischio, incidente e fornitore ICT nella pagina dell'elemento
 // (piano, passo 20). Si caricano solo per questi tipi.
 import { EntitySelect, Select } from "../select";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, lazy, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -596,6 +596,10 @@ function Notifications({ x, refKey }: { x: IncidentView; refKey: string }) {
   );
 }
 
+// Bozza DORA con l'assistente (AI, ondata 5): caricata solo aprendo una notifica DORA; senza AI
+// mostra al più le versioni salvate (che esistono solo se l'assistente è stato usato).
+const DoraNoticeAssist = lazy(() => import("./GrcAssistant").then((m) => ({ default: m.DoraNoticeAssist })));
+
 function NotificationCard({ n, refKey, manage }: { n: Notification; refKey: string; manage: boolean }) {
   const refresh = useRefresh(refKey);
   const [open, setOpen] = useState(false);
@@ -647,6 +651,17 @@ function NotificationCard({ n, refKey, manage }: { n: Notification; refKey: stri
       )}
       {open && (
         <div className="flex flex-col gap-2">
+          {n.scheme_key === "dora" && (
+            <Suspense fallback={null}>
+              <DoraNoticeAssist
+                notification={n.id}
+                onSaved={(c) => {
+                  setContent(c);
+                  refresh();
+                }}
+              />
+            </Suspense>
+          )}
           <label className="flex flex-col gap-1">
             <span className="label">{tr("governance.riskdetail.contenuto")}</span>
             <textarea className="field min-h-28" value={content} onChange={(e) => setContent(e.target.value)} />

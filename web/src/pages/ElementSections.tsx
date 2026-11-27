@@ -513,6 +513,9 @@ export function describe(
     case "incident":
       return field === "postmortem" ? h("incidentPostmortem") : added?.summary ? h("incidentClassifiedSummary", { summary: s(added.summary) }) : h("incidentClassified");
     case "notification":
+      if (field === "draft_version")
+        return (h(added?.source === "assistente" ? "notificationDraftAi" : "notificationDraft", { scheme: s(added?.scheme ?? ""), version: s(added?.version ?? "") }) +
+          (added?.stage ? ` · ${s(added.stage)}` : "")).trim();
       return (h("notification", { scheme: s(added?.scheme ?? "") }) + (added?.stage ? ` · ${s(added.stage)}` : "")).trim();
     case "risk":
       return added?.residual ? h("riskResidual", { residual: s(added.residual) }) : h("risk");

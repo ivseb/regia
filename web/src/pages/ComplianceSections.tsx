@@ -466,6 +466,8 @@ export function EvidenceSection({ refKey }: { refKey: string }) {
                     {c.key}
                   </Link>{" "}
                   {c.title}
+                  {c.coverage === "partial" && <span className="text-[12px] text-muted"> · {tr("governance.compliancesections.copertura_parziale")}</span>}
+                  {c.via === "ai" && <span className="text-[12px] text-muted"> · {tr("governance.compliancesections.collegata_con_assistente")}</span>}
                 </span>
               ))}
             </span>,

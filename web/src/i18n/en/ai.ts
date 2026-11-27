@@ -24,11 +24,11 @@ export default {
   "ai.feature.classificazione": "Classification and duplicates",
   "ai.feature.classificazione.d": "On creation: likely duplicates and suggested field values, to accept one by one.",
   "ai.feature.bozze": "Drafts",
-  "ai.feature.bozze.d": "Drafts of descriptions, comments and replies to the requester on an item's page; later policies, runbooks and notifications.",
+  "ai.feature.bozze.d": "Drafts of descriptions, comments and replies to the requester on an item's page.",
   "ai.feature.wiki": "Personal wiki",
   "ai.feature.wiki.d": "The pages AI keeps up to date for each person.",
   "ai.feature.grc": "Assisted GRC",
-  "ai.feature.grc.d": "Evidence linked to controls and compliance drafts.",
+  "ai.feature.grc.d": "Evidence proposed for controls (and the other way round), policy and runbook drafts, the DORA notification draft of an incident.",
 
   "ai.tool.cerca": "search",
   "ai.tool.query": "query",

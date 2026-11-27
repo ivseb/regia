@@ -33,7 +33,7 @@ func (s *Server) notificationDrafts(w http.ResponseWriter, r *http.Request, p *a
 func (s *Server) notificationDraftExport(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	version, err := strconv.Atoi(r.PathValue("version"))
 	if err != nil || version < 1 {
-		writeProblem(w, r, http.StatusNotFound, "not_found", "versione inesistente")
+		writeProblem(w, r, http.StatusNotFound, "element.not_found", "versione inesistente")
 		return
 	}
 	var n *risk.Notification
