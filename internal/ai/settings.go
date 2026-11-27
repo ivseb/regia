@@ -130,8 +130,11 @@ type ProviderRow struct {
 	PriceInput    *float64 `json:"price_input_usd"`
 	PriceOutput   *float64 `json:"price_output_usd"`
 	// Local: indirizzo su questa macchina o sulla rete interna: i dati non escono (niente mascheramento).
-	Local  bool `json:"local"`
-	secret []byte
+	Local bool `json:"local"`
+	// Region e ProjectID: regione e progetto del cloud (Bedrock, Vertex). Non sono segreti.
+	Region    string `json:"region"`
+	ProjectID string `json:"project_id"`
+	secret    []byte
 }
 
 // regulated: il tenant ha almeno una normativa (regolamento o direttiva) attiva.
@@ -299,13 +302,14 @@ func secretContext(id string) string { return "ai-provider:" + id }
 
 func (s *Service) listProviders(ctx context.Context, tx pgx.Tx) ([]ProviderRow, error) {
 	rows, err := tx.Query(ctx, `select id::text, kind, name, coalesce(base_url, ''), secret_enc, no_tools_models,
-		price_input_usd::float8, price_output_usd::float8 from ai_providers order by created_at, name`)
+		price_input_usd::float8, price_output_usd::float8, coalesce(region, ''), coalesce(project_id, '')
+		from ai_providers order by created_at, name`)
 	if err != nil {
 		return nil, err
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ProviderRow, error) {
 		var p ProviderRow
-		err := r.Scan(&p.ID, &p.Kind, &p.Name, &p.BaseURL, &p.secret, &p.NoToolsModels, &p.PriceInput, &p.PriceOutput)
+		err := r.Scan(&p.ID, &p.Kind, &p.Name, &p.BaseURL, &p.secret, &p.NoToolsModels, &p.PriceInput, &p.PriceOutput, &p.Region, &p.ProjectID)
 		p.HasKey = len(p.secret) > 0
 		p.Local = s.isLocal(p)
 		if p.NoToolsModels == nil {
@@ -371,16 +375,29 @@ func LocalHost(host string) bool {
 	return false
 }
 
-// ProviderInput crea o modifica un fornitore. APIKey vuota = invariata (RemoveKey la toglie).
+// ProviderInput crea o modifica un fornitore. APIKey vuota = invariata (RemoveKey la toglie);
+// lo stesso per le credenziali dei cloud: vuote = invariate.
 type ProviderInput struct {
-	Kind          string   `json:"kind"`
-	Name          string   `json:"name"`
-	BaseURL       string   `json:"base_url"`
-	APIKey        string   `json:"api_key"`
-	RemoveKey     bool     `json:"remove_key"`
-	NoToolsModels []string `json:"no_tools_models"`
-	PriceInput    *float64 `json:"price_input_usd"`
-	PriceOutput   *float64 `json:"price_output_usd"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	BaseURL   string `json:"base_url"`
+	APIKey    string `json:"api_key"`
+	RemoveKey bool   `json:"remove_key"`
+	// Region e ProjectID: regione (Bedrock, Vertex) e progetto Google Cloud (Vertex).
+	Region    string `json:"region"`
+	ProjectID string `json:"project_id"`
+	// Credenziali AWS per Bedrock in alternativa alla chiave API di Bedrock (APIKey).
+	AWSAccessKeyID     string `json:"aws_access_key_id"`
+	AWSSecretAccessKey string `json:"aws_secret_access_key"`
+	AWSSessionToken    string `json:"aws_session_token"`
+	// ServiceAccountJSON è la chiave JSON del service account Google Cloud (Vertex).
+	ServiceAccountJSON string   `json:"service_account_json"`
+	NoToolsModels      []string `json:"no_tools_models"`
+	PriceInput         *float64 `json:"price_input_usd"`
+	PriceOutput        *float64 `json:"price_output_usd"`
+	// secret è il segreto nuovo da cifrare (chiave o credenziali del cloud in JSON); vuoto =
+	// invariato. Lo prepara cleanProvider.
+	secret string
 }
 
 func (s *Service) cleanProvider(in *ProviderInput, prev *ProviderRow) (Kind, error) {
@@ -396,21 +413,29 @@ func (s *Service) cleanProvider(in *ProviderInput, prev *ProviderRow) (Kind, err
 		return k, invalid("name", "ai.name_required", "serve un nome (al massimo 80 caratteri)")
 	}
 	in.BaseURL = strings.TrimSpace(in.BaseURL)
-	if k.NeedsURL {
-		base, err := s.normalizeURL(in.BaseURL)
+	switch {
+	case k.NeedsURL || (k.OptionalURL && in.BaseURL != ""):
+		base, err := s.normalizeURL(in.BaseURL, k.URLSuffix)
 		if err != nil {
 			return k, &Error{Status: 422, Code: "ai.base_url_invalid", Field: "base_url", Msg: err.Error()}
 		}
 		in.BaseURL = base
-	} else {
+	default:
 		in.BaseURL = ""
 	}
-	in.APIKey = strings.TrimSpace(in.APIKey)
-	if len(in.APIKey) > 4000 || strings.ContainsAny(in.APIKey, " \n\r\t") {
-		return k, invalid("api_key", "ai.key_invalid", "chiave non valida")
+	if err := cleanCloud(k, in, prev); err != nil {
+		return k, err
 	}
-	if k.NeedsKey && in.APIKey == "" && (prev == nil || !prev.HasKey || in.RemoveKey) {
-		return k, invalid("api_key", "ai.key_required", "serve la chiave del fornitore")
+	if k.Cloud == "" {
+		in.Region, in.ProjectID = "", ""
+		in.APIKey = strings.TrimSpace(in.APIKey)
+		if len(in.APIKey) > 4000 || strings.ContainsAny(in.APIKey, " \n\r\t") {
+			return k, invalid("api_key", "ai.key_invalid", "chiave non valida")
+		}
+		if k.NeedsKey && in.APIKey == "" && (prev == nil || !prev.HasKey || in.RemoveKey) {
+			return k, invalid("api_key", "ai.key_required", "serve la chiave del fornitore")
+		}
+		in.secret = in.APIKey
 	}
 	var models []string
 	for _, m := range in.NoToolsModels {
@@ -434,8 +459,9 @@ func (s *Service) cleanProvider(in *ProviderInput, prev *ProviderRow) (Kind, err
 	return k, nil
 }
 
-// normalizeURL controlla l'indirizzo base con la politica di rete dei connettori.
-func (s *Service) normalizeURL(raw string) (string, error) {
+// normalizeURL controlla l'indirizzo base con la politica di rete dei connettori; a un
+// indirizzo senza percorso aggiunge suffix («/v1» per i compatibili OpenAI).
+func (s *Service) normalizeURL(raw, suffix string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", errors.New("serve l'indirizzo base del servizio (es. http://localhost:11434/v1)")
@@ -462,7 +488,7 @@ func (s *Service) normalizeURL(raw string) (string, error) {
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 	if u.Path == "" {
-		u.Path = "/v1"
+		u.Path = suffix
 	}
 	return u.String(), nil
 }
@@ -481,19 +507,21 @@ func (s *Service) CreateProvider(ctx context.Context, tx pgx.Tx, actor engine.Ac
 	}
 	id := db.NewID()
 	var sealed []byte
-	if in.APIKey != "" {
+	if in.secret != "" {
 		var err error
-		if sealed, err = s.o.Box.Seal([]byte(in.APIKey), secretContext(id)); err != nil {
+		if sealed, err = s.o.Box.Seal([]byte(in.secret), secretContext(id)); err != nil {
 			return nil, err
 		}
 	}
-	if _, err := tx.Exec(ctx, `insert into ai_providers (tenant_id, id, kind, name, base_url, secret_enc, no_tools_models, price_input_usd, price_output_usd)
-		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8)`, id, in.Kind, in.Name, nullable(in.BaseURL), sealed, in.NoToolsModels, in.PriceInput, in.PriceOutput); err != nil {
+	if _, err := tx.Exec(ctx, `insert into ai_providers (tenant_id, id, kind, name, base_url, secret_enc, no_tools_models, price_input_usd, price_output_usd,
+			region, project_id)
+		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, in.Kind, in.Name, nullable(in.BaseURL), sealed, in.NoToolsModels,
+		in.PriceInput, in.PriceOutput, nullable(in.Region), nullable(in.ProjectID)); err != nil {
 		return nil, err
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "ai.provider.create", EntityType: "ai_provider", EntityID: id,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
-		Payload: map[string]any{"kind": in.Kind, "base_url": in.BaseURL, "key": in.APIKey != ""}}); err != nil {
+		Payload: map[string]any{"kind": in.Kind, "base_url": in.BaseURL, "key": in.secret != "", "region": in.Region, "project_id": in.ProjectID}}); err != nil {
 		return nil, err
 	}
 	return s.provider(ctx, tx, id)
@@ -511,8 +539,8 @@ func (s *Service) UpdateProvider(ctx context.Context, tx pgx.Tx, actor engine.Ac
 	sealed := prev.secret
 	keyChanged := false
 	switch {
-	case in.APIKey != "":
-		if sealed, err = s.o.Box.Seal([]byte(in.APIKey), secretContext(id)); err != nil {
+	case in.secret != "":
+		if sealed, err = s.o.Box.Seal([]byte(in.secret), secretContext(id)); err != nil {
 			return nil, err
 		}
 		keyChanged = true
@@ -520,13 +548,13 @@ func (s *Service) UpdateProvider(ctx context.Context, tx pgx.Tx, actor engine.Ac
 		sealed, keyChanged = nil, true
 	}
 	if _, err := tx.Exec(ctx, `update ai_providers set name = $2, base_url = $3, secret_enc = $4, no_tools_models = $5,
-		price_input_usd = $6, price_output_usd = $7, updated_at = now() where id = $1`,
-		id, in.Name, nullable(in.BaseURL), sealed, in.NoToolsModels, in.PriceInput, in.PriceOutput); err != nil {
+		price_input_usd = $6, price_output_usd = $7, region = $8, project_id = $9, updated_at = now() where id = $1`,
+		id, in.Name, nullable(in.BaseURL), sealed, in.NoToolsModels, in.PriceInput, in.PriceOutput, nullable(in.Region), nullable(in.ProjectID)); err != nil {
 		return nil, err
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "ai.provider.update", EntityType: "ai_provider", EntityID: id,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
-		Payload: map[string]any{"base_url": in.BaseURL, "key_changed": keyChanged}}); err != nil {
+		Payload: map[string]any{"base_url": in.BaseURL, "key_changed": keyChanged, "region": in.Region, "project_id": in.ProjectID}}); err != nil {
 		return nil, err
 	}
 	return s.provider(ctx, tx, id)
@@ -561,7 +589,7 @@ func (s *Service) instance(p *ProviderRow) (Provider, Kind, error) {
 	if !ok {
 		return nil, Kind{}, &Error{Status: 409, Code: "ai.kind_unavailable", Msg: "il tipo di fornitore non è disponibile in questa installazione"}
 	}
-	cfg := ProviderConfig{BaseURL: p.BaseURL, Local: p.Local}
+	cfg := ProviderConfig{BaseURL: p.BaseURL, Local: p.Local, Region: p.Region, ProjectID: p.ProjectID}
 	if len(p.secret) > 0 {
 		key, err := s.o.Box.Open(p.secret, secretContext(p.ID))
 		if err != nil {
@@ -604,6 +632,94 @@ func (s *Service) ProviderModels(ctx context.Context, tx pgx.Tx, id string) ([]M
 		}
 	}
 	return list, nil
+}
+
+// TestResult è l'esito della prova di connessione di un fornitore.
+type TestResult struct {
+	OK bool `json:"ok"`
+	// Models sono i modelli del fornitore (quelli dichiarati dal servizio uniti ai proposti).
+	Models []ModelInfo `json:"models"`
+	// Model è il modello provato (Bedrock, Vertex), se la prova ne usa uno.
+	Model string `json:"model,omitempty"`
+	// NoTools sono i modelli che il servizio dichiara senza strumenti, segnati adesso come tali.
+	NoTools   []string `json:"no_tools"`
+	LatencyMS int64    `json:"latency_ms"`
+}
+
+// TestProvider prova la connessione: elenca i modelli e, per i cloud senza elenco, verifica
+// credenziali, regione e accesso a un modello con il conteggio dei token (gratuito, niente
+// testo generato). I modelli che il servizio dichiara senza strumenti (Ollama) si aggiungono
+// a quelli segnati: fanno solo riassunti e bozze, e l'interfaccia lo dice. Non consuma budget.
+func (s *Service) TestProvider(ctx context.Context, tx pgx.Tx, actor engine.Actor, id, model string) (*TestResult, error) {
+	p, err := s.provider(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	model = strings.TrimSpace(model)
+	if utf8.RuneCountInString(model) > 200 {
+		return nil, invalid("model", "ai.model_required", "modello non valido")
+	}
+	start := s.o.Now()
+	list, err := s.ProviderModels(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	out := &TestResult{OK: true, Models: list, NoTools: []string{}}
+	prov, k, err := s.instance(p)
+	if err != nil {
+		return nil, err
+	}
+	if t, ok := prov.(Tester); ok {
+		if model == "" {
+			model = s.testModel(ctx, tx, p, k)
+		}
+		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if err := t.Test(cctx, model); err != nil {
+			return nil, err
+		}
+		out.Model = model
+	}
+	out.LatencyMS = s.o.Now().Sub(start).Milliseconds()
+	marked := p.NoToolsModels
+	for _, m := range list {
+		if m.Tools != nil && !*m.Tools && !slices.Contains(marked, m.ID) && len(marked) < 100 {
+			marked = append(marked, m.ID)
+			out.NoTools = append(out.NoTools, m.ID)
+		}
+	}
+	if len(out.NoTools) > 0 {
+		if _, err := tx.Exec(ctx, `update ai_providers set no_tools_models = $2, updated_at = now() where id = $1`, id, marked); err != nil {
+			return nil, err
+		}
+	}
+	if err := audit.Append(ctx, tx, audit.Event{Action: "ai.provider.test", EntityType: "ai_provider", EntityID: id,
+		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
+		Payload: map[string]any{"models": len(list), "model": out.Model, "no_tools": out.NoTools}}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// testModel sceglie il modello da provare: quello di un livello che usa il fornitore,
+// altrimenti il primo proposto da Regia.
+func (s *Service) testModel(ctx context.Context, tx pgx.Tx, p *ProviderRow, k Kind) string {
+	if st, err := LoadSettings(ctx, tx); err == nil {
+		for _, c := range []TierChoice{st.Fast, st.Deep} {
+			if c.ProviderID == p.ID && c.Model != "" {
+				return c.Model
+			}
+		}
+	}
+	for _, m := range k.Proposed {
+		if m.Tier == TierFast {
+			return m.ID
+		}
+	}
+	if len(k.Proposed) > 0 {
+		return k.Proposed[0].ID
+	}
+	return ""
 }
 
 // Kinds sono i tipi di fornitore disponibili, nell'ordine di registrazione.

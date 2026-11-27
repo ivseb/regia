@@ -8,24 +8,49 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Prezzi di listino noti, in dollari per milione di token (input, output). Il costo nel
-// registro è una stima: il fornitore fattura con le sue regole (cache, sconti, valuta).
-var listPrices = map[string][2]float64{
-	"claude-haiku-5-5":  {0.10, 0.50},
-	"claude-sonnet-5-5": {2, 10},
-	"claude-opus-5-5":   {4, 20},
-	"claude-opus-5":     {5, 25},
-	"claude-sonnet-5":   {2, 10},
-	"claude-fable-5-2":  {8, 40},
-	"claude-haiku-4-5":  {1, 5},
+// price è il listino di un modello in dollari per milione di token. CacheRead è il prezzo
+// dell'input letto dalla cache del prompt; zero = 10% dell'input (Anthropic).
+type price struct{ In, Out, CacheRead float64 }
+
+// Prezzi di listino noti, in dollari per milione di token. Il costo nel registro è una stima:
+// il fornitore fattura con le sue regole (sconti, valuta, prezzi dei partner su Bedrock e
+// Vertex), e l'amministratore può impostare i prezzi del fornitore. Fonti: listini ufficiali
+// di Anthropic, OpenAI e Google (Gemini dal 1° dicembre 2026), verificati il 2026-11-27.
+var listPrices = map[string]price{
+	"claude-haiku-5-5":  {In: 0.10, Out: 0.50},
+	"claude-sonnet-5-5": {In: 2, Out: 10},
+	"claude-opus-5-5":   {In: 4, Out: 20},
+	"claude-opus-5":     {In: 5, Out: 25},
+	"claude-sonnet-5":   {In: 2, Out: 10},
+	"claude-fable-5-2":  {In: 8, Out: 40},
+	"claude-haiku-4-5":  {In: 1, Out: 5},
+	// OpenAI: input in cache al 5% (Astra) e al 10% (Luna, Terra).
+	"gpt-6.2-astra": {In: 8, Out: 40, CacheRead: 0.40},
+	"gpt-6.1-terra": {In: 1, Out: 5, CacheRead: 0.10},
+	"gpt-6-luna":    {In: 0.10, Out: 0.50, CacheRead: 0.01},
+	// Google Gemini (cache implicita).
+	"gemini-4-carbon":   {In: 4, Out: 20, CacheRead: 0.20},
+	"gemini-4-hydrogen": {In: 1.50, Out: 7.50, CacheRead: 0.075},
 }
 
-// Moltiplicatori della cache del prompt sul prezzo dell'input (listino Anthropic: lettura al
-// 10%, scrittura con durata di 5 minuti al 125%).
+// Moltiplicatori della cache del prompt sul prezzo dell'input quando il listino non dà il
+// prezzo della lettura (listino Anthropic: lettura al 10%, scrittura con durata di 5 minuti
+// al 125%).
 const (
 	cacheReadFactor  = 0.1
 	cacheWriteFactor = 1.25
 )
+
+// listPrice cerca il listino del modello, anche con i prefissi dei cloud (Bedrock:
+// «anthropic.», «eu.anthropic.»; Gemini: «models/»).
+func listPrice(model string) (price, bool) {
+	m := strings.TrimPrefix(model, "models/")
+	if i := strings.LastIndex(m, "anthropic."); i >= 0 {
+		m = m[i+len("anthropic."):]
+	}
+	p, ok := listPrices[m]
+	return p, ok
+}
 
 // Cost stima il costo di una chiamata: prezzi del fornitore se impostati, altrimenti il
 // listino noto del modello, altrimenti zero (modelli locali).
@@ -36,18 +61,20 @@ func Cost(p *ProviderRow, model string, in, out int64) float64 {
 // CostCached è Cost con la cache del prompt: in è tutto l'input, di cui cacheRead letto dalla
 // cache e cacheWrite scritto nella cache.
 func CostCached(p *ProviderRow, model string, in, cacheRead, cacheWrite, out int64) float64 {
-	pin, pout := 0.0, 0.0
-	if lp, ok := listPrices[strings.TrimPrefix(model, "anthropic.")]; ok {
-		pin, pout = lp[0], lp[1]
-	}
+	lp, _ := listPrice(model)
+	pin, pout := lp.In, lp.Out
+	pread := lp.CacheRead
 	if p != nil && p.PriceInput != nil {
-		pin = *p.PriceInput
+		pin, pread = *p.PriceInput, 0
 	}
 	if p != nil && p.PriceOutput != nil {
 		pout = *p.PriceOutput
 	}
+	if pread == 0 {
+		pread = pin * cacheReadFactor
+	}
 	plain := max(in-cacheRead-cacheWrite, 0)
-	return (float64(plain)*pin + float64(cacheRead)*pin*cacheReadFactor + float64(cacheWrite)*pin*cacheWriteFactor + float64(out)*pout) / 1e6
+	return (float64(plain)*pin + float64(cacheRead)*pread + float64(cacheWrite)*pin*cacheWriteFactor + float64(out)*pout) / 1e6
 }
 
 // Stati del budget.

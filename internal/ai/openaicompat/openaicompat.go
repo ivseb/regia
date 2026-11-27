@@ -30,7 +30,7 @@ const Kind = "openai_compat"
 
 // Register descrive il tipo di fornitore per il registro di ai.Service.
 func Register() ai.Kind {
-	return ai.Kind{Key: Kind, New: New, NeedsURL: true, External: true}
+	return ai.Kind{Key: Kind, New: New, NeedsURL: true, External: true, URLSuffix: "/v1", DefaultURL: "http://localhost:1234/v1"}
 }
 
 type provider struct {

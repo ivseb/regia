@@ -6,9 +6,11 @@
 // permessi della persona; ogni chiamata registrata in ai_calls; il contenuto degli elementi
 // è un dato e non un'istruzione; senza AI tutto funziona.
 //
-// Adattatori: internal/ai/anthropic (SDK ufficiale) e internal/ai/openaicompat (protocollo
-// compatibile OpenAI: OpenAI, Mistral, vLLM, LM Studio, Ollama...). Il fornitore finto dei test
-// (internal/devtools/fakeai) si registra solo in sviluppo e nei test (Options.Kinds).
+// Adattatori (replica/ai.md §3): internal/ai/anthropic (SDK ufficiale, anche via AWS Bedrock e
+// Google Vertex), internal/ai/openai (Responses API), internal/ai/gemini, internal/ai/ollama e
+// internal/ai/openaicompat (protocollo compatibile OpenAI: Azure OpenAI, Mistral, vLLM, LM
+// Studio...). Il fornitore finto dei test (internal/devtools/fakeai) si registra solo in
+// sviluppo e nei test (Options.Kinds).
 package ai
 
 import (
@@ -99,6 +101,12 @@ type ModelInfo struct {
 	Name string `json:"name,omitempty"`
 	// Tier: livello per cui Regia lo propone («rapido», «approfondito»), se lo conosce.
 	Tier string `json:"tier,omitempty"`
+	// Tools: il servizio dichiara se il modello sa chiamare strumenti (Ollama); nil = non lo dice.
+	Tools *bool `json:"tools,omitempty"`
+	// Thinking: il modello ragiona prima di rispondere (Ollama lo dichiara).
+	Thinking bool `json:"thinking,omitempty"`
+	// Size: dimensione in byte del modello installato (Ollama), per proporre i livelli.
+	Size int64 `json:"size,omitempty"`
 }
 
 // Provider è l'interfaccia unica del modello: ogni adattatore la implementa.
@@ -114,6 +122,13 @@ type Provider interface {
 // insieme: il servizio passa il testo intero a onText alla fine.
 type Streamer interface {
 	ChatStream(ctx context.Context, req Request, onText func(string)) (*Response, error)
+}
+
+// Tester è un adattatore il cui elenco dei modelli non interroga il servizio (Bedrock e Vertex
+// non hanno l'API dei modelli): la prova di connessione chiama Test, che verifica credenziali,
+// regione e accesso al modello senza generare testo (conteggio dei token, gratuito).
+type Tester interface {
+	Test(ctx context.Context, model string) error
 }
 
 // TokenCounter è un adattatore che sa contare i token dell'input prima della chiamata con
@@ -147,7 +162,12 @@ func EstimateTokens(req Request) int64 {
 // ProviderConfig è ciò che serve a un adattatore per collegarsi.
 type ProviderConfig struct {
 	BaseURL string
-	APIKey  string
+	// APIKey è il segreto del fornitore decifrato: la chiave, oppure per i cloud le credenziali
+	// in JSON (Bedrock: chiave API o chiavi d'accesso; Vertex: chiave del service account).
+	APIKey string
+	// Region e ProjectID: regione e progetto del cloud (Bedrock, Vertex).
+	Region    string
+	ProjectID string
 	// Local: indirizzo su questa macchina o sulla rete interna (niente mascheramento).
 	Local bool
 	// HTTPClient è il client con la politica di rete dei connettori (lo prepara ai.Service).
@@ -163,8 +183,17 @@ type Kind struct {
 	New Factory
 	// NeedsKey: la chiave è obbligatoria (Anthropic); per un servizio compatibile è facoltativa.
 	NeedsKey bool
-	// NeedsURL: serve l'indirizzo base (servizio compatibile OpenAI).
+	// NeedsURL: serve l'indirizzo base (servizio compatibile OpenAI, Ollama).
 	NeedsURL bool
+	// OptionalURL: l'indirizzo base si può cambiare (OpenAI: residenza dei dati nell'UE).
+	OptionalURL bool
+	// DefaultURL è l'indirizzo proposto nel modulo (segnaposto).
+	DefaultURL string
+	// URLSuffix si aggiunge a un indirizzo senza percorso («/v1» per i compatibili OpenAI).
+	URLSuffix string
+	// Cloud: «aws» (Bedrock: regione e credenziali AWS) o «gcp» (Vertex: regione, progetto e
+	// service account); vuoto per i fornitori con una chiave.
+	Cloud string
 	// External: i dati escono dall'organizzazione (mascheramento), salvo indirizzi locali.
 	External bool
 	// Tools: il fornitore sa chiamare strumenti con ogni modello (Anthropic). Falso = dipende dal modello.

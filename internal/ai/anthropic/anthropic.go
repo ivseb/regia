@@ -1,9 +1,13 @@
 // Package anthropic è l'adattatore Anthropic dell'interfaccia unica del modello (ai.Provider),
-// con l'SDK ufficiale per Go (github.com/anthropics/anthropic-sdk-go/v2).
+// con l'SDK ufficiale per Go (github.com/anthropics/anthropic-sdk-go/v2): l'API di Anthropic
+// (Register), AWS Bedrock (RegisterBedrock, bedrock.go) e Google Vertex (RegisterVertex,
+// vertex.go), questi due per tenere i dati in una regione UE. Le richieste sono le stesse:
+// cambiano indirizzo, autenticazione e nomi dei modelli.
 //
-// La chiave e l'indirizzo arrivano sempre dalle impostazioni del tenant: il client non legge
-// le variabili d'ambiente del server (ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL), così un tenant
-// non usa mai le credenziali di un altro né quelle dell'operatore.
+// La chiave, le credenziali, la regione e l'indirizzo arrivano sempre dalle impostazioni del
+// tenant: il client non legge le variabili d'ambiente del server (ANTHROPIC_API_KEY,
+// ANTHROPIC_BASE_URL, AWS_*, le credenziali predefinite di Google), così un tenant non usa mai
+// le credenziali di un altro né quelle dell'operatore.
 package anthropic
 
 import (
@@ -17,6 +21,7 @@ import (
 
 	sdk "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
+	"golang.org/x/oauth2"
 
 	"regia/internal/ai"
 )
@@ -43,7 +48,12 @@ func Register() ai.Kind {
 }
 
 type provider struct {
-	client sdk.Client
+	msgs sdk.MessageService
+	// models è l'API dei modelli; nil dove non c'è (Bedrock, Vertex): l'elenco è quello proposto.
+	models   *sdk.ModelService
+	proposed []ai.ModelInfo
+	// who nomina il servizio nei messaggi d'errore («Anthropic», «Bedrock», «Vertex»).
+	who string
 }
 
 // New crea l'adattatore con la chiave del tenant. Senza HTTPClient usa un client con timeout.
@@ -66,11 +76,20 @@ func New(cfg ai.ProviderConfig) (ai.Provider, error) {
 		option.WithHTTPClient(hc),
 		option.WithMaxRetries(2),
 	)
-	return &provider{client: c}, nil
+	return &provider{msgs: c.Messages, models: &c.Models, proposed: Register().Proposed, who: "Anthropic"}, nil
+}
+
+// baseModel toglie dal modello i prefissi dei cloud («anthropic.», «eu.anthropic.» di Bedrock).
+func baseModel(model string) string {
+	if i := strings.LastIndex(model, "anthropic."); i >= 0 {
+		return model[i+len("anthropic."):]
+	}
+	return model
 }
 
 // effortModels sono i modelli che accettano output_config.effort (Claude 5 e successivi).
 func supportsEffort(model string) bool {
+	model = baseModel(model)
 	for _, p := range []string{"claude-opus-5", "claude-sonnet-5", "claude-haiku-5", "claude-fable-5", "claude-mythos-5", "claude-opus-4-8", "claude-opus-4-7"} {
 		if strings.HasPrefix(model, p) {
 			return true
@@ -130,17 +149,27 @@ func (p *provider) CountTokens(ctx context.Context, req ai.Request) (int64, erro
 	for _, t := range full.Tools {
 		cp.Tools = append(cp.Tools, sdk.MessageCountTokensToolUnionParam{OfTool: t.OfTool})
 	}
-	res, err := p.client.Messages.CountTokens(ctx, cp)
+	res, err := p.msgs.CountTokens(ctx, cp)
 	if err != nil {
-		return 0, mapError(err)
+		return 0, p.mapError(err)
 	}
 	return res.InputTokens, nil
 }
 
+// Test verifica credenziali, regione e accesso al modello con il conteggio dei token di una
+// richiesta minima: non genera testo e non costa.
+func (p *provider) Test(ctx context.Context, model string) error {
+	if model == "" {
+		return &ai.ProviderError{Code: "model_not_found", Msg: "scegli il modello da provare"}
+	}
+	_, err := p.CountTokens(ctx, ai.Request{Model: model, Messages: []ai.Message{{Role: ai.RoleUser, Text: "ping"}}})
+	return err
+}
+
 func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) {
-	resp, err := p.client.Messages.New(ctx, params(req))
+	resp, err := p.msgs.New(ctx, params(req))
 	if err != nil {
-		return nil, mapError(err)
+		return nil, p.mapError(err)
 	}
 	return convert(resp), nil
 }
@@ -148,7 +177,7 @@ func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, erro
 // ChatStream chiede la risposta in streaming e passa a onText i pezzi di testo man mano;
 // alla fine il messaggio accumulato è lo stesso di Chat (blocchi nativi compresi).
 func (p *provider) ChatStream(ctx context.Context, req ai.Request, onText func(string)) (*ai.Response, error) {
-	stream := p.client.Messages.NewStreaming(ctx, params(req))
+	stream := p.msgs.NewStreaming(ctx, params(req))
 	defer stream.Close()
 	msg := sdk.Message{}
 	for stream.Next() {
@@ -163,7 +192,7 @@ func (p *provider) ChatStream(ctx context.Context, req ai.Request, onText func(s
 		}
 	}
 	if err := stream.Err(); err != nil {
-		return nil, mapError(err)
+		return nil, p.mapError(err)
 	}
 	return convert(&msg), nil
 }
@@ -254,9 +283,14 @@ func toParams(msgs []ai.Message) []sdk.MessageParam {
 	return out
 }
 
-// Models verifica la chiave elencando i modelli dell'account e segna quelli proposti.
+// Models verifica la chiave elencando i modelli dell'account e segna quelli proposti. Dove
+// l'API dei modelli non c'è (Bedrock, Vertex) restituisce i modelli proposti: la prova di
+// connessione passa da Test.
 func (p *provider) Models(ctx context.Context) ([]ai.ModelInfo, error) {
-	pager := p.client.Models.ListAutoPaging(ctx, sdk.ModelListParams{})
+	if p.models == nil {
+		return append([]ai.ModelInfo(nil), p.proposed...), nil
+	}
+	pager := p.models.ListAutoPaging(ctx, sdk.ModelListParams{})
 	var out []ai.ModelInfo
 	for pager.Next() {
 		m := pager.Current()
@@ -273,21 +307,21 @@ func (p *provider) Models(ctx context.Context) ([]ai.ModelInfo, error) {
 		}
 	}
 	if err := pager.Err(); err != nil {
-		return nil, mapError(err)
+		return nil, p.mapError(err)
 	}
 	return out, nil
 }
 
 // mapError traduce gli errori dell'SDK senza riportare la risposta grezza (niente segreti).
-func mapError(err error) error {
+func (p *provider) mapError(err error) error {
 	var apierr *sdk.Error
 	if errors.As(err, &apierr) {
 		pe := &ai.ProviderError{Status: apierr.StatusCode}
 		switch {
 		case apierr.StatusCode == http.StatusUnauthorized:
-			pe.Code, pe.Msg = "auth", "chiave di Anthropic non valida"
+			pe.Code, pe.Msg = "auth", "credenziali di "+p.who+" non valide"
 		case apierr.StatusCode == http.StatusForbidden:
-			pe.Code, pe.Msg = "forbidden", "la chiave non può usare questo modello"
+			pe.Code, pe.Msg = "forbidden", "le credenziali non possono usare questo modello in questa regione"
 		case apierr.StatusCode == http.StatusNotFound:
 			pe.Code, pe.Msg = "model_not_found", "modello inesistente"
 		case apierr.StatusCode == http.StatusTooManyRequests:
@@ -306,6 +340,10 @@ func mapError(err error) error {
 	}
 	var ue *url.Error
 	if errors.As(err, &ue) {
+		var re *oauth2.RetrieveError
+		if errors.As(err, &re) {
+			return &ai.ProviderError{Code: "auth", Msg: "Google non ha rilasciato il token: controlla il service account"}
+		}
 		return &ai.ProviderError{Code: "network", Msg: "fornitore non raggiungibile"}
 	}
 	return &ai.ProviderError{Code: "bad_response", Msg: "risposta del fornitore non riconosciuta"}

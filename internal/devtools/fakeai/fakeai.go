@@ -89,8 +89,14 @@ type provider struct{}
 // New crea il fornitore finto (la configurazione non serve).
 func New(ai.ProviderConfig) (ai.Provider, error) { return provider{}, nil }
 
+// ModelNoTools è un modello finto che il «servizio» dichiara senza strumenti, come fa Ollama:
+// la prova di connessione lo segna fra quelli che fanno solo riassunti e bozze.
+const ModelNoTools = "finto-senza-strumenti"
+
 func (provider) Models(context.Context) ([]ai.ModelInfo, error) {
-	return []ai.ModelInfo{{ID: ModelFast, Name: "Finto rapido", Tier: ai.TierFast}, {ID: ModelDeep, Name: "Finto approfondito", Tier: ai.TierDeep}}, nil
+	no := false
+	return []ai.ModelInfo{{ID: ModelFast, Name: "Finto rapido", Tier: ai.TierFast}, {ID: ModelDeep, Name: "Finto approfondito", Tier: ai.TierDeep},
+		{ID: ModelNoTools, Name: "Finto senza strumenti", Tools: &no}}, nil
 }
 
 func approxTokens(req ai.Request) int64 {

@@ -14,7 +14,10 @@ import (
 
 	"regia/internal/ai"
 	aianthropic "regia/internal/ai/anthropic"
+	"regia/internal/ai/gemini"
 	"regia/internal/ai/mcpserver"
+	"regia/internal/ai/ollama"
+	aiopenai "regia/internal/ai/openai"
 	"regia/internal/ai/openaicompat"
 	"regia/internal/ai/tools"
 	"regia/internal/devtools/fakeai"
@@ -30,10 +33,12 @@ import (
 //     integrazioni: un token API rubato non cambia fornitore né chiave);
 //   - stato, conversazioni, domande e proposte: chiunque sia nel tenant, con i suoi permessi.
 
-// aiKinds sono i tipi di fornitore: Anthropic e compatibile OpenAI; il finto solo in sviluppo
-// (regia serve --dev) e nei test, come i finti connettori.
+// aiKinds sono i tipi di fornitore (replica/ai.md §3): Anthropic (anche via AWS Bedrock e
+// Google Vertex per la regione UE), OpenAI, Gemini, Ollama e il compatibile OpenAI; il finto
+// solo in sviluppo (regia serve --dev) e nei test, come i finti connettori.
 func aiKinds(dev bool) []ai.Kind {
-	kinds := []ai.Kind{aianthropic.Register(), openaicompat.Register()}
+	kinds := []ai.Kind{aianthropic.Register(), aianthropic.RegisterBedrock(), aianthropic.RegisterVertex(),
+		aiopenai.Register(), gemini.Register(), ollama.Register(), openaicompat.Register()}
 	if dev {
 		kinds = append(kinds, fakeai.Register())
 	}
@@ -66,6 +71,7 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH "+b+"/providers/{id}", adminSession(s.aiUpdateProvider))
 	mux.HandleFunc("DELETE "+b+"/providers/{id}", adminSession(s.aiDeleteProvider))
 	mux.HandleFunc("GET "+b+"/providers/{id}/models", adminOnly(s.aiProviderModels))
+	mux.HandleFunc("POST "+b+"/providers/{id}/test", adminSession(s.aiTestProvider))
 	mux.HandleFunc("GET "+b+"/usage", adminOnly(s.aiUsage))
 	mux.HandleFunc("GET "+b+"/conversations", inTenant(s.aiConversations))
 	mux.HandleFunc("GET "+b+"/conversations/{id}", inTenant(s.aiConversation))
@@ -150,12 +156,15 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request, p *auth.Princi
 }
 
 type aiKindView struct {
-	Key      string         `json:"key"`
-	NeedsKey bool           `json:"needs_key"`
-	NeedsURL bool           `json:"needs_url"`
-	External bool           `json:"external"`
-	Tools    bool           `json:"tools"`
-	Proposed []ai.ModelInfo `json:"proposed"`
+	Key         string         `json:"key"`
+	NeedsKey    bool           `json:"needs_key"`
+	NeedsURL    bool           `json:"needs_url"`
+	OptionalURL bool           `json:"optional_url"`
+	DefaultURL  string         `json:"default_url"`
+	Cloud       string         `json:"cloud"`
+	External    bool           `json:"external"`
+	Tools       bool           `json:"tools"`
+	Proposed    []ai.ModelInfo `json:"proposed"`
 }
 
 func (s *Server) aiSettingsView(r *http.Request, tx pgx.Tx) (any, error) {
@@ -177,7 +186,8 @@ func (s *Server) aiSettingsView(r *http.Request, tx pgx.Tx) (any, error) {
 		if prop == nil {
 			prop = []ai.ModelInfo{}
 		}
-		kinds = append(kinds, aiKindView{Key: k.Key, NeedsKey: k.NeedsKey, NeedsURL: k.NeedsURL, External: k.External, Tools: k.Tools, Proposed: prop})
+		kinds = append(kinds, aiKindView{Key: k.Key, NeedsKey: k.NeedsKey, NeedsURL: k.NeedsURL, OptionalURL: k.OptionalURL,
+			DefaultURL: k.DefaultURL, Cloud: k.Cloud, External: k.External, Tools: k.Tools, Proposed: prop})
 	}
 	return map[string]any{"settings": st, "providers": provs, "kinds": kinds, "features": ai.Features, "budget": bud, "dev": s.dev}, nil
 }
@@ -232,6 +242,19 @@ func (s *Server) aiProviderModels(w http.ResponseWriter, r *http.Request, p *aut
 			list = []ai.ModelInfo{}
 		}
 		return map[string]any{"items": list}, err
+	})
+}
+
+// aiTestProvider prova la connessione del fornitore (modelli, credenziali, modelli senza strumenti).
+func (s *Server) aiTestProvider(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in struct {
+		Model string `json:"model"`
+	}
+	if r.ContentLength != 0 && !decodeJSON(w, r, &in) {
+		return
+	}
+	s.aiTx(w, r, p, false, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		return s.ai.TestProvider(r.Context(), tx, actorOf(r, p), r.PathValue("id"), in.Model)
 	})
 }
 
