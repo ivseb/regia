@@ -104,7 +104,7 @@ func testServiceAccount(t *testing.T) string {
 	}
 	der, _ := x509.MarshalPKCS8PrivateKey(k)
 	b, _ := json.Marshal(map[string]string{"type": "service_account", "project_id": "regia-prova-ue", "private_key_id": "k1",
-		"private_key": string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})),
+		"private_key":  string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})),
 		"client_email": "regia@regia-prova-ue.iam.gserviceaccount.com", "token_uri": "https://oauth2.googleapis.com/token"})
 	return string(b)
 }
