@@ -1,14 +1,15 @@
-# Progetti: piano del PM, modi di consegna, Panoramica, baseline, fornitori, programmi, budget e status report
+# Progetti: piano del PM, modi di consegna, Panoramica, baseline, fornitori, programmi, budget, status report e portafoglio
 
-Passi 1, 2, 3, 4 e 5 di `replica/progetti.md`. La richiesta dice perché e quanto, il progetto come, quando e chi, l'epic cosa fa un team. Le due viste si toccano nel work package.
+Passi 1-6 di `replica/progetti.md`. La richiesta dice perché e quanto, il progetto come, quando e chi, l'epic cosa fa un team. Le due viste si toccano nel work package.
 
 - Backend: `internal/modules/projects` (modulo `projects`), motore del Gantt in `internal/modules/planning/graph.go`, epic dei work package in `internal/modules/work/epic.go`.
 - API: `internal/api/projects.go`.
-- Migrazioni: `migrations/0077_progetti.sql`, `migrations/0078_progetti_baseline.sql` (passo 3), `migrations/0079_progetti_fornitori.sql` (passo 4). Il passo 5 non ha migrazioni: usa `budgets`, `status_reports` ed `ext_project` come sono.
+- Migrazioni: `migrations/0077_progetti.sql`, `migrations/0078_progetti_baseline.sql` (passo 3), `migrations/0079_progetti_fornitori.sql` (passo 4). Il passo 5 non ha migrazioni: usa `budgets`, `status_reports` ed `ext_project` come sono. Passo 6: `migrations/0082_progetti_dipendenze.sql`.
 - Interfaccia: `web/src/projectsApi.ts`, `web/src/pages/progetti/` (passo 4: `SupplierPanel.tsx`, `ProgramOverview.tsx`), schede in `web/src/pages/ElementPage.tsx`.
 - Testi: area `progetti` (`progetti.ts` schede, `progetti-pm.ts` Panoramica, tabelle ed elenco, `progetti-piano.ts` Gantt, `progetti-voci.ts` scheda della voce e impostazioni, `progetti-baseline.ts` baseline, tolleranze e change request, `progetti-fornitori.ts` SAL, deliverable e conflitti, `progetti-programmi.ts` programmi, `lavoro-progetti.ts` notifiche) ed `errors-progetti.ts`.
 - Passo 5: `internal/modules/projects/incoming.go` («In arrivo dai progetti»), `tolerance.go` (tolleranze del progetto), `internal/modules/report/project.go` (status report del progetto), `finance.ProjectTotals`; interfaccia `web/src/pages/progetti/IncomingWork.tsx`, Panoramica (`BudgetBlock`, `ReportsBlock`), `StatusReportsTab kind="project"`, testi in `progetti-passo5.ts`.
-- Test: `internal/itest/progetti_passo5_test.go` (passo 5), `web/e2e/progetti-passo5.spec.ts`, `internal/itest/progetti_test.go`, `internal/itest/progetti_baseline_test.go`, `internal/itest/progetti_fornitori_test.go`, `internal/modules/projects/baseline_test.go`, `internal/modules/projects/supplier_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts` (passo 4: `progetti-fornitori.spec.ts`).
+- Passo 6: `internal/modules/projects/deps.go` (dipendenze tra progetti), `appwork.go` (progetti sull'applicazione), `portfolio.go` (mappa dei semafori), contratto ICT in `supplier.go`, riepilogo sulla richiesta in `internal/modules/report/statusreport.go`; interfaccia `web/src/pages/progetti/CrossDeps.tsx`, `ApplicationProjects.tsx`, `PortfolioMap.tsx`, roadmap in `Roadmap.tsx`, testi in `progetti-passo6.ts`.
+- Test: `internal/itest/progetti_passo6_test.go` e `web/e2e/progetti-passo6.spec.ts` (passo 6), `internal/itest/progetti_passo5_test.go` (passo 5), `web/e2e/progetti-passo5.spec.ts`, `internal/itest/progetti_test.go`, `internal/itest/progetti_baseline_test.go`, `internal/itest/progetti_fornitori_test.go`, `internal/modules/projects/baseline_test.go`, `internal/modules/projects/supplier_test.go`, `internal/modules/planning/graph_test.go`, `web/e2e/progetti*.spec.ts` (passo 4: `progetti-fornitori.spec.ts`).
 
 ## Dati
 
@@ -17,7 +18,8 @@ Passi 1, 2, 3, 4 e 5 di `replica/progetti.md`. La richiesta dice perché e quant
 | `ext_project` | modello (`agile`, `waterfall`, `mixed`, `contract`), programma, tolleranze del progetto (facoltative: `null` = quelle del tenant) |
 | `project_requests` | richieste confluite: una richiesta sta in un solo progetto, un progetto ne raccoglie più d'una |
 | `plan_phases` | fasi del piano con `gate_enabled`, `gate_status` (`open`, `pending`, `approved`, `rejected`) e la richiesta di approvazione |
-| `ext_work_package` | progetto, fase, `delivery_mode` (`agile`, `waterfall`, `supplier`), applicazione, team, fornitore (`ict_provider`), stima, peso manuale, impatto d'origine; passo 4: `supplier_updates` (il contatto del fornitore dichiara da sé), contratto (`contract_ref`, `contract_amount_cents`, `contract_currency`) |
+| `ext_work_package` | progetto, fase, `delivery_mode` (`agile`, `waterfall`, `supplier`), applicazione, team, fornitore (`ict_provider`), stima, peso manuale, impatto d'origine; passo 4: `supplier_updates` (il contatto del fornitore dichiara da sé), contratto (`contract_ref`, `contract_amount_cents`, `contract_currency`); passo 6: `contract_id`, il contratto del registro ICT (`ict_contracts`), facoltativo |
+| `project_dependencies` | passo 6: il progetto (`project_id`) o una sua voce (`item_id`) ha bisogno della milestone di un altro progetto (`milestone_id`) entro `need_by` (senza: l'inizio della voce); nota; `alerted_end` è la data della milestone già segnalata al PM |
 | `ext_plan_activity` | attività di un work package a cascata, con stima e percentuale corrente |
 | `ext_milestone` | c'era dallo schema di partenza senza uso: aggiunti progetto, fase, work package, flag contrattuale; `actual_date` è il giorno in cui è raggiunta, `baseline_date` è la data nella baseline in vigore |
 | `ext_plan_progress` | avanzamento dichiarato storicizzato (voce, giorno, percentuale, nota, chi) |
@@ -118,7 +120,7 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 - **Altro:** change request da inviare o in approvazione (figlie del progetto), rischi collegati al progetto o alle sue richieste, ruoli obbligatori mancanti, margine sulla scadenza normativa (o desiderata) delle richieste.
 - **Budget (passo 5):** il budget del progetto, vedi «Budget del progetto» sotto.
 - **Perimetro (passo 5):** work package e milestone nati dopo la baseline in vigore (`scope_added`) e quelli della baseline poi annullati o tolti dal piano (`scope_removed`). Le attività no: sono il dettaglio di un work package a cascata.
-- **Semaforo:** rosso con una milestone in ritardo, la previsione oltre la scadenza o uno scostamento oltre le tolleranze (date o budget); giallo con work package in ritardo, dipendenze bloccate, conflitti con altri progetti, perimetro cambiato (`scope_changed`) o ruoli mancanti.
+- **Semaforo:** rosso con una milestone in ritardo, la previsione oltre la scadenza o uno scostamento oltre le tolleranze (date o budget); giallo con work package in ritardo, dipendenze bloccate, dipendenze da milestone di altri progetti in ritardo (`external_late`, passo 6), conflitti con altri progetti, perimetro cambiato (`scope_changed`) o ruoli mancanti.
 
 ## Cancelli di fase
 
@@ -205,11 +207,53 @@ Il modulo si accende e si spegne per tenant (`projects`, prefissi API `projects`
 - `GET /projects/incoming?team=<id>|space=<chiave>&weeks=8` (da 1 a 52): work package con quel team e attività di quei work package, aperti, di progetti aperti, con date che toccano le prossime settimane. Il work package nella fase iniziale è `proposed` (da accettare); quello agile accettato porta i suoi epic. Le voci che l'attore non legge non compaiono e si contano in `restricted`; il progetto e il work package non leggibili restano senza titolo.
 - **Interfaccia:** nel backlog del team (colonna a destra), con la finestra di 4, 8 o 12 settimane, se il modulo dei progetti è acceso e lo spazio è di un team.
 
+## Riepilogo sulla richiesta (passo 6)
+
+- `GET /demand/requests/{ref}/status-reports` di una richiesta confluita porta `project`: chiave, titolo, l'ultimo report inviato del progetto (`latest`, con i limiti di chi legge come gli altri report del progetto) e quanti ne ha (`submitted`). Chi non legge il progetto riceve solo `restricted`. La periodicità della richiesta non è più attesa né in ritardo.
+- Nuovi report della richiesta non si creano più: `validation.report.status_in_project`. Quelli vecchi (e una bozza già aperta) restano.
+- **Interfaccia:** in cima alla scheda «Stato» il blocco «Status report del progetto» (`data-testid="stato-progetto"`) con l'ultimo report (semafori, sintesi, presa visione) e il link alla scheda «Stato» del progetto; sotto, «Report della richiesta, prima del progetto».
+
+## Applicazione e progetti nel tempo (passo 6)
+
+- `GET /projects/by-application?app=<chiave|id>`: i work package (non annullati, di progetti non annullati) sull'applicazione, con progetto, fase, team, modo, date, stato e `open`; i conflitti (`conflicts`: coppie di work package aperti, con date, di progetti diversi, con il periodo sovrapposto), la stessa regola di `conflictsSQL`. Un progetto non leggibile lascia la voce senza progetto, titolo, fase e team; un work package non leggibile senza titolo e team. Serve leggere l'applicazione.
+- **Interfaccia:** scheda «Progetti» dell'applicazione (se il modulo dei progetti è acceso): conflitti in testa, poi i work package nel tempo su un asse a mesi; sul telefono un elenco.
+
+## Dipendenze tra progetti (passo 6)
+
+- **Modello:** `project_dependencies`. La data che serve è `need_by` oppure, senza, l'inizio della voce che dipende (una delle due è obbligatoria: `validation.projects.xdep_need`). La dipendenza è in ritardo (`late_days`, giorni lavorativi) se la milestone non è raggiunta e la sua data prevista, o oggi se è già passata, va oltre la data che serve.
+- **API:** `POST /projects/{ref}/dependencies {milestone_id, item_id?, need_by?, note?}` (chi pianifica il progetto, e deve leggere la milestone; non del progetto stesso, `xdep_same`; voce del progetto, `xdep_item`; senza doppioni, `xdep_exists`), `DELETE /projects/{ref}/dependencies/{id}`, `GET /projects/{ref}/dependency-candidates` (milestone aperte di altri progetti aperti che l'attore legge, prima quelle dello stesso programma). Le prime due restituiscono il piano.
+- **Piano:** `external` (le dipendenze del progetto da altri) e `dependents` (gli altri progetti che aspettano le sue milestone), con i limiti di visibilità (`limitDeps`): l'altro progetto non leggibile lascia la dipendenza `restricted`, senza progetto né milestone; restano le date.
+- **Numeri:** `external_late` e il motivo `external_late`, giallo. Nella mappa dei semafori contano per i tempi.
+- **Avviso:** `notifyDeps` dopo ogni spostamento salvato (`saveChanges`, del progetto della milestone o di quello che dipende) e alla creazione: ai PM del progetto che dipende, notifica `project` evento `dependency_late` con le chiavi e le date, una volta per data della milestone (`alerted_end`); quando la dipendenza rientra l'avviso si dimentica.
+- **Interfaccia:** nel piano il riquadro «Dipendenze da altri progetti» (aggiungi, togli, in ritardo, chi aspetta le milestone di questo) e il segno ⇠ sulla riga della voce; in Panoramica tra le dipendenze bloccate; nella roadmap del programma il segno ⇠ alla data che serve, rosso se in ritardo, e la riga nell'elenco del telefono.
+
+## Mappa dei semafori e roadmap di portafoglio (passo 6)
+
+- `GET /projects/portfolio?closed=true|false`: i progetti leggibili (`element.read`, come l'elenco) con la riga della roadmap (`ProgramProject`, con le dipendenze), il programma, il modello e i semafori per ambito (`signalsOf`):
+
+| ambito | rosso | giallo | altro |
+| --- | --- | --- | --- |
+| tempi | milestone in ritardo, oltre la scadenza, oltre le tolleranze | work package in ritardo, dipendenze bloccate, dipendenze da altri progetti in ritardo | `none` senza piano |
+| budget | oltre la tolleranza | previsione o speso più impegnato oltre l'approvato | `none` senza budget, `hidden` per chi non lo vede |
+| perimetro | — | perimetro cambiato o change request aperta | `none` senza baseline |
+| rischi | — | rischi aperti o ruoli obbligatori mancanti | |
+| conflitti | — | conflitti con altri progetti | |
+
+- **Interfaccia:** scheda «Semafori» nella pagina dei progetti (`PortfolioMap.tsx`): ricerca, programma, semaforo generale, ambito con problemi, raggruppamento per programma, anche i chiusi; sul telefono un elenco.
+- **Roadmap di portafoglio (§4):** la pagina Roadmap, con il modulo dei progetti acceso, mostra prima i progetti (la roadmap del programma, con milestone, baseline e dipendenze) e poi le richieste non ancora confluite in un progetto (`RequestWindow.in_project`). La cabina di portafoglio resta sulle richieste.
+
+## Contratto del fornitore dal registro ICT (passo 6)
+
+- `PUT /plan-items/{id}/supplier {contract_id}` collega il work package a un contratto di `ict_contracts` (`""` lo scollega). Il contratto deve essere del fornitore del work package (`validation.projects.contract_supplier`); senza fornitore il work package prende quello del contratto. Serve leggere il fornitore.
+- `GET /plan-items/{id}/contracts`: i contratti collegabili (del fornitore, o di tutti i fornitori leggibili se non c'è), per chi pianifica.
+- **Valori:** `contract.ref`, `amount_cents` e `currency` valgono quelli scritti sul work package e, dove mancano, quelli del contratto (riferimento, costo annuo, valuta); `own_ref` e `own_amount_cents` sono quelli scritti; `linked` è il contratto con fornitore, date, costo annuo (agli stessi che vedono gli importi) e scadenza. I SAL a importo si misurano sul valore che vale (`contractAmountSQL`). Collegare non tocca i dati già scritti.
+- **Interfaccia:** nel pannello del fornitore «Contratto dal registro ICT» (scelta e «Collega») o il contratto collegato con «Scollega»; riferimento e importo del contratto collegato fanno da segnaposto ai campi del work package.
+
 ## Ancora aperto
 
-- **Carico del componente in Architettura:** i conflitti stanno nel piano e nella notifica; la scheda dell'applicazione non mostra ancora i progetti che la toccano (`conflictsOf` e l'indice su `ext_work_package.application_id` sono il punto di partenza).
-- **Riepilogo sulla richiesta:** la scheda «Stato» della richiesta confluita mostra ancora i suoi report; non rimanda a quelli del progetto.
+- **Costo annuo come valore del contratto:** collegato a un contratto senza importo proprio, il work package misura i SAL a importo sul costo annuo del registro; per una commessa pluriennale va scritto l'importo sul work package.
+- **Dipendenze e baseline:** la dipendenza da un altro progetto non entra nella baseline né apre change request; segnala e basta.
 
 ## Nota sulla visibilità
 
-Il piano, la baseline, le change request, i conflitti e il programma applicano i limiti del singolo elemento (`visibility.go`): una voce non leggibile resta con date, avanzamento e dipendenze ma senza titolo, persone e collegamenti. Il fornitore esterno vede il suo work package, i suoi SAL e i suoi deliverable perché ne è stakeholder.
+Il piano, la baseline, le change request, i conflitti, il programma, le dipendenze tra progetti, la scheda dell'applicazione e la mappa dei semafori applicano i limiti del singolo elemento (`visibility.go`): una voce non leggibile resta con date, avanzamento e dipendenze ma senza titolo, persone e collegamenti. Il fornitore esterno vede il suo work package, i suoi SAL e i suoi deliverable perché ne è stakeholder.

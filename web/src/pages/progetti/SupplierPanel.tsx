@@ -65,14 +65,17 @@ const money = (cents: number | null, currency: string) => (cents == null ? "—"
 function Contract({ v, busy, run }: { v: SupplierView; busy: boolean; run: Run }) {
   const t = useT();
   const edit = v.can_edit;
-  const [ref, setRef] = useState(v.contract.ref ?? "");
-  const [amount, setAmount] = useState(v.contract.amount_cents == null ? "" : String(v.contract.amount_cents / 100));
+  // Il modulo modifica i dati scritti sul work package; quelli del contratto collegato fanno da segnaposto.
+  const own = v.contract.own_amount_cents;
+  const [ref, setRef] = useState(v.contract.own_ref ?? "");
+  const [amount, setAmount] = useState(own == null ? "" : String(own / 100));
   const [currency, setCurrency] = useState(v.contract.currency || "EUR");
   useEffect(() => {
-    setRef(v.contract.ref ?? "");
-    setAmount(v.contract.amount_cents == null ? "" : String(v.contract.amount_cents / 100));
+    setRef(v.contract.own_ref ?? "");
+    setAmount(own == null ? "" : String(own / 100));
     setCurrency(v.contract.currency || "EUR");
-  }, [v.contract.ref, v.contract.amount_cents, v.contract.currency]);
+  }, [v.contract.own_ref, own, v.contract.currency]);
+  const linked = v.contract.linked;
   const n = amount.trim() === "" ? null : Number(amount.replace(",", "."));
   const amountOk = n == null || (Number.isFinite(n) && n >= 0);
   const contact = v.contacts[0] ?? null;
@@ -87,17 +90,19 @@ function Contract({ v, busy, run }: { v: SupplierView; busy: boolean; run: Run }
   };
   return (
     <div className="flex flex-col gap-3">
+      <LinkedContractBlock v={v} busy={busy} run={run} />
       {edit ? (
         <form className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_160px_90px_auto] sm:items-end" onSubmit={(e) => { e.preventDefault(); if (amountOk) save(); }}>
           <label className="flex flex-col gap-1">
             <span className="label">{t("progetti.fornitori.contractRef")}</span>
-            <input className="field" maxLength={120} value={ref} onChange={(e) => setRef(e.target.value)} />
+            <input className="field" maxLength={120} value={ref} placeholder={linked?.reference ?? ""} onChange={(e) => setRef(e.target.value)} />
           </label>
           {v.amounts_visible && (
             <>
               <label className="flex flex-col gap-1">
                 <span className="label">{t("progetti.fornitori.contractAmount")}</span>
-                <input type="number" inputMode="decimal" min={0} step="0.01" className="field tabular" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <input type="number" inputMode="decimal" min={0} step="0.01" className="field tabular" value={amount}
+                  placeholder={linked?.annual_cost_cents != null ? String(linked.annual_cost_cents / 100) : ""} onChange={(e) => setAmount(e.target.value)} />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="label">{t("progetti.fornitori.currency")}</span>
@@ -113,6 +118,7 @@ function Contract({ v, busy, run }: { v: SupplierView; busy: boolean; run: Run }
           <Fact label={t("progetti.fornitori.contractAmount")}>{v.amounts_visible ? money(v.contract.amount_cents, v.contract.currency || "EUR") : t("progetti.fornitori.amountsHidden")}</Fact>
         </dl>
       )}
+      {edit && linked && <p className="m-0 text-[12px] text-muted">{t("progetti.passo6.contract.ownHelp")}</p>}
       {v.amounts_visible && v.accepted_cents != null && (
         <p className="tabular m-0 text-[13px] text-muted">{t("progetti.fornitori.acceptedTotal", { amount: money(v.accepted_cents, v.contract.currency || "EUR") })}</p>
       )}
@@ -140,6 +146,64 @@ function Contract({ v, busy, run }: { v: SupplierView; busy: boolean; run: Run }
           <span className="text-[12px] text-muted">{t("progetti.fornitori.updatesHelp")}</span>
         </span>
       </label>
+    </div>
+  );
+}
+
+/** Contratto del registro ICT collegato (passo 6): si sceglie tra quelli del fornitore, si scollega. */
+function LinkedContractBlock({ v, busy, run }: { v: SupplierView; busy: boolean; run: Run }) {
+  const t = useT();
+  const linked = v.contract.linked;
+  const [pick, setPick] = useState("");
+  const opts = useQuery({ queryKey: projectKeys.contracts(v.item_id), queryFn: () => projectsApi.contractOptions(v.item_id), enabled: v.can_edit && !linked });
+  const period = (a: string | null, b: string | null) => (a || b ? `${a ? date(a) : "…"} – ${b ? date(b) : "…"}` : t("progetti.passo6.contract.noDates"));
+  if (linked) {
+    return (
+      <div className="flex flex-col gap-2 border-l-2 border-rule pl-3" data-testid="contratto-collegato">
+        <span className="label text-muted">{t("progetti.passo6.contract.linked")}</span>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="font-mono text-[12.5px] font-semibold">{linked.reference}</span>
+          <span>{linked.provider}</span>
+          {linked.service_type && <span className="text-[12.5px] text-muted">{linked.service_type}</span>}
+        </div>
+        <span className="tabular text-[12.5px]">
+          {period(linked.start_date, linked.end_date)}
+          {linked.expired && <span className="ml-2 font-semibold text-danger">{t("progetti.passo6.contract.expired")}</span>}
+        </span>
+        {v.amounts_visible && linked.annual_cost_cents != null && (
+          <span className="tabular text-[12.5px]">{t("progetti.passo6.contract.annual", { amount: money(linked.annual_cost_cents, linked.currency || "EUR") })}</span>
+        )}
+        {v.can_edit && (
+          <button type="button" className="btn touch-44 self-start" disabled={busy} onClick={() => run(() => projectsApi.updateSupplier(v.item_id, { contract_id: "" }))}>
+            {t("progetti.passo6.contract.unlink")}
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (!v.can_edit) return null;
+  const items = opts.data?.items ?? [];
+  return (
+    <div className="flex flex-col gap-1.5" data-testid="contratto-registro">
+      <span className="label">{t("progetti.passo6.contract.fromRegister")}</span>
+      {opts.data && items.length === 0 ? (
+        <span className="text-[12.5px] text-muted">{t("progetti.passo6.contract.noneInRegister")}</span>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <Select className="field w-full sm:w-80" aria-label={t("progetti.passo6.contract.fromRegister")} value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">{t("progetti.passo6.contract.choose")}</option>
+            {items.map((c) => (
+              <option key={c.id} value={c.id}>
+                {`${c.reference} · ${c.provider}${c.expired ? ` · ${t("progetti.passo6.contract.expired")}` : ""}`}
+              </option>
+            ))}
+          </Select>
+          <button type="button" className="btn touch-44" disabled={busy || !pick} onClick={() => run(() => projectsApi.updateSupplier(v.item_id, { contract_id: pick }))}>
+            {t("progetti.passo6.contract.link")}
+          </button>
+        </div>
+      )}
+      <span className="text-[12px] text-muted">{t("progetti.passo6.contract.help")}</span>
     </div>
   );
 }

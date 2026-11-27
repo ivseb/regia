@@ -203,6 +203,8 @@ export function Describe({ n }: { n: Notification }) {
           return R("project.claim_submitted", { number: String(p.number ?? ""), work_package: str(p.work_package) });
         case "deliverable_delivered":
           return R("project.deliverable_delivered");
+        case "dependency_late":
+          return R("project.dependency_late", { milestone: str(p.milestone), other: str(p.other), project: str(p.project), need: p.need ? fmtDate(str(p.need)) : "", date: p.date ? fmtDate(str(p.date)) : "" });
       }
       return R("project.plain");
     case "budget":

@@ -72,6 +72,9 @@ type RequestWindow struct {
 	Scheduled          int     `json:"scheduled"`
 	PhaseIndex         int     `json:"phase_index"`
 	PhaseCount         int     `json:"phase_count"`
+	// InProject: la richiesta è confluita in un progetto (progetti, passo 6): la roadmap di
+	// portafoglio la mostra come progetto.
+	InProject bool `json:"in_project"`
 }
 
 // Plan è il piano di una richiesta.
@@ -114,7 +117,9 @@ const windowSelect = `
 	          and ie.deleted_at is null where x.request_id = r.id),
 	       (select count(*) from ext_impact x join elements ie on ie.tenant_id = x.tenant_id and ie.id = x.element_id
 	          and ie.deleted_at is null and ie.start_at is not null where x.request_id = r.id),
-	       coalesce(o.ordinal, 0)
+	       coalesce(o.ordinal, 0),
+	       exists (select 1 from project_requests pr join elements pe on pe.tenant_id = pr.tenant_id and pe.id = pr.project_id
+	          and pe.deleted_at is null where pr.request_id = r.id)
 	from elements r
 	join spaces s on s.tenant_id = r.tenant_id and s.id = r.space_id
 	join element_types t on t.tenant_id = r.tenant_id and t.id = r.type_id and t.key = 'business_request'
@@ -127,7 +132,7 @@ func scanWindows(rows pgx.Rows) ([]RequestWindow, error) {
 		var w RequestWindow
 		var start, end, desired, deadline *time.Time
 		err := r.Scan(&w.ID, &w.Key, &w.Title, &w.State, &w.StateCategory, &start, &end, &desired, &deadline,
-			&w.Mandatory, &w.Driver, &w.Impacts, &w.Scheduled, &w.PhaseIndex)
+			&w.Mandatory, &w.Driver, &w.Impacts, &w.Scheduled, &w.PhaseIndex, &w.InProject)
 		w.Start, w.End, w.DesiredDate, w.RegulatoryDeadline = dateStr(start), dateStr(end), dateStr(desired), dateStr(deadline)
 		return w, err
 	})

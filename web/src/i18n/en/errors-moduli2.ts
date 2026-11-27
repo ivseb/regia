@@ -161,6 +161,7 @@ export default {
   "errors.validation.report.portal_type_unavailable": "This request type isn't available in the portal.",
   "errors.validation.report.regulatory_too_many": "At most 8 indicators.",
   "errors.validation.report.status_no_previous": "There is no previous report to compare with.",
+  "errors.validation.report.status_in_project": "This request is part of a project: write the status report on the project.",
   "errors.validation.report.status_not_awaiting": "The report isn't awaiting acknowledgement.",
   "errors.validation.report.status_other_requests": "The reports belong to different requests.",
   "errors.validation.report.status_period_inverted": "The period starts after it ends.",

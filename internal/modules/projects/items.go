@@ -606,8 +606,12 @@ func (s *Service) saveChanges(ctx context.Context, tx pgx.Tx, actor engine.Actor
 	if len(changes) == 0 {
 		return nil
 	}
-	// Date nuove: conflitti con altri progetti sulle stesse applicazioni (passo 4).
+	// Date nuove: conflitti con altri progetti sulle stesse applicazioni (passo 4) e dipendenze tra
+	// progetti oltre la data che serve (passo 6).
 	if err := s.notifyConflicts(ctx, tx, actor, projectID); err != nil {
+		return err
+	}
+	if err := s.notifyDeps(ctx, tx, actor, projectID); err != nil {
 		return err
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "plan.update", EntityType: TypeProject, EntityID: projectID,

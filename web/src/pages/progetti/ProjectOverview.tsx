@@ -51,7 +51,7 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
             </Block>
             <Block title={t("progetti.overview.blocked")}>
               {n.blocked.length === 0 ? (
-                <None text={t("progetti.overview.blockedNone")} />
+                n.external_late.length === 0 && <None text={t("progetti.overview.blockedNone")} />
               ) : (
                 <ul className="m-0 list-none p-0">
                   {n.blocked.map((b) => (
@@ -61,6 +61,22 @@ export function ProjectOverview({ refKey, onTab }: { refKey: string; onTab: (t: 
                         {b.reason === "waiting" ? t("progetti.overview.waiting") : t("progetti.overview.violated")} <span className="font-mono text-[11.5px]">({t(`progetti.common.dep.${b.dep_kind}`)})</span>
                       </span>
                       <ItemLink itemKey={b.waits_on.key} title={b.waits_on.title} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {n.external_late.length > 0 && (
+                <ul className="m-0 list-none p-0" aria-label={t("progetti.passo6.dep.lateTitle")} data-testid="panoramica-dipendenze">
+                  {n.external_late.map((d) => (
+                    <li key={d.id} className="flex flex-col border-b border-hair py-1">
+                      <span>
+                        {d.item ? `${d.item.key} ${d.item.title}` : t("progetti.passo6.dep.wholeProject")} {t("progetti.passo6.dep.needs")}{" "}
+                        {d.milestone_project ? `${d.milestone_project.key} · ${d.milestone?.title ?? t("progetti.restricted")}` : t("progetti.restricted")}
+                      </span>
+                      <span className="tabular text-[12.5px] font-semibold text-danger">
+                        {t("progetti.passo6.dep.dates", { need: d.need_by ? date(d.need_by) : "—", date: d.milestone_date ? date(d.milestone_date) : "—" })} ·{" "}
+                        {t("progetti.passo6.dep.late", { count: d.late_days })}
+                      </span>
                     </li>
                   ))}
                 </ul>

@@ -127,6 +127,10 @@ type Plan struct {
 	// può cambiarle (passo 5).
 	ProjectTolerance ProjectTolerance `json:"project_tolerance"`
 	CanEditTolerance bool             `json:"can_edit_tolerance"`
+	// Dipendenze tra progetti (passo 6): da milestone di altri progetti (External) e di altri
+	// progetti dalle milestone di questo (Dependents).
+	External   []CrossDep `json:"external"`
+	Dependents []CrossDep `json:"dependents"`
 }
 
 // ProjectTolerance sono le tolleranze del singolo progetto: nil vuol dire quella del tenant.
@@ -397,6 +401,9 @@ func (s *Service) loadPlan(ctx context.Context, tx pgx.Tx, el *engine.Element) (
 		return nil, err
 	}
 	if err := loadConflicts(ctx, tx, p); err != nil {
+		return nil, err
+	}
+	if err := loadDeps(ctx, tx, p); err != nil {
 		return nil, err
 	}
 	computeItemProgress(p)

@@ -167,6 +167,14 @@ func (s *Server) projectRoutes(mux *http.ServeMux) {
 	// Passo 5: tolleranze del progetto, «In arrivo dai progetti», status report del progetto.
 	mux.HandleFunc("PUT "+b+"/{ref}/tolerance", inTenant(s.setProjectTolerance))
 	mux.HandleFunc("GET "+b+"/incoming", inTenant(s.incomingWork))
+	// Passo 6: mappa dei semafori e roadmap di portafoglio, progetti sull'applicazione, dipendenze
+	// tra progetti, contratti del registro ICT collegabili al work package.
+	mux.HandleFunc("GET "+b+"/portfolio", inTenant(s.projectPortfolio))
+	mux.HandleFunc("GET "+b+"/by-application", inTenant(s.applicationProjects))
+	mux.HandleFunc("GET "+b+"/{ref}/dependency-candidates", inTenant(s.dependencyCandidates))
+	mux.HandleFunc("POST "+b+"/{ref}/dependencies", inTenant(s.createCrossDep))
+	mux.HandleFunc("DELETE "+b+"/{ref}/dependencies/{id}", inTenant(s.deleteCrossDep))
+	mux.HandleFunc("GET "+it+"/{id}/contracts", inTenant(s.planItemContracts))
 	mux.HandleFunc("GET "+b+"/{ref}/status-reports", inTenant(s.listStatusReports))
 	mux.HandleFunc("GET "+b+"/{ref}/status-reports/prefill", inTenant(s.prefillStatusReport))
 	mux.HandleFunc("POST "+b+"/{ref}/status-reports", inTenant(s.createStatusReport))
@@ -613,5 +621,51 @@ func (s *Server) incomingWork(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	weeks, _ := strconv.Atoi(q.Get("weeks"))
 	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.Incoming, error) {
 		return s.proj.IncomingWork(r.Context(), tx, actorOf(r, p), projects.IncomingInput{Team: q.Get("team"), Space: q.Get("space"), Weeks: weeks})
+	})
+}
+
+// Passo 6.
+
+func (s *Server) projectPortfolio(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	closed := r.URL.Query().Get("closed") == "true"
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.Portfolio, error) {
+		return s.proj.Portfolio(r.Context(), tx, actorOf(r, p), closed)
+	})
+}
+
+func (s *Server) applicationProjects(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	app := r.URL.Query().Get("app")
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (*projects.AppProjects, error) {
+		return s.proj.ApplicationProjects(r.Context(), tx, actorOf(r, p), app)
+	})
+}
+
+func (s *Server) dependencyCandidates(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		items, err := s.proj.DepCandidates(r.Context(), tx, actorOf(r, p), r.PathValue("ref"))
+		return map[string]any{"items": items}, err
+	})
+}
+
+func (s *Server) createCrossDep(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in projects.CrossDepInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	tenantJSON(s, w, r, p, false, http.StatusCreated, func(tx pgx.Tx) (*projects.Plan, error) {
+		return s.proj.CreateCrossDep(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), in)
+	})
+}
+
+func (s *Server) deleteCrossDep(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, false, http.StatusOK, func(tx pgx.Tx) (*projects.Plan, error) {
+		return s.proj.DeleteCrossDep(r.Context(), tx, actorOf(r, p), r.PathValue("ref"), r.PathValue("id"))
+	})
+}
+
+func (s *Server) planItemContracts(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	tenantJSON(s, w, r, p, true, http.StatusOK, func(tx pgx.Tx) (any, error) {
+		items, err := s.proj.ContractOptions(r.Context(), tx, actorOf(r, p), r.PathValue("id"))
+		return map[string]any{"items": items}, err
 	})
 }

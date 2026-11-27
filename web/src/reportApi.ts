@@ -145,7 +145,10 @@ export type ReportSchedule = {
   reminder_days: number;
   expected_in_phases: string[];
 };
-export type ReportList = { items: StatusReport[]; schedule: ReportSchedule; can_edit: boolean };
+/** La richiesta è confluita in un progetto (progetti, passo 6): l'ultimo report inviato del progetto.
+ * restricted: l'attore non legge il progetto (niente chiave, titolo né report). */
+export type ProjectLink = { id?: string; key?: string; title?: string; restricted?: boolean; latest: StatusReport | null; submitted: number };
+export type ReportList = { items: StatusReport[]; schedule: ReportSchedule; can_edit: boolean; project?: ProjectLink };
 export type Change = { field: string; label: string; from: unknown; to: unknown; trend: "better" | "worse" | "same" };
 export type Comparison = { from: StatusReport; to: StatusReport; changes: Change[] };
 export type ReportInput = Partial<Pick<StatusReport, "overall" | "schedule" | "cost" | "scope" | "risk">> & {

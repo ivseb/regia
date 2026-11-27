@@ -20,6 +20,7 @@ import {
   type ReportKind,
   type Frequency,
   type RAG,
+  type ProjectLink,
   type ReportList,
   type Sections,
   type StatusReport,
@@ -99,14 +100,15 @@ function ReportsBody({ refKey }: { refKey: string }) {
   });
   if (list.error) return <ErrorNote error={list.error} />;
   if (!list.data) return <Loading className="m-0 text-muted" />;
-  const { items, can_edit } = list.data;
+  const { items, can_edit, project } = list.data;
   const draft = items.find((r) => r.status === "draft");
   const sent = items.filter((r) => r.status === "submitted");
   const shown = open ? items.find((r) => r.id === open) : sent[0];
   return (
     <div className="flex flex-col gap-6">
-      <ScheduleBar refKey={refKey} data={list.data} />
-      {can_edit && !draft && (
+      {project ? <ProjectReports link={project} /> : <ScheduleBar refKey={refKey} data={list.data} />}
+      {project && (sent.length > 0 || draft) && <SectionTitle>{t("progetti.passo6.request.old")}</SectionTitle>}
+      {can_edit && !draft && !project && (
         <div className="flex flex-wrap items-center gap-3">
           <button className="btn btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
             {create.isPending ? t("lavoro.statusreports.preparing") : t("lavoro.statusreports.new")}
@@ -116,11 +118,69 @@ function ReportsBody({ refKey }: { refKey: string }) {
         </div>
       )}
       {draft && can_edit && <DraftEditor key={draft.id} report={draft} refKey={refKey} />}
-      {sent.length === 0 && !draft && <p className="m-0 text-muted">{t("lavoro.statusreports.noneSent")}</p>}
+      {sent.length === 0 && !draft && !project && <p className="m-0 text-muted">{t("lavoro.statusreports.noneSent")}</p>}
       {compare && shown && <CompareView id={compare} onClose={() => setCompare(null)} />}
       {!compare && shown && shown.status === "submitted" && <ReportView report={shown} refKey={refKey} onCompare={() => setCompare(shown.id)} />}
       {sent.length > 0 && <History items={sent} current={shown?.id} onOpen={(id) => { setOpen(id); setCompare(null); }} />}
     </div>
+  );
+}
+
+/** Riepilogo sulla richiesta confluita in un progetto (passo 6 dei progetti): gli status report ora sono
+ * del progetto; qui l'ultimo inviato, in evidenza, con il link alla scheda «Stato» del progetto. */
+function ProjectReports({ link }: { link: ProjectLink }) {
+  const t = useT();
+  const r = link.latest;
+  return (
+    <section className="flex flex-col gap-3 border-l-2 border-accent pl-4" aria-label={t("progetti.passo6.request.title")} data-testid="stato-progetto">
+      <SectionTitle>{t("progetti.passo6.request.title")}</SectionTitle>
+      {link.restricted || !link.key ? (
+        <p className="m-0 text-[13px]">{t("progetti.passo6.request.restricted")}</p>
+      ) : (
+        <>
+          <p className="m-0 text-[13px]">
+            <Trans
+              k="progetti.passo6.request.moved"
+              slots={{
+                project: (
+                  <Link to="/e/$key" params={{ key: link.key }} className="font-medium text-accent no-underline hover:underline">
+                    <span className="font-mono text-[12px]">{link.key}</span> {link.title}
+                  </Link>
+                ),
+              }}
+            />
+          </p>
+          {r ? (
+            <article className="flex flex-col gap-2" aria-label={t("progetti.passo6.request.latest", { period: period(r) })}>
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <h3 className="m-0 text-[16px] font-bold">{t("progetti.passo6.request.latest", { period: period(r) })}</h3>
+                <Rag value={r.overall} />
+              </div>
+              <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-[12.5px]" aria-label={t("progetti.passo6.request.signals")}>
+                {DIMENSIONS.filter((d) => d.key !== "overall").map((d) => (
+                  <li key={d.key} className="flex items-center gap-1.5">
+                    <span className="text-muted">{d.label}</span>
+                    <Rag value={r[d.key]} />
+                  </li>
+                ))}
+              </ul>
+              {r.sections.summary && <div className="text-[13px]"><Markdown text={r.sections.summary} /></div>}
+              <p className="m-0 text-[12.5px] text-muted">
+                {r.submitted_at ? t("lavoro.statusreports.submittedOn", { date: date(r.submitted_at) }) : t("lavoro.statusreports.submitted")}
+                {r.author ? ` ${t("lavoro.statusreports.by", { name: r.author })}` : ""}
+                {" · "}
+                {r.acknowledged_at ? t("progetti.passo5.report.seen") : t("progetti.passo5.report.unseen")}
+              </p>
+            </article>
+          ) : (
+            <p className="m-0 text-[13px] text-muted">{t("progetti.passo6.request.noneYet")}</p>
+          )}
+          <Link to="/e/$key" params={{ key: link.key }} search={{ scheda: "stato" }} className="btn self-start no-underline">
+            {t("progetti.passo6.request.open", { count: link.submitted })}
+          </Link>
+        </>
+      )}
+    </section>
   );
 }
 

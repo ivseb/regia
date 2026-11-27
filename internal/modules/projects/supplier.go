@@ -26,11 +26,35 @@ import (
 // come utente esterno, con il solo ruolo sul suo work package, oppure restare fuori da Regia.
 
 // Contract è il contratto del work package. Importi solo a chi pianifica e al contatto del fornitore.
+// Ref, AmountCents e Currency sono quelli che valgono: i dati scritti sul work package e, dove
+// mancano, quelli del contratto collegato del registro ICT (passo 6). OwnRef e OwnAmountCents sono
+// quelli scritti sul work package.
 type Contract struct {
-	Ref         *string `json:"ref"`
-	AmountCents *int64  `json:"amount_cents"`
-	Currency    string  `json:"currency"`
+	Ref            *string         `json:"ref"`
+	AmountCents    *int64          `json:"amount_cents"`
+	Currency       string          `json:"currency"`
+	OwnRef         *string         `json:"own_ref"`
+	OwnAmountCents *int64          `json:"own_amount_cents"`
+	Linked         *LinkedContract `json:"linked"`
 }
+
+// LinkedContract è il contratto del registro ICT collegato al work package (passo 6).
+type LinkedContract struct {
+	ID              string  `json:"id"`
+	Reference       string  `json:"reference"`
+	ProviderID      string  `json:"provider_id"`
+	Provider        string  `json:"provider"`
+	ServiceType     string  `json:"service_type"`
+	StartDate       *string `json:"start_date"`
+	EndDate         *string `json:"end_date"`
+	AnnualCostCents *int64  `json:"annual_cost_cents"`
+	Currency        *string `json:"currency"`
+	Expired         bool    `json:"expired"`
+}
+
+// contractAmountSQL è il valore del contratto su cui si misurano i SAL a importo: quello scritto
+// sul work package, altrimenti il costo annuo del contratto collegato del registro ICT.
+const contractAmountSQL = `coalesce(w.contract_amount_cents, (select ic.annual_cost_cents from ict_contracts ic where ic.tenant_id = w.tenant_id and ic.id = w.contract_id))`
 
 // Claim è un SAL.
 type Claim struct {
@@ -142,7 +166,7 @@ func claimProgress(claims []claimRow, contract *int64) *float64 {
 // loadSupplier aggiunge ai work package del fornitore SAL accettati, SAL da accettare e
 // deliverable, per l'avanzamento (computeItemProgress) e le tabelle.
 func loadSupplier(ctx context.Context, tx pgx.Tx, p *Plan) error {
-	rows, err := tx.Query(ctx, `select w.element_id::text, w.supplier_updates, w.contract_amount_cents,
+	rows, err := tx.Query(ctx, `select w.element_id::text, w.supplier_updates, `+contractAmountSQL+`,
 		coalesce((select jsonb_agg(jsonb_build_object('Percent', c.percent::float8, 'Amount', c.amount_cents) order by c.number)
 		  from ext_progress_claim c join elements ce on ce.tenant_id = c.tenant_id and ce.id = c.element_id and ce.deleted_at is null
 		  where c.work_package_id = w.element_id and c.status = 'accepted'), '[]'::jsonb),
@@ -231,14 +255,40 @@ func (s *Service) Supplier(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 	}
 	v := &SupplierView{ItemID: el.ID, Contacts: []Person{}, Claims: []Claim{}, Deliverables: []Deliverable{},
 		CanEdit: plan, CanDeclare: declare, AmountsVisible: plan || contact}
-	var amount *int64
-	if err := tx.QueryRow(ctx, `select w.delivery_mode, w.supplier_id::text, su.title, w.supplier_updates, w.contract_ref, w.contract_amount_cents, w.contract_currency
+	var amount, ownAmount *int64
+	var lc LinkedContract
+	var lcID, lcRef, lcProvID, lcProv, lcService, lcCur *string
+	var lcStart, lcEnd *time.Time
+	var lcCost *int64
+	if err := tx.QueryRow(ctx, `select w.delivery_mode, w.supplier_id::text, su.title, w.supplier_updates, w.contract_ref, w.contract_amount_cents, w.contract_currency,
+		ic.id::text, ic.reference, ic.provider_element_id::text, pe.title, ic.service_type, ic.start_date::timestamptz, ic.end_date::timestamptz, ic.annual_cost_cents, ic.currency::text
 		from ext_work_package w left join elements su on su.tenant_id = w.tenant_id and su.id = w.supplier_id and su.deleted_at is null
-		where w.element_id = $1`, el.ID).Scan(&v.Mode, &v.SupplierID, &v.Supplier, &v.SupplierUpdates, &v.Contract.Ref, &amount, &v.Contract.Currency); err != nil {
+		left join ict_contracts ic on ic.tenant_id = w.tenant_id and ic.id = w.contract_id
+		left join elements pe on pe.tenant_id = ic.tenant_id and pe.id = ic.provider_element_id
+		where w.element_id = $1`, el.ID).Scan(&v.Mode, &v.SupplierID, &v.Supplier, &v.SupplierUpdates, &v.Contract.OwnRef, &ownAmount, &v.Contract.Currency,
+		&lcID, &lcRef, &lcProvID, &lcProv, &lcService, &lcStart, &lcEnd, &lcCost, &lcCur); err != nil {
 		return nil, err
 	}
+	v.Contract.Ref, amount = v.Contract.OwnRef, ownAmount
+	if lcID != nil {
+		lc = LinkedContract{ID: *lcID, Reference: deref(lcRef), ProviderID: deref(lcProvID), Provider: deref(lcProv), ServiceType: deref(lcService),
+			StartDate: dateStr(lcStart), EndDate: dateStr(lcEnd), Currency: lcCur, Expired: lcEnd != nil && lcEnd.Before(today())}
+		if v.AmountsVisible {
+			lc.AnnualCostCents = lcCost
+		}
+		v.Contract.Linked = &lc
+		if v.Contract.Ref == nil {
+			v.Contract.Ref = &lc.Reference
+		}
+		if amount == nil && lcCost != nil {
+			amount = lcCost
+			if lcCur != nil {
+				v.Contract.Currency = *lcCur
+			}
+		}
+	}
 	if v.AmountsVisible {
-		v.Contract.AmountCents = amount
+		v.Contract.AmountCents, v.Contract.OwnAmountCents = amount, ownAmount
 	}
 	rows, err := tx.Query(ctx, `select m.id::text, m.display_name from stakeholders sh
 		join stakeholder_roles r on r.tenant_id = sh.tenant_id and r.id = sh.role_id and r.key = $2
@@ -358,6 +408,8 @@ type SupplierInput struct {
 	ClearAmount     bool    `json:"clear_amount"`
 	Currency        *string `json:"contract_currency"`
 	ContactID       *string `json:"contact_id"`
+	// ContractID: il contratto del registro ICT (passo 6); "" toglie il collegamento.
+	ContractID *string `json:"contract_id"`
 }
 
 func (s *Service) UpdateSupplier(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string, in SupplierInput) (*SupplierView, error) {
@@ -385,6 +437,11 @@ func (s *Service) UpdateSupplier(ctx context.Context, tx pgx.Tx, actor engine.Ac
 		}
 		in.Currency = &c
 	}
+	if in.ContractID != nil {
+		if err := s.linkContract(ctx, tx, actor, el.ID, strings.TrimSpace(*in.ContractID)); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := tx.Exec(ctx, `update ext_work_package set
 		supplier_updates = coalesce($2, supplier_updates),
 		contract_ref = case when $3::text is null then contract_ref else nullif($3, '') end,
@@ -406,6 +463,90 @@ func (s *Service) UpdateSupplier(ctx context.Context, tx pgx.Tx, actor engine.Ac
 		return nil, err
 	}
 	return s.Supplier(ctx, tx, actor, el.ID)
+}
+
+// linkContract collega il work package a un contratto del registro ICT ("" lo scollega). Il
+// contratto deve essere del fornitore del work package; se il work package non ha ancora un
+// fornitore, prende quello del contratto.
+func (s *Service) linkContract(ctx context.Context, tx pgx.Tx, actor engine.Actor, wpID, contractID string) error {
+	if contractID == "" {
+		_, err := tx.Exec(ctx, "update ext_work_package set contract_id = null where element_id = $1", wpID)
+		return err
+	}
+	var provider string
+	if engine.IsUUID(contractID) {
+		_ = tx.QueryRow(ctx, "select provider_element_id::text from ict_contracts where id = $1", contractID).Scan(&provider)
+	}
+	if provider == "" {
+		return engine.NotFound("contract_id", "contract", "contratto inesistente")
+	}
+	if ok, err := s.eng.CanRead(ctx, tx, actor, provider); err != nil || !ok {
+		return firstErr(err, engine.NotFound("contract_id", "contract", "contratto inesistente"))
+	}
+	var supplier *string
+	if err := tx.QueryRow(ctx, "select supplier_id::text from ext_work_package where element_id = $1", wpID).Scan(&supplier); err != nil {
+		return err
+	}
+	if supplier != nil && *supplier != provider {
+		return engine.InvalidCode("validation.projects.contract_supplier", "contract_id", "il contratto è di un altro fornitore")
+	}
+	_, err := tx.Exec(ctx, "update ext_work_package set contract_id = $2, supplier_id = coalesce(supplier_id, $3) where element_id = $1", wpID, contractID, provider)
+	return err
+}
+
+// ContractOption è un contratto del registro ICT che il work package può collegare.
+type ContractOption struct {
+	ID          string  `json:"id"`
+	Reference   string  `json:"reference"`
+	ProviderID  string  `json:"provider_id"`
+	Provider    string  `json:"provider"`
+	ServiceType string  `json:"service_type"`
+	StartDate   *string `json:"start_date"`
+	EndDate     *string `json:"end_date"`
+	Expired     bool    `json:"expired"`
+}
+
+// ContractOptions elenca i contratti collegabili al work package: quelli del suo fornitore o,
+// senza fornitore, tutti quelli dei fornitori che l'attore legge. Solo per chi pianifica.
+func (s *Service) ContractOptions(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) ([]ContractOption, error) {
+	el, projectID, err := s.supplierWP(ctx, tx, actor, ref)
+	if err != nil {
+		return nil, err
+	}
+	if ok, err := canPlan(ctx, tx, actor, projectID); err != nil || !ok {
+		return nil, firstErr(err, engine.ErrForbidden)
+	}
+	rows, err := tx.Query(ctx, `select c.id::text, c.reference, c.provider_element_id::text, pe.title, c.service_type,
+		c.start_date::timestamptz, c.end_date::timestamptz
+		from ict_contracts c
+		join elements pe on pe.tenant_id = c.tenant_id and pe.id = c.provider_element_id and pe.deleted_at is null
+		join ext_work_package w on w.tenant_id = c.tenant_id and w.element_id = $1
+		where w.supplier_id is null or w.supplier_id = c.provider_element_id
+		order by pe.title, c.end_date desc nulls first, c.reference limit 300`, el.ID)
+	if err != nil {
+		return nil, err
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ContractOption, error) {
+		var c ContractOption
+		var start, end *time.Time
+		err := r.Scan(&c.ID, &c.Reference, &c.ProviderID, &c.Provider, &c.ServiceType, &start, &end)
+		c.StartDate, c.EndDate = dateStr(start), dateStr(end)
+		c.Expired = end != nil && end.Before(today())
+		return c, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := []ContractOption{}
+	rd := s.reader(actor)
+	for _, c := range list {
+		if ok, err := rd.can(ctx, tx, c.ProviderID); err != nil {
+			return nil, err
+		} else if ok {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 // setContact sostituisce il contatto del fornitore sul work package e lo porta sui SAL e sui
@@ -624,7 +765,7 @@ func (s *Service) decideClaim(ctx context.Context, tx pgx.Tx, actor engine.Actor
 	if outcome == "accepted" {
 		var rows []claimRow
 		var contract *int64
-		if err := tx.QueryRow(ctx, `select w.contract_amount_cents,
+		if err := tx.QueryRow(ctx, `select `+contractAmountSQL+`,
 			coalesce((select jsonb_agg(jsonb_build_object('Percent', c.percent::float8, 'Amount', c.amount_cents) order by c.number)
 			  from ext_progress_claim c join elements ce on ce.tenant_id = c.tenant_id and ce.id = c.element_id and ce.deleted_at is null
 			  where c.work_package_id = w.element_id and c.status = 'accepted'), '[]'::jsonb)
