@@ -533,7 +533,9 @@ export type NotificationKind = "mention" | "comment" | "role" | "phase" | "appro
   // Timesheet: settimane da approvare, esito, riapertura.
   | "timesheet"
   // Progetti: conflitti sulle applicazioni, SAL e consegne dei fornitori da accettare.
-  | "project";
+  | "project"
+  // AI: il budget del mese ha superato l'80% (a chi amministra l'organizzazione).
+  | "ai";
 export type Notification = {
   id: string;
   kind: NotificationKind;

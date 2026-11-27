@@ -79,15 +79,22 @@ func supportsEffort(model string) bool {
 	return false
 }
 
-func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) {
+// params traduce la richiesta neutra in quella dell'SDK.
+//
+// Cache del prompt: il marcatore cache_control in cima alla richiesta mette in cache tutto
+// fino all'ultimo blocco (strumenti, istruzioni, messaggi). Nel giro con gli strumenti ogni
+// chiamata rilegge dalla cache il prefisso della precedente; istruzioni e strumenti restano
+// identici fra le domande, così anche la conversazione successiva parte dalla cache.
+func params(req ai.Request) sdk.MessageNewParams {
 	maxTokens := int64(req.MaxTokens)
 	if maxTokens <= 0 {
 		maxTokens = 16000
 	}
 	params := sdk.MessageNewParams{
-		Model:     req.Model,
-		MaxTokens: maxTokens,
-		Messages:  toParams(req.Messages),
+		Model:        req.Model,
+		MaxTokens:    maxTokens,
+		Messages:     toParams(req.Messages),
+		CacheControl: sdk.NewCacheControlEphemeralParam(),
 	}
 	if req.System != "" {
 		params.System = []sdk.TextBlockParam{{Text: req.System}}
@@ -109,12 +116,44 @@ func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, erro
 		}
 		params.Tools = append(params.Tools, sdk.ToolUnionParam{OfTool: &tp})
 	}
-	resp, err := p.client.Messages.New(ctx, params)
+	return params
+}
+
+func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) {
+	resp, err := p.client.Messages.New(ctx, params(req))
 	if err != nil {
 		return nil, mapError(err)
 	}
-	out := &ai.Response{Model: resp.Model, InputTokens: resp.Usage.InputTokens + resp.Usage.CacheCreationInputTokens + resp.Usage.CacheReadInputTokens,
-		OutputTokens: resp.Usage.OutputTokens}
+	return convert(resp), nil
+}
+
+// ChatStream chiede la risposta in streaming e passa a onText i pezzi di testo man mano;
+// alla fine il messaggio accumulato è lo stesso di Chat (blocchi nativi compresi).
+func (p *provider) ChatStream(ctx context.Context, req ai.Request, onText func(string)) (*ai.Response, error) {
+	stream := p.client.Messages.NewStreaming(ctx, params(req))
+	defer stream.Close()
+	msg := sdk.Message{}
+	for stream.Next() {
+		ev := stream.Current()
+		if err := msg.Accumulate(ev); err != nil {
+			return nil, &ai.ProviderError{Code: "bad_response", Msg: "risposta del fornitore non riconosciuta"}
+		}
+		if d, ok := ev.AsAny().(sdk.ContentBlockDeltaEvent); ok {
+			if t, ok := d.Delta.AsAny().(sdk.TextDelta); ok && t.Text != "" && onText != nil {
+				onText(t.Text)
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		return nil, mapError(err)
+	}
+	return convert(&msg), nil
+}
+
+func convert(resp *sdk.Message) *ai.Response {
+	u := resp.Usage
+	out := &ai.Response{Model: resp.Model, InputTokens: u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens,
+		OutputTokens: u.OutputTokens, CacheReadTokens: u.CacheReadInputTokens, CacheWriteTokens: u.CacheCreationInputTokens}
 	out.Message = ai.Message{Role: ai.RoleAssistant, Native: resp.ToParam()}
 	var text []string
 	for _, block := range resp.Content {
@@ -136,7 +175,7 @@ func (p *provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, erro
 	default:
 		out.Stop = ai.StopEnd
 	}
-	return out, nil
+	return out
 }
 
 // splitSchema separa proprietà e campi obbligatori dello schema JSON dello strumento.

@@ -1,13 +1,20 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"regia/internal/ai"
 	aianthropic "regia/internal/ai/anthropic"
+	"regia/internal/ai/mcpserver"
 	"regia/internal/ai/openaicompat"
 	"regia/internal/ai/tools"
 	"regia/internal/devtools/fakeai"
@@ -64,9 +71,25 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+b+"/conversations/{id}", inTenant(s.aiConversation))
 	mux.HandleFunc("DELETE "+b+"/conversations/{id}", inTenant(s.aiDeleteConversation))
 	mux.HandleFunc("POST "+b+"/ask", inTenant(s.aiAsk))
+	mux.HandleFunc("POST "+b+"/graph", inTenant(s.aiGraph))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/confirm", inTenant(s.aiConfirm))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/reject", inTenant(s.aiReject))
+	// Server MCP (ondata 2): solo con un token API, nel tenant del token.
+	mux.Handle(MCPPath, mcpserver.Handler(mcpserver.Options{AI: s.ai, DB: s.db, Version: s.version, BaseURL: s.adm.baseURL, Log: s.log,
+		Caller: func(r *http.Request) *mcpserver.Caller {
+			p := principal(r.Context())
+			if p == nil || p.TokenID == "" || p.TenantID == "" {
+				return nil
+			}
+			return &mcpserver.Caller{TenantID: p.TenantID, Actor: actorOf(r, p), ReadOnly: p.ReadOnly()}
+		},
+		Changed: func(tenantID, memberID string) {
+			s.events.publish(tenantID, Event{Kind: "changed", Path: MCPPath, Actor: memberID, At: time.Now().UnixMilli()})
+		}}))
 }
+
+// MCPPath è l'indirizzo del server MCP.
+const MCPPath = "/api/v1/mcp"
 
 // aiError traduce gli errori dell'AI; gli altri vanno al traduttore del motore.
 func (s *Server) aiError(w http.ResponseWriter, r *http.Request, err error) {
@@ -231,15 +254,72 @@ func (s *Server) aiAsk(w http.ResponseWriter, r *http.Request, p *auth.Principal
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	lang := s.memberLang(r, p)
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		s.aiAskStream(w, r, p, lang, in)
+		return
+	}
+	res, err := s.ai.Ask(r.Context(), p.TenantID, actorOf(r, p), lang, in)
+	if err != nil {
+		s.aiError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// aiAskStream risponde in streaming (Server-Sent Events): eventi «text», «tool» e «step»
+// mentre l'assistente lavora, poi «done» con lo stesso corpo della risposta JSON, oppure
+// «error» con il problema (stesso formato degli errori dell'API).
+func (s *Server) aiAskStream(w http.ResponseWriter, r *http.Request, p *auth.Principal, lang string, in ai.AskInput) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{}) // una risposta lunga dura più del WriteTimeout del server
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	var mu sync.Mutex
+	send := func(event string, v any) {
+		b, _ := json.Marshal(v)
+		mu.Lock()
+		defer mu.Unlock()
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
+		_ = rc.Flush()
+	}
+	send("start", map[string]any{})
+	res, err := s.ai.AskStream(r.Context(), p.TenantID, actorOf(r, p), lang, in, func(ev ai.AskEvent) { send(ev.Type, ev) })
+	if err != nil {
+		rec := httptest.NewRecorder()
+		s.aiError(rec, r, err)
+		var problem map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &problem)
+		if problem == nil {
+			problem = map[string]any{"status": rec.Code}
+		}
+		send("error", problem)
+		return
+	}
+	send("done", res)
+}
+
+// memberLang è la lingua della persona (per le risposte del modello).
+func (s *Server) memberLang(r *http.Request, p *auth.Principal) string {
 	lang := i18n.Default
 	_ = s.db.InTenant(r.Context(), p.TenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
-		l, err := i18n.MemberLang(r.Context(), tx, p.MemberID)
-		if err == nil {
+		if l, err := i18n.MemberLang(r.Context(), tx, p.MemberID); err == nil {
 			lang = l
 		}
 		return nil
 	})
-	res, err := s.ai.Ask(r.Context(), p.TenantID, actorOf(r, p), lang, in)
+	return lang
+}
+
+// aiGraph traduce una domanda sul grafo in una query (funzione «domande_grafo»).
+func (s *Server) aiGraph(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ai.GraphInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.ai.GraphQuestion(r.Context(), p.TenantID, actorOf(r, p), s.memberLang(r, p), in)
 	if err != nil {
 		s.aiError(w, r, err)
 		return

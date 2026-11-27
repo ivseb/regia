@@ -13,6 +13,7 @@ import (
 
 	"regia/internal/ai/tools"
 	"regia/internal/engine"
+	"regia/internal/engine/notify"
 	"regia/internal/modules/devsecops/connectors/github/ghapi"
 	"regia/internal/platform/audit"
 	"regia/internal/platform/db"
@@ -158,6 +159,12 @@ type CallMeta struct {
 // Call fa una chiamata al modello del target: controlla il budget prima e la registra in
 // ai_calls dopo, qualunque sia l'esito. Il registro ha l'hash del prompt, non il contenuto.
 func (s *Service) Call(ctx context.Context, t *Target, req Request, meta CallMeta) (*Response, error) {
+	return s.CallStream(ctx, t, req, meta, nil)
+}
+
+// CallStream è Call con il testo restituito mentre arriva: onText riceve i pezzi in ordine.
+// Con un adattatore che non sa farlo (Streamer), onText riceve tutto il testo alla fine.
+func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta CallMeta, onText func(string)) (*Response, error) {
 	req.Model = t.Model
 	req.Deep = t.Tier != TierFast
 	if !t.Tools {
@@ -189,18 +196,26 @@ func (s *Service) Call(ctx context.Context, t *Target, req Request, meta CallMet
 	cctx, cancel := context.WithTimeout(ctx, s.o.Timeout)
 	defer cancel()
 	start := s.o.Now()
-	resp, err := prov.Chat(cctx, req)
+	var resp *Response
+	if st, ok := prov.(Streamer); ok && onText != nil {
+		resp, err = st.ChatStream(cctx, req, onText)
+	} else {
+		resp, err = prov.Chat(cctx, req)
+		if err == nil && onText != nil && resp.Message.Text != "" {
+			onText(resp.Message.Text)
+		}
+	}
 	rec.Duration = s.o.Now().Sub(start)
 	if err != nil {
 		rec.Outcome, rec.ErrorCode = "error", ErrorCode(err)
 		s.record(ctx, meta.TenantID, rec)
 		return nil, err
 	}
-	rec.In, rec.Out = resp.InputTokens, resp.OutputTokens
+	rec.In, rec.Out, rec.CacheRead, rec.CacheWrite = resp.InputTokens, resp.OutputTokens, resp.CacheReadTokens, resp.CacheWriteTokens
 	if resp.Model != "" {
 		rec.Model = resp.Model
 	}
-	rec.Cost = Cost(t.Provider, t.Model, resp.InputTokens, resp.OutputTokens)
+	rec.Cost = CostCached(t.Provider, t.Model, resp.InputTokens, resp.CacheReadTokens, resp.CacheWriteTokens, resp.OutputTokens)
 	rec.Outcome = "ok"
 	if resp.Stop == StopRefusal {
 		rec.Outcome, rec.ErrorCode = "refused", "model_refusal"
@@ -229,7 +244,7 @@ func promptHash(req Request) []byte {
 
 type callRecord struct {
 	MemberID, Feature, Kind, Model, Tier string
-	In, Out                              int64
+	In, Out, CacheRead, CacheWrite       int64
 	Cost                                 float64
 	Outcome, ErrorCode                   string
 	PromptHash                           []byte
@@ -249,10 +264,10 @@ func (s *Service) record(ctx context.Context, tenantID string, r callRecord) {
 	}
 	err := s.o.DB.InTenant(context.WithoutCancel(ctx), tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `insert into ai_calls (tenant_id, member_id, feature, provider, model, tier, input_tokens, output_tokens,
-			cost_usd, element_ids, prompt_sha256, outcome, error_code, duration_ms, conversation_id)
-			values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			cost_usd, element_ids, prompt_sha256, outcome, error_code, duration_ms, conversation_id, cache_read_tokens, cache_write_tokens)
+			values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 			nullable(r.MemberID), r.Feature, r.Kind, r.Model, nullable(r.Tier), r.In, r.Out, r.Cost, ids, r.PromptHash,
-			r.Outcome, nullable(r.ErrorCode), r.Duration.Milliseconds(), nullable(r.ConversationID))
+			r.Outcome, nullable(r.ErrorCode), r.Duration.Milliseconds(), nullable(r.ConversationID), r.CacheRead, r.CacheWrite)
 		return err
 	})
 	if err != nil {
@@ -260,8 +275,9 @@ func (s *Service) record(ctx context.Context, tenantID string, r callRecord) {
 	}
 }
 
-// warnBudget: al primo superamento dell'80% nel mese resta una voce nel registro di audit
-// (l'avviso si vede in Configurazione → AI e nel pannello Assistente).
+// warnBudget: al primo superamento dell'80% nel mese resta una voce nel registro di audit e
+// chi amministra l'organizzazione riceve una notifica (l'avviso si vede anche in
+// Configurazione → AI e nel pannello Assistente).
 func (s *Service) warnBudget(ctx context.Context, meta CallMeta) {
 	err := s.o.DB.InTenant(context.WithoutCancel(ctx), meta.TenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
 		b, err := s.budget(ctx, tx)
@@ -273,8 +289,21 @@ func (s *Service) warnBudget(ctx context.Context, meta CallMeta) {
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
-		return audit.Append(ctx, tx, audit.Event{Action: "ai.budget.warning", EntityType: "ai_settings",
-			Payload: map[string]any{"percent": int(b.Percent), "month": b.Month}})
+		if err := audit.Append(ctx, tx, audit.Event{Action: "ai.budget.warning", EntityType: "ai_settings",
+			Payload: map[string]any{"percent": int(b.Percent), "month": b.Month}}); err != nil {
+			return err
+		}
+		// Notifica (e email, se attive) a chi amministra l'organizzazione, una volta al mese.
+		rows, err := tx.Query(ctx, notify.AdminsSQL)
+		if err != nil {
+			return err
+		}
+		admins, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		_, err = notify.EmitDirect(ctx, tx, notify.KindAI, admins, map[string]any{"event": "budget_warning", "percent": int(b.Percent), "month": b.Month})
+		return err
 	})
 	if err != nil {
 		s.o.Log.Warn("avviso del budget AI", "errore", err)

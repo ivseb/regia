@@ -55,6 +55,12 @@ export const LISTS: Record<string, ListConfig> = {
     page: "documenti", get path() { return crumbs("governance", "documents"); }, get title() { return tr("altro.views.list.documenti.title"); }, baseQuery: "tipo: page ordina per: aggiornata desc", // i18n-ok: sintassi della query (parole chiave italiane)
     typeKey: "page", modes: ["tabella"], defaultCols: cols, get emptyText() { return tr("altro.views.list.documenti.empty"); }, href: "/elenco/documenti",
   },
+  // Domande sul grafo (replica/ai.md, ondata 2): la query di una domanda, su qualsiasi tipo.
+  // Si scrive anche a mano: senza AI la lista funziona uguale.
+  domande: {
+    page: "domande", get path() { return tr("ai.graph.path"); }, get title() { return tr("ai.graph.listTitle"); }, baseQuery: "ordina per: aggiornata desc", // i18n-ok: sintassi della query (parole chiave italiane)
+    typeKey: "", modes: ["tabella"], defaultCols: ["key", "title", "state", "assignee", "updated"], get emptyText() { return tr("ai.graph.listEmpty"); }, href: "/elenco/domande",
+  },
 };
 
 /** Dove porta il nome di una pagina di viste (preferiti nel menu, palette). */

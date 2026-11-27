@@ -20,9 +20,22 @@ var listPrices = map[string][2]float64{
 	"claude-haiku-4-5":  {1, 5},
 }
 
+// Moltiplicatori della cache del prompt sul prezzo dell'input (listino Anthropic: lettura al
+// 10%, scrittura con durata di 5 minuti al 125%).
+const (
+	cacheReadFactor  = 0.1
+	cacheWriteFactor = 1.25
+)
+
 // Cost stima il costo di una chiamata: prezzi del fornitore se impostati, altrimenti il
 // listino noto del modello, altrimenti zero (modelli locali).
 func Cost(p *ProviderRow, model string, in, out int64) float64 {
+	return CostCached(p, model, in, 0, 0, out)
+}
+
+// CostCached è Cost con la cache del prompt: in è tutto l'input, di cui cacheRead letto dalla
+// cache e cacheWrite scritto nella cache.
+func CostCached(p *ProviderRow, model string, in, cacheRead, cacheWrite, out int64) float64 {
 	pin, pout := 0.0, 0.0
 	if lp, ok := listPrices[strings.TrimPrefix(model, "anthropic.")]; ok {
 		pin, pout = lp[0], lp[1]
@@ -33,7 +46,8 @@ func Cost(p *ProviderRow, model string, in, out int64) float64 {
 	if p != nil && p.PriceOutput != nil {
 		pout = *p.PriceOutput
 	}
-	return (float64(in)*pin + float64(out)*pout) / 1e6
+	plain := max(in-cacheRead-cacheWrite, 0)
+	return (float64(plain)*pin + float64(cacheRead)*pin*cacheReadFactor + float64(cacheWrite)*pin*cacheWriteFactor + float64(out)*pout) / 1e6
 }
 
 // Stati del budget.

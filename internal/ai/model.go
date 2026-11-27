@@ -80,10 +80,15 @@ const (
 
 // Response è la risposta del modello.
 type Response struct {
-	Message      Message
-	Stop         string
+	Message Message
+	Stop    string
+	// InputTokens è tutto l'input, comprese le parti lette o scritte nella cache del prompt.
 	InputTokens  int64
 	OutputTokens int64
+	// CacheReadTokens e CacheWriteTokens: parti dell'input lette dalla cache del prompt o
+	// scritte nella cache (Anthropic); costano diversamente dall'input normale.
+	CacheReadTokens  int64
+	CacheWriteTokens int64
 	// Model è il modello che ha risposto (può differire da quello chiesto, es. un alias).
 	Model string
 }
@@ -102,6 +107,13 @@ type Provider interface {
 	Chat(ctx context.Context, req Request) (*Response, error)
 	// Models elenca i modelli: quelli installati (Ollama, LM Studio) o quelli noti.
 	Models(ctx context.Context) ([]ModelInfo, error)
+}
+
+// Streamer è un adattatore che restituisce il testo della risposta mentre arriva (le
+// risposte lunghe si vedono crescere nel pannello). Chi non lo implementa risponde tutto
+// insieme: il servizio passa il testo intero a onText alla fine.
+type Streamer interface {
+	ChatStream(ctx context.Context, req Request, onText func(string)) (*Response, error)
 }
 
 // ProviderConfig è ciò che serve a un adattatore per collegarsi.

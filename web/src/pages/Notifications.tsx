@@ -32,6 +32,7 @@ export const KIND_LABELS: Record<NotificationKind, { label: Key; hint: Key }> = 
   risk: { label: "lavoro.notifications.kind.risk.label", hint: "lavoro.notifications.kind.risk.hint" },
   timesheet: { label: "lavoro.notifications.kind.timesheet.label", hint: "lavoro.notifications.kind.timesheet.hint" },
   project: { label: "lavoro.notifications.kind.project.label", hint: "lavoro.notifications.kind.project.hint" },
+  ai: { label: "ai.notif.label", hint: "ai.notif.hint" },
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -207,6 +208,9 @@ export function Describe({ n }: { n: Notification }) {
           return R("project.dependency_late", { milestone: str(p.milestone), other: str(p.other), project: str(p.project), need: p.need ? fmtDate(str(p.need)) : "", date: p.date ? fmtDate(str(p.date)) : "" });
       }
       return R("project.plain");
+    case "ai":
+      if (ev === "budget_warning") return <Rich k="ai.notif.budget_warning" params={{ percent: Number(p.percent) || 0, month: str(p.month) }} />;
+      return <>{t("ai.notif.plain")}</>;
     case "budget":
       return (
         <>
@@ -273,6 +277,8 @@ function moduleOfKind(kind: NotificationKind): UiModule | undefined {
     case "timesheet":
     case "project":
       return "work";
+    case "ai":
+      return "platform";
     default:
       return undefined;
   }
@@ -303,7 +309,11 @@ function Row({ n, onOpen }: { n: Notification; onOpen: (n: Notification) => void
   const cls = `flex items-start gap-3 px-4 py-2.5 md:px-7 no-underline text-fg hover:bg-sel/60`;
   return (
     <li className="border-b border-hair">
-      {n.kind === "timesheet" ? (
+      {n.kind === "ai" ? (
+        <Link to="/configurazione/ai/consumo" className={cls} onClick={() => onOpen(n)}>
+          {body}
+        </Link>
+      ) : n.kind === "timesheet" ? (
         <Link to="/tempo" search={{ settimana: str(n.payload.week) || undefined, persona: n.payload.event === "submitted" ? str(n.payload.member_id) || undefined : undefined }} className={cls} onClick={() => onOpen(n)}>
           {body}
         </Link>

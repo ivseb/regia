@@ -45,7 +45,7 @@ Richieste di esempio in varie fasi dello stage-gate: `scripts/dev-demo-data.sh h
 - [Lavoro](sviluppo/lavoro.md): pianificazione e tempo, commenti e notifiche, work management, import, viste salvate, «Da fare», etichette nelle liste (`etichetta:`) e board paginata con tutti gli sprint.
 - [Timesheet nel motore delle approvazioni](sviluppo/timesheet-approvazioni.md): settimana inviata come richiesta `timesheet` in «Le mie approvazioni», deleghe, notifiche di invio ed esito.
 - [Requisiti e gate di rilascio](sviluppo/requisiti.md): requisiti, verifica, deroghe, gate; requisiti veri dalle regole dei questionari (origine `questionnaire`).
-- [AI](sviluppo/ai.md): impostazioni del tenant, adattatori Anthropic e compatibile OpenAI, registro e budget, strumenti con i permessi della persona, assistente, fornitore finto ([guida per chi amministra](ai.md)).
+- [AI](sviluppo/ai.md): impostazioni del tenant, adattatori Anthropic e compatibile OpenAI (cache del prompt e streaming), registro e budget, strumenti con i permessi della persona, assistente, domande sul grafo, server MCP, fornitore finto ([guida per chi amministra](ai.md), [collegare i client MCP](ai-mcp.md)).
 - [DevSecOps](sviluppo/devsecops.md): vulnerabilità, connettori GitHub, GitLab e Gitea ([guida Gitea](devsecops-gitea.md)), gate, politica della pipeline, DORA.
 - [Commit collegati agli elementi](sviluppo/commit-elementi.md): commit e PR unite di GitHub e Gitea con le chiavi degli spazi (`HL-12`), blocco «Codice» nella scheda, lead time DORA dal primo commit.
 - [Knowledge](sviluppo/knowledge.md): documenti della knowledge base.

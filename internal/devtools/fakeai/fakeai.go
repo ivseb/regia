@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"regia/internal/ai"
 )
@@ -153,6 +155,34 @@ func (provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) 
 	return resp, nil
 }
 
+// ChatStream risponde come Chat e passa il testo a pezzi (una parola alla volta, con una
+// piccola pausa), così l'interfaccia e i test vedono la risposta crescere.
+func (p provider) ChatStream(ctx context.Context, req ai.Request, onText func(string)) (*ai.Response, error) {
+	resp, err := p.Chat(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	text := resp.Message.Text
+	for text != "" {
+		i := strings.IndexByte(text, ' ')
+		part := text
+		if i >= 0 {
+			part = text[:i+1]
+		}
+		text = text[len(part):]
+		onText(part)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(StreamPause):
+		}
+	}
+	return resp, nil
+}
+
+// StreamPause è la pausa fra i pezzi del testo in streaming.
+var StreamPause = 15 * time.Millisecond
+
 var (
 	keyRe     = regexp.MustCompile(`\b[A-Z][A-Z0-9_]{0,19}-[1-9][0-9]*\b`)
 	commentRe = regexp.MustCompile(`(?is)^\s*commenta\s+([A-Z][A-Z0-9_]{0,19}-[1-9][0-9]*)\s*[:,]?\s*(.+)$`)
@@ -160,8 +190,69 @@ var (
 	readRe    = regexp.MustCompile(`(?m)^chiave: (\S+)\n(?:.*\n)*?titolo: (.+)$`)
 )
 
+// GraphMarker è la riga del formato che il prompt delle domande sul grafo chiede al modello:
+// con questa nelle istruzioni il finto traduce la domanda in una query.
+const GraphMarker = "QUERY: la query"
+
+var (
+	graphFixRe   = regexp.MustCompile(`(?s)^La query «(.*)» non è valida: .*\(frammento: «(.*)»\)`)
+	graphQuoteRe = regexp.MustCompile("`([^`]+)`")
+	clauseRe     = regexp.MustCompile(`-?[^\s:"]+:\s*(?:"[^"]*"|\S+)|"[^"]*"|\S+`)
+	graphWords   = []struct{ prefix, clause string }{
+		{"applicazion", "tipo: application"},
+		{"richiest", "tipo: business_request"},
+		{"rischi", "tipo: risk"},
+		{"incident", "tipo: incident"},
+		{"attivit", "tipo: task"},
+		{"apert", "fase: aperta"},
+		{"chius", "fase: chiusa"},
+		{"mie", "assegnatario: me"},
+		{"miei", "assegnatario: me"},
+		// Un campo che non esiste: il motore lo rifiuta e la correzione lo toglie.
+		{"critic", "criticità: alta"},
+	}
+)
+
+// graphRules: la query tra apici inversi nella domanda, se c'è; altrimenti le parole note
+// della domanda diventano clausole. Nel giro di correzione toglie la clausola sbagliata.
+func graphRules(req ai.Request) Step {
+	last := req.Messages[len(req.Messages)-1].Text
+	if m := graphFixRe.FindStringSubmatch(last); m != nil {
+		var keep []string
+		dropped := false
+		for _, c := range clauseRe.FindAllString(m[1], -1) {
+			if !dropped && m[2] != "" && strings.Contains(c, strings.TrimSpace(m[2])) {
+				dropped = true
+				continue
+			}
+			keep = append(keep, c)
+		}
+		return Step{Text: "QUERY: " + strings.Join(keep, " ") + "\nSPIEGAZIONE: Ho tolto «" + m[2] + "», che il catalogo non conosce."}
+	}
+	if m := graphQuoteRe.FindStringSubmatch(last); m != nil {
+		return Step{Text: "QUERY: " + m[1] + "\nSPIEGAZIONE: Ho usato la query che hai scritto."}
+	}
+	var clauses []string
+	for _, w := range strings.Fields(strings.ToLower(last)) {
+		w = strings.Trim(w, "?.,;:!«»\"'")
+		for _, g := range graphWords {
+			if strings.HasPrefix(w, g.prefix) && !slices.Contains(clauses, g.clause) {
+				clauses = append(clauses, g.clause)
+				break
+			}
+		}
+	}
+	if len(clauses) == 0 {
+		clauses = []string{strings.Trim(last, "?")}
+	}
+	return Step{Text: "QUERY: " + strings.Join(clauses, " ") + "\nSPIEGAZIONE: Ho cercato gli elementi che la domanda nomina."}
+}
+
 // rules è il comportamento a regole dei modelli non programmati.
 func rules(req ai.Request) Step {
+	if strings.Contains(req.System, GraphMarker) {
+		return graphRules(req)
+	}
 	last := req.Messages[len(req.Messages)-1]
 	if len(last.ToolResults) > 0 {
 		var found, errs, props []string
