@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"regia/internal/ai"
@@ -115,16 +116,56 @@ func StatusError(who string, status int, body []byte) error {
 		pe.Code, pe.Msg = "rate_limit", "troppe richieste: riprova tra poco"
 	case status == http.StatusBadRequest && strings.Contains(low, "tool"):
 		pe.Code, pe.Msg = "tools_unsupported", "il modello non sa chiamare strumenti"
+		if d := Detail(body); d != "" {
+			pe.Msg += " (" + d + ")"
+		}
 	case (status == http.StatusBadRequest || status == http.StatusNotFound) && strings.Contains(low, "api key"):
 		pe.Code, pe.Msg = "auth", "chiave di "+who+" non valida"
 	case status == http.StatusBadRequest:
 		pe.Code, pe.Msg = "bad_request", "richiesta rifiutata da "+who
+		// Il motivo del fornitore serve a capire cosa correggere: si tiene, breve e ripulito.
+		if d := Detail(body); d != "" {
+			pe.Msg += ": " + d
+		}
 	case status >= 500:
 		pe.Code, pe.Msg = "provider_down", who+" non disponibile"
 	default:
 		pe.Code, pe.Msg = "error", "risposta inattesa di "+who
 	}
 	return pe
+}
+
+var secretRe = regexp.MustCompile(`(AIza[0-9A-Za-z_\-]{20,}|sk-[0-9A-Za-z_\-]{10,}|[0-9A-Za-z_\-]{40,})`)
+
+// Detail è il messaggio d'errore del fornitore («error.message», «error» o «message» del corpo
+// JSON, come lo danno Gemini, OpenAI, Anthropic e i compatibili), su una riga, al massimo 300
+// caratteri e senza ciò che somiglia a una chiave. Vuoto se il corpo non lo ha.
+func Detail(body []byte) string {
+	var v struct {
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
+	}
+	if json.Unmarshal(body, &v) != nil {
+		return ""
+	}
+	msg := v.Message
+	if len(v.Error) > 0 {
+		var e struct {
+			Message string `json:"message"`
+		}
+		var str string
+		switch {
+		case json.Unmarshal(v.Error, &e) == nil && e.Message != "":
+			msg = e.Message
+		case json.Unmarshal(v.Error, &str) == nil && str != "":
+			msg = str
+		}
+	}
+	msg = strings.Join(strings.Fields(secretRe.ReplaceAllString(msg, "…")), " ")
+	if r := []rune(msg); len(r) > 300 {
+		msg = string(r[:300]) + "…"
+	}
+	return msg
 }
 
 // SSE legge gli eventi Server-Sent Events: per ogni evento chiama fn con il nome (vuoto se

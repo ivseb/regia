@@ -597,8 +597,14 @@ func applyTime(ctx context.Context, s *Services, env Env, in json.RawMessage) (*
 // Catalogo
 // ---------------------------------------------------------------------
 
+// obj è lo schema JSON di un oggetto. «required» c'è solo se non è vuoto: un elenco nullo
+// («required»: null) non è JSON Schema valido e Gemini rifiuta la richiesta.
 func obj(props map[string]any, required ...string) map[string]any {
-	return map[string]any{"type": "object", "properties": props, "required": required}
+	o := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		o["required"] = required
+	}
+	return o
 }
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
