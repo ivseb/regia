@@ -125,6 +125,8 @@ func (s *Service) Portfolio(ctx context.Context, tx pgx.Tx, actor engine.Actor, 
 		}
 		out.Projects = append(out.Projects, row)
 	}
-	sort.SliceStable(out.Programs, func(i, j int) bool { return strings.ToLower(out.Programs[i].Title) < strings.ToLower(out.Programs[j].Title) })
+	sort.SliceStable(out.Programs, func(i, j int) bool {
+		return strings.ToLower(out.Programs[i].Title) < strings.ToLower(out.Programs[j].Title)
+	})
 	return out, nil
 }

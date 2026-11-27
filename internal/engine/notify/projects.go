@@ -24,6 +24,6 @@ func init() {
 		"notify.project.deliverable_delivered": {It: "{actor} ha consegnato {key}: è da accettare", En: "{actor} delivered {key}: it needs your decision"},
 		"notify.project.dependency_late": {It: "{milestone} di {other} è prevista il {date}, oltre il {need} che serve a {project}",
 			En: "{milestone} of {other} is now due on {date}, after {need} when {project} needs it"},
-		"notify.project":                       {It: "Novità sul progetto: {key}", En: "Project update: {key}"},
+		"notify.project": {It: "Novità sul progetto: {key}", En: "Project update: {key}"},
 	})
 }

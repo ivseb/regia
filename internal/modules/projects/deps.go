@@ -33,12 +33,12 @@ type CrossDep struct {
 	ItemID  *string `json:"item_id"`
 	Item    *Ref    `json:"item"`
 	// La milestone di cui ha bisogno e il suo progetto; nil se non leggibili.
-	MilestoneID     string  `json:"milestone_id"`
-	Milestone       *Ref    `json:"milestone"`
-	MilestoneOf     *Ref    `json:"milestone_project"`
-	MilestoneDate   *string `json:"milestone_date"`
-	MilestoneBase   *string `json:"milestone_baseline"`
-	MilestoneState  string  `json:"milestone_state_category"`
+	MilestoneID    string  `json:"milestone_id"`
+	Milestone      *Ref    `json:"milestone"`
+	MilestoneOf    *Ref    `json:"milestone_project"`
+	MilestoneDate  *string `json:"milestone_date"`
+	MilestoneBase  *string `json:"milestone_baseline"`
+	MilestoneState string  `json:"milestone_state_category"`
 	// NeedBy è la data che serve (impostata o, senza, l'inizio della voce); NeedBySet quella impostata.
 	NeedBy    *string `json:"need_by"`
 	NeedBySet *string `json:"need_by_set"`
