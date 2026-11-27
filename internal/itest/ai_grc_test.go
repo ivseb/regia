@@ -1,6 +1,8 @@
 package itest
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"log/slog"
 	"net/http"
@@ -126,6 +128,25 @@ func TestAIGRC(t *testing.T) {
 	// Nulla si collega da sé: il controllo dei backup non ha ancora l'evidenza.
 	if n := count(`select count(*) from grc_evidence_controls where evidence_element_id = $1 and control_element_id = $2`, eid(evKey), eid(bk)); n != 0 {
 		t.Fatalf("collegata senza conferma: %d", n)
+	}
+	// Seguito dell'ondata 5 (fatto nell'ondata 6): il testo degli allegati (testo e Word) entra
+	// come dato, mascherato; un'immagine no.
+	att := co.do("POST", "/api/v1/grc/evidence", map[string]any{"controls": []string{ac}, "kind": "attachment", "title": "Verbale allegato"}, http.StatusCreated)
+	attKey := att["key"].(string)
+	admin.upload("/api/v1/elements/"+attKey+"/attachments", "verbale.txt", []byte("Prova di ripristino completata il 3 marzo. Referente: mario.rossi@example.com"), "", http.StatusCreated)
+	var docx bytes.Buffer
+	zw := zip.NewWriter(&docx)
+	w, _ := zw.Create("word/document.xml")
+	_, _ = w.Write([]byte(`<w:document xmlns:w="x"><w:body><w:p><w:r><w:t>Tempo di ripristino misurato: 42 minuti</w:t></w:r></w:p></w:body></w:document>`))
+	_ = zw.Close()
+	admin.upload("/api/v1/elements/"+attKey+"/attachments", "esito.docx", docx.Bytes(), "", http.StatusCreated)
+	admin.upload("/api/v1/elements/"+attKey+"/attachments", "foto.png", []byte("\x89PNG\r\n\x1a\nnon testo"), "", http.StatusCreated)
+	co.do("POST", "/api/v1/ai/grc/map", map[string]any{"evidence": attKey}, http.StatusOK)
+	reqs = fakeai.Requests(fakeai.ModelDeep)
+	sent := reqs[len(reqs)-1].Messages[0].Text
+	if !strings.Contains(sent, "allegati: 3, di cui letti 2") || !strings.Contains(sent, "Prova di ripristino completata il 3 marzo") ||
+		!strings.Contains(sent, "Tempo di ripristino misurato: 42 minuti") || strings.Contains(sent, "mario.rossi@example.com") {
+		t.Fatalf("testo degli allegati: %.1500s", sent)
 	}
 	// Un'evidenza che cita un controllo inventato: la voce si scarta e si conta.
 	inv := co.do("POST", "/api/v1/grc/evidence", map[string]any{"controls": []string{ac}, "kind": "note", "title": "Nota che inventa", "note": "inventa un controllo"}, http.StatusCreated)

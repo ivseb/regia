@@ -21,6 +21,7 @@ import (
 	"regia/internal/modules/risk"
 	"regia/internal/platform/audit"
 	"regia/internal/platform/db"
+	"regia/internal/platform/textextract"
 )
 
 // GRC assistito (replica/ai.md §2 punto 5, ondata 5): funzione «grc», livello approfondito.
@@ -255,7 +256,12 @@ func (s *Service) GRCMap(ctx context.Context, tenantID string, actor engine.Acto
 				fmt.Fprintf(&b, "link: %s\n", ev.URL)
 			}
 			if ev.Attachments > 0 {
-				fmt.Fprintf(&b, "allegati: %d (il contenuto dei file non è letto)\n", ev.Attachments)
+				read, txt, err := s.attachmentTexts(ctx, tx, actor, ev.Key)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(&b, "allegati: %d, di cui letti %d (gli altri non hanno testo leggibile: immagini, scansioni, formati non supportati)\n", ev.Attachments, read)
+				b.WriteString(txt)
 			}
 			if strings.TrimSpace(ev.Note) != "" {
 				fmt.Fprintf(&b, "nota:\n%s\n", clipRunes(strings.TrimSpace(ev.Note), 4000))
@@ -1244,4 +1250,51 @@ func (s *Service) GRCSaveNotice(ctx context.Context, tenantID string, actor engi
 	s.record(ctx, tenantID, callRecord{MemberID: actor.MemberID, Feature: FeatureGRC, Kind: "regia", Model: "proposta:bozza_notifica",
 		Outcome: "accepted_by_user", ElementIDs: []string{out.Notification.IncidentID}})
 	return out, nil
+}
+
+// Limiti della lettura degli allegati di un'evidenza: quanti file, quanti caratteri per file e
+// in tutto (il testo entra nella richiesta al modello come dato).
+const (
+	attachMaxFiles = 3
+	attachMaxRunes = 4000
+	attachMaxTotal = 9000
+)
+
+// attachmentTexts legge il testo degli allegati dell'elemento che la persona può leggere
+// (collab.Attachments con i suoi permessi): testo, Word, OpenDocument e PDF con testo, al
+// massimo tre file. Il testo torna come dato da mettere nella richiesta (poi mascherata).
+func (s *Service) attachmentTexts(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) (int, string, error) {
+	if s.o.Tools == nil || s.o.Tools.Collab == nil || s.o.Tools.Collab.Files == nil {
+		return 0, "", nil
+	}
+	atts, err := s.o.Tools.Collab.Attachments(ctx, tx, actor, ref)
+	if err != nil {
+		if errors.Is(err, engine.ErrNotFound) || errors.Is(err, engine.ErrForbidden) {
+			return 0, "", nil
+		}
+		return 0, "", err
+	}
+	var b strings.Builder
+	read, total := 0, 0
+	for _, a := range atts {
+		if read >= attachMaxFiles || total >= attachMaxTotal {
+			break
+		}
+		if textextract.Kind(a.Name, a.MimeType) == "" || a.Size > textextract.MaxInput {
+			continue
+		}
+		f, err := s.o.Tools.Collab.Files.Open(a.SHA256)
+		if err != nil {
+			continue
+		}
+		txt := textextract.Extract(f, a.Name, a.MimeType, min(attachMaxRunes, attachMaxTotal-total))
+		f.Close()
+		if txt == "" {
+			continue
+		}
+		read++
+		total += utf8.RuneCountInString(txt)
+		fmt.Fprintf(&b, "allegato «%s»:\n%s\n", clipRunes(a.Name, 120), txt)
+	}
+	return read, b.String(), nil
 }
