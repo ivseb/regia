@@ -327,7 +327,11 @@ func TestAIFondamenta(t *testing.T) {
 	// --- Errore del fornitore: 502, e la chiamata resta nel registro con il codice.
 	fakeai.Program("guasto", fakeai.Step{Err: &ai.ProviderError{Status: 503, Code: "provider_down", Msg: "servizio non disponibile"}})
 	setDeep("scenario:guasto", nil)
+	nConv := len(list(admin.do("GET", "/api/v1/ai/conversations", nil, http.StatusOK)["items"]))
 	admin.do("POST", "/api/v1/ai/ask", map[string]any{"question": "ciao"}, http.StatusBadGateway)
+	if n := len(list(admin.do("GET", "/api/v1/ai/conversations", nil, http.StatusOK)["items"])); n != nConv {
+		t.Fatalf("conversazione vuota rimasta dopo l'errore: %d → %d", nConv, n)
+	}
 	if n := calls(`outcome = 'error' and error_code = 'provider_down'`); n != 1 {
 		t.Fatalf("errore non registrato: %d", n)
 	}

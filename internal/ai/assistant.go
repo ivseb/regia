@@ -297,8 +297,20 @@ func (s *Service) Ask(ctx context.Context, tenantID string, actor engine.Actor, 
 	}
 	msgs = append(msgs, Message{Role: RoleUser, Text: masker.Mask(in.Question)})
 
-	// Conversazione nuova: si crea prima della prima chiamata, così il registro la cita.
+	// Conversazione nuova: si crea prima della prima chiamata, così il registro la cita. Se la
+	// domanda non arriva a una risposta, la conversazione nuova e vuota si toglie.
+	fresh := false
+	defer func() {
+		if fresh {
+			_ = s.o.DB.InTenant(context.WithoutCancel(ctx), tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `delete from ai_conversations where id = $1 and not exists
+					(select 1 from ai_messages m where m.conversation_id = $1)`, conv.ID)
+				return err
+			})
+		}
+	}()
 	if conv == nil {
+		fresh = true
 		conv = &Conversation{ID: db.NewID(), Title: clipTitle(in.Question)}
 		if err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
 			return tx.QueryRow(ctx, `insert into ai_conversations (tenant_id, id, member_id, title) values (app_tenant(), $1, $2, $3)
@@ -401,6 +413,7 @@ func (s *Service) Ask(ctx context.Context, tenantID string, actor engine.Actor, 
 	if err != nil {
 		return nil, err
 	}
+	fresh = false
 	out.Conversation = *conv
 	return &out, nil
 }
