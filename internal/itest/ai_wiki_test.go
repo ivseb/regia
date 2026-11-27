@@ -284,6 +284,20 @@ func TestAIWiki(t *testing.T) {
 	if st := e.obj(e.ed.do("GET", "/api/v1/wiki", nil, http.StatusOK)["state"]); st["last_outcome"] != "errore" || !strings.HasPrefix(st["last_error"].(string), "ai.budget") {
 		t.Fatalf("stato dopo il budget: %v", st)
 	}
+	// Seguito (ondata 5): la persona riceve un avviso, una volta sola finché l'aggiornamento non
+	// torna a riuscire.
+	failed := func() int {
+		return ownerCount(`select count(*) from notifications where tenant_id = $1 and member_id = $2 and kind = 'ai' and payload->>'event' = 'wiki_failed'`, e.tid, edMember)
+	}
+	if n := failed(); n != 1 {
+		t.Fatalf("avviso dell'aggiornamento non riuscito: %d", n)
+	}
+	if _, err := e.api.AI().UpdateWiki(e.ctx, e.tid, edMember, true); err == nil {
+		t.Fatal("secondo aggiornamento oltre il budget")
+	}
+	if n := failed(); n != 1 {
+		t.Fatalf("avvisi ripetuti: %d", n)
+	}
 
 	// --- Esportazione in Markdown.
 	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/wiki/export", nil)

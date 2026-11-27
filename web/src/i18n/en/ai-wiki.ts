@@ -108,4 +108,5 @@ export default {
   "ai.wiki.addOpen": "Open page",
   "ai.wiki.addHelp": "It goes at the end of the page; the assistant will take it into account at the next update.",
   "ai.wiki.sideTitle": "My wiki",
+  "ai.notif.wiki_failed": "The assistant could not update your wiki: open the wiki to see why.",
 } satisfies Translation<typeof it>;

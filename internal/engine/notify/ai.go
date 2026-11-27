@@ -4,7 +4,10 @@ import "regia/internal/platform/i18n"
 
 // KindAI: avvisi dell'AI (replica/ai.md §4). Eventi nel payload:
 //   - budget_warning: il consumo del mese ha superato l'80% del budget dell'AI; va una volta
-//     al mese a chi amministra l'organizzazione. Il payload porta la percentuale e il mese.
+//     al mese a chi amministra l'organizzazione. Il payload porta la percentuale e il mese;
+//   - wiki_failed: l'aggiornamento della wiki personale non è riuscito (ondata 5, seguito della
+//     4); va alla persona, una volta finché un aggiornamento non torna a riuscire. Il payload
+//     porta il codice dell'errore (code).
 //
 // Sta in un file a parte per aggiungersi a Kinds senza toccare la lista degli altri moduli. Non
 // è legato a un elemento: la notifica ha element_id nullo.
@@ -22,6 +25,8 @@ func init() {
 	i18n.Register(map[string]i18n.Msg{
 		"notify.ai.budget_warning": {It: "Il budget dell'AI di {month} è al {percent}%: al 100% le funzioni dell'AI si fermano fino al mese dopo",
 			En: "The AI budget for {month} is at {percent}%: at 100% the AI features stop until next month"},
+		"notify.ai.wiki_failed": {It: "L'aggiornamento della tua wiki con l'assistente non è riuscito: apri la wiki per il motivo",
+			En: "The assistant could not update your wiki: open the wiki to see why"},
 		"notify.ai": {It: "Avviso dell'AI", En: "AI notice"},
 	})
 }

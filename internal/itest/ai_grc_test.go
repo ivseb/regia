@@ -305,4 +305,16 @@ func TestAIGRC(t *testing.T) {
 	if n := count(`select count(*) from ai_calls where feature = 'grc' and model = 'proposta:bozza_notifica' and outcome = 'accepted_by_user'`); n != 1 {
 		t.Fatalf("decisione della notifica nel registro: %d", n)
 	}
+
+	// --- Seguito dell'ondata 3: analisi alla creazione anche per incidenti, rischi e requisiti
+	// (stesso servizio, duplicati dello stesso tipo che la persona vede).
+	tr := im.do("POST", "/api/v1/ai/card/triage", map[string]any{"type": "incident", "title": "Pagamenti online non disponibili di nuovo"}, http.StatusOK)
+	if !strings.Contains(jsonString(tr["duplicates"]), incKey) {
+		t.Fatalf("incidente duplicato: %s", jsonString(tr))
+	}
+	rk := admin.do("POST", "/api/v1/risks", map[string]any{"title": "Indisponibilità del gateway dei pagamenti"}, http.StatusCreated)
+	tr = admin.do("POST", "/api/v1/ai/card/triage", map[string]any{"type": "risk", "title": "Gateway dei pagamenti indisponibile"}, http.StatusOK)
+	if !strings.Contains(jsonString(tr["duplicates"]), rk["key"].(string)) {
+		t.Fatalf("rischio duplicato: %s", jsonString(tr))
+	}
 }

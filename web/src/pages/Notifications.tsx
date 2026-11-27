@@ -210,6 +210,7 @@ export function Describe({ n }: { n: Notification }) {
       return R("project.plain");
     case "ai":
       if (ev === "budget_warning") return <Rich k="ai.notif.budget_warning" params={{ percent: Number(p.percent) || 0, month: str(p.month) }} />;
+      if (ev === "wiki_failed") return <>{t("ai.notif.wiki_failed")}</>;
       return <>{t("ai.notif.plain")}</>;
     case "budget":
       return (
@@ -309,7 +310,11 @@ function Row({ n, onOpen }: { n: Notification; onOpen: (n: Notification) => void
   const cls = `flex items-start gap-3 px-4 py-2.5 md:px-7 no-underline text-fg hover:bg-sel/60`;
   return (
     <li className="border-b border-hair">
-      {n.kind === "ai" ? (
+      {n.kind === "ai" && n.payload.event === "wiki_failed" ? (
+        <Link to="/profilo/wiki" className={cls} onClick={() => onOpen(n)}>
+          {body}
+        </Link>
+      ) : n.kind === "ai" ? (
         <Link to="/configurazione/ai/consumo" className={cls} onClick={() => onOpen(n)}>
           {body}
         </Link>

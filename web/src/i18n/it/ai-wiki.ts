@@ -109,4 +109,5 @@ export default {
   "ai.wiki.addOpen": "Apri la pagina",
   "ai.wiki.addHelp": "Si aggiunge in fondo alla pagina; l'assistente lo terrà presente al prossimo aggiornamento.",
   "ai.wiki.sideTitle": "La mia wiki",
+  "ai.notif.wiki_failed": "L'aggiornamento della tua wiki con l'assistente non è riuscito: apri la wiki per vedere il motivo.",
 } satisfies Source;

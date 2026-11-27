@@ -14,6 +14,7 @@ import (
 	"regia/internal/ai/tools"
 	"regia/internal/ai/wiki"
 	"regia/internal/engine"
+	"regia/internal/engine/notify"
 	"regia/internal/platform/db"
 )
 
@@ -283,8 +284,23 @@ func (s *Service) UpdateWiki(ctx context.Context, tenantID, memberID string, for
 	}
 	run := &WikiRun{Outcome: "nulla", Pages: []string{}}
 	defer func() {
-		_ = s.WikiTx(context.WithoutCancel(ctx), tenantID, memberID, false, func(tx pgx.Tx) error {
-			return wiki.Finish(context.WithoutCancel(ctx), tx, memberID, run.Outcome, run.Error, len(run.Pages), run.Note)
+		bg := context.WithoutCancel(ctx)
+		_ = s.WikiTx(bg, tenantID, memberID, false, func(tx pgx.Tx) error {
+			prev, err := wiki.GetState(bg, tx, memberID)
+			if err != nil {
+				return err
+			}
+			if err := wiki.Finish(bg, tx, memberID, run.Outcome, run.Error, len(run.Pages), run.Note); err != nil {
+				return err
+			}
+			// Seguito dell'ondata 4: la persona riceve un avviso quando l'aggiornamento non riesce,
+			// una volta sola finché un aggiornamento non torna a riuscire (niente avvisi ripetuti
+			// ogni ora con l'aggiornamento automatico).
+			if run.Outcome == "errore" && prev.LastOutcome != "errore" {
+				_, err := notify.EmitDirect(bg, tx, notify.KindAI, []string{memberID}, map[string]any{"event": "wiki_failed", "code": run.Error})
+				return err
+			}
+			return nil
 		})
 	}()
 	fail := func(err error) (*WikiRun, error) {

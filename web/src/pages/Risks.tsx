@@ -16,6 +16,7 @@ import { Trans } from "../i18n/Trans";
 import { crumbs } from "../crumbs";
 import { EmptyState } from "../emptyState";
 import { GrcTabs } from "./portafoglio-ui";
+import { CreateAssistant } from "./CreateAssistant";
 
 const RiskConfig = lazy(() => import("./RiskConfig"));
 
@@ -534,6 +535,8 @@ function NewRisk({ onDone }: { onDone: () => void }) {
         <button type="button" className="btn" onClick={onDone}>{tr("governance.compliance.annulla")}</button>
       </div>
       <ErrorNote error={create.error} />
+      {/* Con l'AI accesa: rischi simili già nel registro (seguito dell'ondata 3, fatto nell'ondata 5). */}
+      <CreateAssistant type="risk" title={title} description={desc} />
     </form>
   );
 }
@@ -868,6 +871,8 @@ function NewIncident({ onDone }: { onDone: () => void }) {
         <button type="button" className="btn" onClick={onDone}>{tr("governance.compliance.annulla")}</button>
       </div>
       <ErrorNote error={create.error} />
+      {/* Con l'AI accesa: incidenti simili già aperti (seguito dell'ondata 3, fatto nell'ondata 5). */}
+      <CreateAssistant type="incident" title={title} description={desc} />
     </form>
   );
 }

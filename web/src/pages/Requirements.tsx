@@ -24,6 +24,7 @@ import { PageHeader } from "../shell";
 import { ErrorNote, SectionTitle, ago, date, Loading } from "../ui";
 import { useNarrow } from "./timeline";
 import { ProblemActions } from "./ProblemActions";
+import { CreateAssistant } from "./CreateAssistant";
 import { tr } from "../i18n/core";
 import { loc } from "../i18n/format";
 import { crumbs } from "../crumbs";
@@ -407,6 +408,8 @@ function CreateForm({ refKey, matrix, isImpact, onDone }: { refKey: string; matr
       </div>
       {baseline.data && <p className="m-0 text-[12.5px] text-muted">{baseline.data.created.length ? tr("governance.requirements.creati_requisiti", { count: baseline.data.created.length }) : tr("governance.requirements.nessun_requisito_nuovo_le_baseline")}</p>}
       <ErrorNote error={create.error ?? baseline.error} />
+      {/* Con l'AI accesa: requisiti simili che potrebbero essere lo stesso (seguito dell'ondata 3, fatto nell'ondata 5). */}
+      <CreateAssistant type="requirement" title={f.title} description={f.text ?? ""} />
     </form>
   );
 }
