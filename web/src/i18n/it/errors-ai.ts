@@ -1,0 +1,32 @@
+// Errori dell'AI (internal/ai, internal/api/ai.go).
+import type { Source } from "../types";
+
+export default {
+  "errors.ai.disabled": "L'AI non è attiva in questa organizzazione.",
+  "errors.ai.not_configured": "Manca il modello: chi amministra l'organizzazione deve completare le impostazioni dell'AI.",
+  "errors.ai.budget_exhausted": "Il budget mensile dell'AI è esaurito: tutto il resto funziona come sempre.",
+  "errors.ai.not_found": "Non trovato.",
+  "errors.ai.forbidden": "Operazione non consentita.",
+  "errors.ai.provider_unknown": "Scegli un fornitore tra quelli configurati.",
+  "errors.ai.model_required": "Scegli il modello del livello.",
+  "errors.ai.enable_needs_model": "Per accendere l'AI serve almeno il modello di un livello.",
+  "errors.ai.retention_range": "La conservazione va da 1 a 3650 giorni.",
+  "errors.ai.budget_range": "Il budget va lasciato vuoto o maggiore di zero.",
+  "errors.ai.feature_unknown": "Funzione sconosciuta.",
+  "errors.ai.route_invalid": "Per spostare una funzione scegli un livello, oppure fornitore e modello.",
+  "errors.ai.kind_unknown": "Tipo di fornitore non disponibile.",
+  "errors.ai.kind_unavailable": "Il tipo di fornitore non è disponibile in questa installazione.",
+  "errors.ai.name_required": "Serve un nome (al massimo 80 caratteri).",
+  "errors.ai.base_url_invalid": "Indirizzo del servizio non valido.",
+  "errors.ai.key_invalid": "Chiave non valida.",
+  "errors.ai.key_required": "Serve la chiave del fornitore.",
+  "errors.ai.key_unreadable": "La chiave salvata non si legge più: inseriscila di nuovo.",
+  "errors.ai.too_many_models": "Al massimo 100 modelli.",
+  "errors.ai.too_many_providers": "Al massimo 20 fornitori.",
+  "errors.ai.price_range": "Prezzo per milione di token tra 0 e 10000 dollari.",
+  "errors.ai.provider_in_use": "Il fornitore è usato da un livello o da una funzione: cambiali prima di toglierlo.",
+  "errors.ai.month_invalid": "Mese non valido.",
+  "errors.ai.question_invalid": "Scrivi una domanda (al massimo 4000 caratteri).",
+  "errors.ai.proposal_decided": "La proposta è già stata decisa.",
+  "errors.ai.provider_error": "Il fornitore del modello ha risposto con un errore ({reason}).",
+} satisfies Source;

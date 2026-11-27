@@ -1,0 +1,32 @@
+import type { Translation } from "../types";
+import type it from "../it/errors-ai";
+
+export default {
+  "errors.ai.disabled": "AI is not turned on in this organization.",
+  "errors.ai.not_configured": "No model is set: an organization administrator needs to complete the AI settings.",
+  "errors.ai.budget_exhausted": "The monthly AI budget is used up: everything else works as usual.",
+  "errors.ai.not_found": "Not found.",
+  "errors.ai.forbidden": "Operation not allowed.",
+  "errors.ai.provider_unknown": "Choose one of the configured providers.",
+  "errors.ai.model_required": "Choose the model for the tier.",
+  "errors.ai.enable_needs_model": "To turn AI on, set the model of at least one tier.",
+  "errors.ai.retention_range": "Retention must be between 1 and 3650 days.",
+  "errors.ai.budget_range": "Leave the budget empty or set it above zero.",
+  "errors.ai.feature_unknown": "Unknown function.",
+  "errors.ai.route_invalid": "To move a function, choose a tier, or a provider and a model.",
+  "errors.ai.kind_unknown": "Provider type not available.",
+  "errors.ai.kind_unavailable": "This provider type isn't available in this installation.",
+  "errors.ai.name_required": "A name is required (80 characters at most).",
+  "errors.ai.base_url_invalid": "The service address isn't valid.",
+  "errors.ai.key_invalid": "The key isn't valid.",
+  "errors.ai.key_required": "The provider key is required.",
+  "errors.ai.key_unreadable": "The saved key can no longer be read: enter it again.",
+  "errors.ai.too_many_models": "100 models at most.",
+  "errors.ai.too_many_providers": "20 providers at most.",
+  "errors.ai.price_range": "Price per million tokens between 0 and 10,000 dollars.",
+  "errors.ai.provider_in_use": "A tier or a function uses this provider: change them before removing it.",
+  "errors.ai.month_invalid": "The month isn't valid.",
+  "errors.ai.question_invalid": "Write a question (4,000 characters at most).",
+  "errors.ai.proposal_decided": "This proposal has already been decided.",
+  "errors.ai.provider_error": "The model provider returned an error ({reason}).",
+} satisfies Translation<typeof it>;

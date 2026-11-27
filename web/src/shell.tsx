@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tempoApi } from "./tempoApi";
 import { api, ApiError, collab, type Me } from "./api";
 import { dafareApi } from "./dafareApi";
+import { aiApi } from "./aiApi";
 import { applyTheme, getTheme, type Theme } from "./theme";
 import { ErrorNote } from "./ui";
 import { useLiveUpdates } from "./live";
@@ -26,6 +27,8 @@ import type { Key } from "./i18n/core";
 const CommandPalette = lazy(() => import("./palette").then((m) => ({ default: m.CommandPalette })));
 // Pannello «?» e dialogo «+ Crea» (tastiera.tsx): si caricano alla prima apertura.
 const KeyboardLayer = lazy(() => import("./tastiera").then((m) => ({ default: m.KeyboardLayer })));
+// Pannello «Assistente» (pages/Assistente.tsx): si carica alla prima apertura.
+const AssistantPanel = lazy(() => import("./pages/Assistente").then((m) => ({ default: m.AssistantPanel })));
 // Accesso (pages/Login.tsx, con il secondo passo dell'MFA): si carica solo senza sessione.
 const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
 
@@ -73,6 +76,11 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
     setPaletteOpen((o) => !o);
   }, []);
   usePaletteShortcut(togglePalette);
+  // Assistente (replica/ai.md, ondata 1): solo con l'AI accesa e un modello pronto.
+  const aiStatus = useQuery({ queryKey: ["ai-status"], queryFn: aiApi.status, enabled: !!me.active_tenant, staleTime: 60_000 });
+  const aiReady = !!me.active_tenant && !!aiStatus.data?.enabled && !!aiStatus.data?.ready;
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  useEffect(() => setAssistantOpen(false), [me.active_tenant?.tenant_id]);
   // Tastiera e «+ Crea» (replica/usabilita.md, proposta 10): pannello «?», dialogo di creazione e avvisi brevi.
   const navigate = useNavigate();
   const [helpOpen, setHelpOpen] = useState(false);
@@ -226,6 +234,11 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
             ?
           </button>
         </div>
+        {aiReady && (
+          <button className="btn justify-center" aria-haspopup="dialog" aria-expanded={assistantOpen} data-testid="apri-assistente" onClick={() => setAssistantOpen(true)}>
+            {t("ai.panel.open")}
+          </button>
+        )}
         <FavoriteViews enabled={!!me.active_tenant} />
         {sections.map((sec) => {
           const key = sectionKey(sec);
@@ -289,6 +302,11 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
             onCreate={canCreate ? openCreate : undefined}
             onHelp={() => setHelpOpen(true)}
           />
+        </Suspense>
+      )}
+      {aiReady && assistantOpen && (
+        <Suspense fallback={null}>
+          <AssistantPanel onClose={() => setAssistantOpen(false)} />
         </Suspense>
       )}
       {me.active_tenant && (helpOpen || creating) && (

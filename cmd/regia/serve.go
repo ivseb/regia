@@ -139,6 +139,8 @@ func cmdServe(ctx context.Context, args []string) error {
 		// Import di progetti: connettori verso Jira o YouTrack nella rete interna solo se consentito.
 		ImportAllowPrivate: importer.AllowPrivateFromEnv(),
 	})
+	// AI: conservazione delle conversazioni (retention_days del tenant, 90 di default).
+	go apiSrv.AI().Run(ctx, time.Hour, log)
 	go grcSvc.RunRecompute(ctx, rt.db, time.Hour, log)
 	// Metriche DORA: ricalcolo orario dei punti di metric_points (DevSecOps, fase 5a).
 	go dsoSvc.RunDora(ctx, rt.db, time.Hour, log)

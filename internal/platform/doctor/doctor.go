@@ -363,7 +363,8 @@ func Database(ctx context.Context, r *Report, pool *pgxpool.Pool, fsys fs.FS, da
 		if err := pool.QueryRow(ctx, `select (select count(*) from accounts where mfa_secret_enc is not null)
 			+ (select count(*) from webhooks)
 			+ (select count(*) from integrations where secret_enc is not null)
-			+ (select count(*) from ai_settings where secret_enc is not null)`).Scan(&encrypted); err != nil {
+			+ (select count(*) from ai_settings where secret_enc is not null)
+			+ (select count(*) from ai_providers where secret_enc is not null)`).Scan(&encrypted); err != nil {
 			encrypted = -1
 		}
 	}

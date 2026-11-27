@@ -842,6 +842,14 @@ const projectRoutes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/configurazione/progetti", component: ProjectSettingsPage }), // i18n-ok: codice TypeScript letto come testo
 ];
 
+// AI (replica/ai.md, ondata 1): impostazioni e consumo, per chi amministra l'organizzazione.
+const AiConfigPage = lazyRouteComponent(() => import("./pages/AiConfig"), "AiConfig");
+const AiUsagePage = lazyRouteComponent(() => import("./pages/AiUsage"), "AiUsage");
+const aiRoutes = [
+  createRoute({ getParentRoute: () => rootRoute, path: "/configurazione/ai", component: AiConfigPage }), // i18n-ok: codice TypeScript letto come testo
+  createRoute({ getParentRoute: () => rootRoute, path: "/configurazione/ai/consumo", component: AiUsagePage }), // i18n-ok: codice TypeScript letto come testo
+];
+
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
@@ -885,6 +893,7 @@ export const router = createRouter({
     ...guidaAdminRoutes,
     coinvolgiRoute,
     ...projectRoutes,
+    ...aiRoutes,
   ]),
   defaultPreload: "intent",
   defaultNotFoundComponent: NotFound,
