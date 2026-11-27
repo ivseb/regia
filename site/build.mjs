@@ -189,6 +189,7 @@ const shotExists = (id) => fs.existsSync(path.join(STATIC, "img", `${id}.webp`))
 // Icone dei moduli: tratti da 2 px, angoli vivi, griglia 24×24.
 const ICONS = {
   demand: `<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>`,
+  projects: `<path d="M3 4h10v4H3zM8 10h9v4H8zM13 16h8v4h-8z"/>`,
   work: `<path d="M3 3h5v18H3zM10 3h5v11h-5zM17 3h4v7h-4z"/>`,
   budget: `<path d="M11 4a8 8 0 1 0 8 8h-8z"/><path d="M14 2v7h7a7 7 0 0 0-7-7z"/>`,
   knowledge: `<path d="M3 4h6a3 3 0 0 1 3 3v14a2.5 2.5 0 0 0-2.5-2.5H3zM21 4h-6a3 3 0 0 0-3 3v14a2.5 2.5 0 0 1 2.5-2.5H21z"/>`,

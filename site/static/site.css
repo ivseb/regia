@@ -49,6 +49,7 @@
   --on-ink-muted: rgba(255, 255, 255, 0.74);
   --on-ink-link: #c3cbff;
   --m-demand: #2b3ff2;
+  --m-projects: #0284c7;
   --m-work: #f0532d;
   --m-budget: #f2a900;
   --m-knowledge: #0aa39a;
@@ -80,6 +81,7 @@
     --ink: #0a0b1c;
     --ink-2: #14173a;
     --m-demand: #7d8cff;
+    --m-projects: #38bdf8;
     --m-work: #ff7a55;
     --m-budget: #ffc23d;
     --m-knowledge: #2fd0c4;
@@ -94,10 +96,10 @@
   --m-demand: #7d8cff; --m-work: #ff7a55; --m-budget: #ffc23d; --m-knowledge: #2fd0c4;
   --m-devsecops: #3fcf7e; --m-grc: #ff4f8b; --m-arch: #a78bfa; --m-platform: #94a3b8;
 }
-.m-demand { --mc: var(--m-demand); } .m-work { --mc: var(--m-work); } .m-budget { --mc: var(--m-budget); --chip-fg: #0a0a0a; }
+.m-demand { --mc: var(--m-demand); } .m-projects { --mc: var(--m-projects); } .m-work { --mc: var(--m-work); } .m-budget { --mc: var(--m-budget); --chip-fg: #0a0a0a; }
 .m-knowledge { --mc: var(--m-knowledge); } .m-devsecops { --mc: var(--m-devsecops); } .m-grc { --mc: var(--m-grc); }
-.m-arch { --mc: var(--m-arch); } .m-platform { --mc: var(--m-platform); }
-.bg-demand { background: var(--m-demand); } .bg-work { background: var(--m-work); } .bg-budget { background: var(--m-budget); }
+.m-arch { --mc: var(--m-arch); } .m-platform { --mc: var(--m-platform); grid-column: 1 / -1; }
+.bg-demand { background: var(--m-demand); } .bg-projects { background: var(--m-projects); } .bg-work { background: var(--m-work); } .bg-budget { background: var(--m-budget); }
 .bg-knowledge { background: var(--m-knowledge); } .bg-devsecops { background: var(--m-devsecops); } .bg-grc { background: var(--m-grc); }
 .bg-arch { background: var(--m-arch); } .bg-platform { background: var(--m-platform); }
 

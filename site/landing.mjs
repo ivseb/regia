@@ -3,7 +3,7 @@
 //
 // Ogni modulo ha un colore (vedi --m-* in static/site.css), usato da icone, mappa e tour.
 
-export const MODULE_KEYS = ["demand", "work", "budget", "knowledge", "devsecops", "grc", "arch", "platform"];
+export const MODULE_KEYS = ["demand", "projects", "work", "budget", "knowledge", "devsecops", "grc", "arch", "platform"];
 
 export const landing = {
   it: {
@@ -138,7 +138,7 @@ export const landing = {
     },
     modules: {
       label: "Funzionalità per modulo",
-      title: "Otto aree, un solo modello di dati",
+      title: "Nove aree, un solo modello di dati",
       lead: "Ogni modulo si accende o si spegne per organizzazione.",
     },
     arch: {
@@ -321,7 +321,7 @@ export const landing = {
     },
     modules: {
       label: "Features by module",
-      title: "Eight areas, one data model",
+      title: "Nine areas, one data model",
       lead: "Each module can be switched on or off per organisation.",
     },
     arch: {

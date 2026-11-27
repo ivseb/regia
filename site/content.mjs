@@ -17,7 +17,7 @@ export const it = {
     "Regia è una piattaforma open source per demand e portafoglio, SDLC con stage-gate, work management, knowledge, DevSecOps, GRC e architettura enterprise. Un solo binario Go con Postgres incluso.",
   modules: {
     label: "Funzionalità per modulo",
-    title: "Otto aree, un solo prodotto",
+    title: "Nove aree, un solo prodotto",
     lead: "Ogni modulo si può accendere o spegnere per organizzazione.",
     items: [
       {
@@ -29,6 +29,17 @@ export const it = {
           "Valutazioni con questionari, scorecard con punteggio 0-100 e graduatoria.",
           "Organi di governo, cabina di portafoglio con scenari, pacchetto della seduta e verbale.",
           "Piano automatico, roadmap, carico dei team, status report e cruscotto.",
+        ],
+      },
+      {
+        name: "Progetti",
+        sub: "Piano, baseline, fornitori",
+        points: [
+          "Progetto sopra le epiche, con work package consegnati in agile, a cascata o da un fornitore.",
+          "Piano con Gantt, milestone, dipendenze anche tra progetti e baseline con tolleranze.",
+          "Change request che nascono da sole quando date, budget o perimetro escono dalla tolleranza.",
+          "Fornitori con SAL e deliverable; avviso quando due progetti toccano la stessa applicazione.",
+          "Programmi con roadmap, mappa dei semafori del portafoglio, budget e status report.",
         ],
       },
       {
@@ -186,7 +197,7 @@ export const en = {
     "Regia is an open source platform for demand and portfolio management, stage-gate SDLC, work management, knowledge, DevSecOps, GRC and enterprise architecture. One Go binary with Postgres included.",
   modules: {
     label: "Features by module",
-    title: "Eight areas, one product",
+    title: "Nine areas, one product",
     lead: "Each module can be switched on or off per organisation.",
     items: [
       {
@@ -198,6 +209,17 @@ export const en = {
           "Assessments with questionnaires, scorecards scoring 0-100 and a ranking.",
           "Governance bodies, a portfolio cockpit with scenarios, meeting pack and minutes.",
           "Automatic plan, roadmap, team load, status reports and dashboard.",
+        ],
+      },
+      {
+        name: "Projects",
+        sub: "Plan, baseline, suppliers",
+        points: [
+          "Projects above epics, with work packages delivered agile, waterfall or by a supplier.",
+          "Plan with Gantt, milestones, dependencies across projects and a baseline with tolerances.",
+          "Change requests that open by themselves when dates, budget or scope leave the tolerance.",
+          "Suppliers with progress claims and deliverables; a warning when two projects touch the same application.",
+          "Programmes with a roadmap, portfolio traffic-light map, budget and status reports.",
         ],
       },
       {
