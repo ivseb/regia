@@ -74,7 +74,9 @@ func TestAIGRC(t *testing.T) {
 		}
 		return n
 	}
-	eid := func(key string) string { return obj(admin.do("GET", "/api/v1/elements/"+key, nil, http.StatusOK)["element"])["id"].(string) }
+	eid := func(key string) string {
+		return obj(admin.do("GET", "/api/v1/elements/"+key, nil, http.StatusOK)["element"])["id"].(string)
+	}
 
 	// --- Dati: DORA, due controlli, evidenze.
 	co.do("POST", "/api/v1/grc/starters/dora", map[string]any{"enable": true}, http.StatusCreated)
