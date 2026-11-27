@@ -145,7 +145,10 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     },
   });
   const messages = convId ? (conv.data?.messages ?? []) : [];
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [messages.length]);
+  useEffect(() => {
+    // Graffe: in Chrome recenti scrollIntoView restituisce una Promise, che React prenderebbe per la pulizia.
+    end.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
 
   const onProposal = (p: Proposal) => {
     qc.setQueryData(["ai-conversation", convId], (old: { conversation: unknown; messages: ChatMessage[] } | undefined) =>
