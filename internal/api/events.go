@@ -162,6 +162,8 @@ func (s *Server) notify(next http.Handler) http.Handler {
 			strings.HasSuffix(r.URL.Path, "/preview") || r.URL.Query().Get("dry_run") == "true" ||
 			// Letture delle notifiche e osservatori riguardano solo chi li modifica.
 			strings.HasPrefix(r.URL.Path, "/api/v1/notifications") || strings.HasSuffix(r.URL.Path, "/watch") ||
+			// Server MCP (pubblica da sé dopo una conferma applicata) e domande sul grafo: letture in POST.
+			r.URL.Path == MCPPath || r.URL.Path == "/api/v1/ai/graph" ||
 			// Salvataggio automatico dei questionari e controllo dei modelli: non cambiano le viste degli altri.
 			(strings.HasPrefix(r.URL.Path, "/api/v1/reviews/") && strings.HasSuffix(r.URL.Path, "/answers")) || r.URL.Path == "/api/v1/review-config/templates/validate" {
 			return

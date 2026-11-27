@@ -56,6 +56,9 @@ type Options struct {
 	Log     *slog.Logger
 	// Caller ricava chi chiama dalla richiesta già autenticata; nil = non autenticato.
 	Caller func(r *http.Request) *Caller
+	// Changed, se c'è, si chiama dopo una proposta confermata e applicata (le viste aperte si
+	// aggiornano); le letture e le proposte non cambiano i dati condivisi.
+	Changed func(tenantID, memberID string)
 }
 
 // Nomi degli strumenti propri del server MCP, oltre a quelli di internal/ai/tools.
@@ -318,6 +321,9 @@ func (o Options) decideHandler(env tools.Env, confirm bool) mcp.ToolHandler {
 		switch p.Status {
 		case "applied":
 			msg = fmt.Sprintf("Proposta %s confermata e applicata: %s.", p.ID, p.Summary)
+			if o.Changed != nil {
+				o.Changed(env.TenantID, env.Actor.MemberID)
+			}
 		case "failed":
 			return text(fmt.Sprintf("Proposta %s non applicata: %s", p.ID, p.Error), true), nil
 		}

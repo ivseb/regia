@@ -14,8 +14,8 @@ import (
 
 	"regia/internal/ai"
 	aianthropic "regia/internal/ai/anthropic"
-	"regia/internal/ai/openaicompat"
 	"regia/internal/ai/mcpserver"
+	"regia/internal/ai/openaicompat"
 	"regia/internal/ai/tools"
 	"regia/internal/devtools/fakeai"
 	"regia/internal/platform/auth"
@@ -82,6 +82,9 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 				return nil
 			}
 			return &mcpserver.Caller{TenantID: p.TenantID, Actor: actorOf(r, p), ReadOnly: p.ReadOnly()}
+		},
+		Changed: func(tenantID, memberID string) {
+			s.events.publish(tenantID, Event{Kind: "changed", Path: MCPPath, Actor: memberID, At: time.Now().UnixMilli()})
 		}}))
 }
 
