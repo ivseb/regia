@@ -1,6 +1,7 @@
 import { Select } from "../select";
 import { Suspense, lazy, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ssoApi, type APIToken } from "../api";
 import { PageHeader, useMe } from "../shell";
 import { ErrorNote, SectionTitle, ago, date } from "../ui";
@@ -97,6 +98,15 @@ export function Profile() {
             </dl>
           )}
         </section>
+        {me.data?.active_tenant && (
+          <section className="flex flex-col gap-2" data-testid="profilo-wiki">
+            <SectionTitle>{t("ai.wiki.title")}</SectionTitle>
+            <p className="m-0 max-w-[640px] text-muted">{t("ai.wiki.profileText")}</p>
+            <Link to="/profilo/wiki" className="touch-44 inline-flex items-center self-start font-semibold">
+              {t("ai.wiki.profileLink")}
+            </Link>
+          </section>
+        )}
         {a && a.method !== "token" && (
           <Suspense fallback={null}>
             <MfaSection />

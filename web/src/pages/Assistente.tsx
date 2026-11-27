@@ -9,6 +9,7 @@ import { aiApi, askStream, type AskEvent, type AskResult, type ChatMessage, type
 import { api } from "../api";
 import { viewsApi } from "../views/viewsApi";
 import { Select } from "../select";
+import { WikiAdd } from "./WikiAdd";
 import { ErrorNote, Loading } from "../ui";
 import { useT } from "../i18n/react";
 import { lookup } from "../i18n/core";
@@ -102,6 +103,8 @@ function Message({ m, onProposal }: { m: ChatMessage; onProposal: (p: Proposal) 
         <ProposalCard key={p.id} p={p} onDecided={onProposal} />
       ))}
       {tools.length > 0 && <span className="text-[12px] text-muted">{t("ai.panel.usedTools", { tools: tools.join(", ") })}</span>}
+      {/* Wiki personale (ondata 4): la risposta si aggiunge a mano alla wiki. */}
+      {m.text.trim() && <WikiAdd text={m.text} compact />}
     </div>
   );
 }

@@ -101,6 +101,31 @@ const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: 
 
 // Profilo e token API (piano, passo 15).
 const profileRoute = createRoute({ getParentRoute: () => rootRoute, path: "/profilo", component: Profile });
+// Wiki personale (AI, ondata 4): le pagine della persona e quelle condivise con lei.
+const WikiHomePage = lazy(() => import("./pages/Wiki").then((m) => ({ default: m.WikiHome })));
+const WikiPagePage = lazy(() => import("./pages/Wiki").then((m) => ({ default: m.WikiPageView })));
+const wikiLoading = <Loading className="px-4 py-6 text-muted md:px-7" />;
+const wikiRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/profilo/wiki",
+  component: () => (
+    <Suspense fallback={wikiLoading}>
+      <WikiHomePage />
+    </Suspense>
+  ),
+});
+const wikiPageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/profilo/wiki/$id",
+  component: function WikiPageRoute() {
+    const { id } = wikiPageRoute.useParams();
+    return (
+      <Suspense fallback={wikiLoading}>
+        <WikiPagePage key={id} id={id} />
+      </Suspense>
+    );
+  },
+});
 
 // Valutazione e priorità del portafoglio, governance (piano, passi 8 e 9).
 const rankingRoute = createRoute({
@@ -866,6 +891,8 @@ export const router = createRouter({
     planRoute,
     notificationsRoute,
     profileRoute,
+    wikiRoute,
+    wikiPageRoute,
     ...portfolioRoutes,
     financeRoute,
     budgetRoute,

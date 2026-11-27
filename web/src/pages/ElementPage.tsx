@@ -40,6 +40,7 @@ type T = ReturnType<typeof useT>;
 
 const ReviewsSection = lazy(() => import("./ReviewsSection"));
 // Assistente nella scheda (AI, ondata 3): si carica solo con l'AI accesa e le funzioni pronte.
+const WikiAdd = lazy(() => import("./WikiAdd").then((m) => ({ default: m.WikiAdd })));
 const CardAssistant = lazy(() => import("./CardAssistant").then((m) => ({ default: m.CardAssistant })));
 const CodiceSection = lazy(() => import("./CodiceSection"));
 // Status report della richiesta (piano, passo 13): scheda «Stato», caricata alla prima apertura.
@@ -797,6 +798,12 @@ function Sidebar({ detail, narrow }: { detail: ElementDetail; narrow: boolean })
       <WorkSidebar detail={detail} narrow={narrow} />
       <LinkedDocuments refKey={key} open={!narrow} />
       <Watchers refKey={key} />
+      {/* Wiki personale (AI, ondata 4): «aggiungi alla wiki», anche senza AI. */}
+      <SideSection title={t("ai.wiki.sideTitle")} open={!narrow}>
+        <Suspense fallback={null}>
+          <WikiAdd element={key} />
+        </Suspense>
+      </SideSection>
     </>
   );
 }
