@@ -13,6 +13,8 @@ Nella **scheda di ogni elemento** (richiesta, progetto, applicazione, attività�
 
 Con il **server MCP** (sezione 7) Claude Desktop, Claude Code o un IDE lavorano su Regia con i permessi della persona, con il suo modello.
 
+Nel **profilo** ogni persona ha la sua **wiki personale** (sezione 9): appunti in Markdown che l'assistente, se la persona lo vuole, tiene aggiornati e usa come contesto. Senza AI si scrive a mano.
+
 ## 1. Il fornitore
 
 **Aggiungi fornitore** e scegli il tipo.
@@ -50,8 +52,9 @@ In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello 
 | Cosa manca per decidere | approfondito | scheda: «Cosa manca per decidere» |
 | Bozze | approfondito | scheda: «Scrivi una bozza» |
 | Classificazione e duplicati | rapido | nuova richiesta: «Cerca duplicati e proponi i campi» |
+| Wiki personale | rapido | profilo → «La mia wiki»: aggiornamento in background |
 
-Wiki personale e GRC assistito sono segnate «in arrivo» ma si possono già sistemare. Domande sul grafo e funzioni della scheda non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare.
+GRC assistito è segnato «in arrivo» ma si può già sistemare. Domande sul grafo e funzioni della scheda non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare. La **wiki personale** invece li usa (legge con cerca, query e leggi e scrive le pagine con uno strumento suo): con un modello segnato «senza strumenti» l'aggiornamento non parte, e la wiki resta da scrivere a mano.
 
 Con Anthropic Regia usa la **cache del prompt**: istruzioni, strumenti e catalogo restano uguali fra le domande e il fornitore li rilegge dalla cache a una frazione del prezzo. Il consumo lo tiene già in conto nel costo stimato.
 
@@ -67,6 +70,7 @@ Un budget mensile in dollari (al listino del fornitore) e, se vuoi, un tetto di 
 
 - **Mascheramento verso i fornitori esterni.** Prima di uscire, i nomi delle persone dell'organizzazione, email, telefoni, IBAN e codici fiscali diventano segnaposto (`[persona-1]`, `[email-1]`); nella risposta tornano i valori veri. Per le organizzazioni **regolamentate** (con una normativa attiva come DORA o NIS2) parte acceso; per le altre parte spento. Lo può cambiare solo chi amministra l'organizzazione.
 - **Conservazione.** Le conversazioni con l'assistente si cancellano dopo 90 giorni dall'ultimo messaggio (configurabile da 1 a 3650). Sono private della persona e si cancellano anche con il suo account. Il registro delle chiamate resta: non contiene il testo.
+- **Wiki personale.** Le pagine restano (è lì che passa ciò che conta delle conversazioni), ma con lo stesso numero di giorni si cancellano la **storia** delle modifiche (resta sempre l'ultima versione di ogni pagina), le pagine **tolte** e le aggiunte a mano già lette dall'assistente. La wiki si cancella con il membro e quando il membro viene anonimizzato; la persona la scarica quando vuole in un file Markdown.
 
 ## 5. Accendere
 
@@ -102,10 +106,29 @@ Compare solo con l'AI accesa e il modello del livello della funzione: senza AI l
 
 L'assistente legge solo ciò che la persona può vedere: un richiedente del portale non riceve come duplicati le richieste degli altri. Ogni chiamata è nel registro con la sua funzione; le bozze inserite e gli asset citati vi compaiono come «proposta confermata».
 
+## 9. Wiki personale
+
+Dal **profilo** → **Apri la mia wiki** (indirizzo `/profilo/wiki`). Ogni persona ha le sue pagine in Markdown: una per progetto o iniziativa che segue, una per comitato, «Le mie priorità», un «Registro delle decisioni», o quelle che vuole. Gli elementi si citano con la **chiave** (`DEM-12`) o con il **codice** (`APP-MOB`) e diventano link, con lo stato e il titolo visti con i permessi di chi legge: ciò che non si vede resta testo.
+
+- **Privata.** Le pagine le vede solo la persona: nemmeno chi amministra l'organizzazione le legge (la separazione è anche nel database). Una pagina si può **condividere**: le persone dell'organizzazione con il link la leggono (non i richiedenti del portale), ma solo chi la possiede la modifica, e la storia resta sua. Le pagine condivise con te compaiono in «Condivise con te».
+- **Promuovi a pagina Knowledge.** Crea una pagina nuova in uno spazio Knowledge in cui la persona può scrivere, con lo stesso titolo e testo. Da lì vive da sola (versioni, revisioni, letture del modulo Knowledge); la pagina della wiki resta com'è e ricorda la chiave.
+- **Storia e registro.** Ogni modifica ha l'autore (**tu** o **assistente**), le righe aggiunte e tolte, le **differenze** con la versione prima e si **annulla**: «Annulla» sull'ultima modifica di una pagina (anche una pagina creata dall'assistente: così si toglie), «Ripristina questa versione» per le precedenti. Anche l'annullamento è una modifica, che si annulla a sua volta. Il **registro delle modifiche** nella pagina della wiki mostra le ultime cento, di tutte le pagine.
+- **Aggiungi alla wiki.** Nella scheda di ogni elemento (riquadro «La mia wiki» a lato) e sotto ogni risposta dell'assistente: si sceglie la pagina (di partenza «Appunti») e una nota, e l'elemento o la risposta si aggiungono in fondo. Funziona anche senza AI; con l'AI accesa l'assistente lo legge al prossimo aggiornamento.
+
+**Con l'AI accesa** compare il riquadro **Aggiornamento con l'assistente** (serve il modello della funzione «Wiki personale», livello rapido, capace di usare gli strumenti):
+
+- **Lascia che l'assistente tenga aggiornata la wiki** è spento finché la persona non lo accende: è lei a decidere di spendere il budget. Acceso, Regia controlla ogni cinque minuti e aggiorna la wiki al massimo **una volta l'ora**, e solo se c'è qualcosa di nuovo; se non c'è niente di nuovo non chiama il modello. **Aggiorna adesso** parte subito, anche con l'aggiornamento automatico spento.
+- **Fonti** (decisione del 2026-11-26): solo gli elementi che la persona **segue o ha creato** e che sono cambiati dall'ultimo aggiornamento, le sue **conversazioni** con l'assistente e ciò che ha **aggiunto a mano**. Il resto si aggiunge a mano. L'assistente può approfondire con cerca, query e leggi, sempre con i permessi della persona: non legge mai ciò che lei non vede.
+- **Scrive senza chiedere conferma** pagina per pagina: la wiki è lo spazio della persona e non tocca dati condivisi. Al massimo otto pagine per aggiornamento; una pagina che la persona ha modificato mentre l'aggiornamento era in corso non si sovrascrive. Ogni modifica è nel registro e si annulla.
+- Il testo degli elementi arriva al modello come **dato**, non come istruzione; il **mascheramento** dei dati personali, il **budget** e il **registro delle chiamate** (funzione «wiki») valgono come per le altre funzioni. Il riquadro dice com'è andato l'ultimo aggiornamento (pagine cambiate, niente di nuovo, budget esaurito, modello mancante).
+
+**Contesto per l'assistente.** Quando la persona fa una domanda nel pannello, chiede un riassunto o una bozza nella scheda o fa una domanda sul grafo, le pagine della sua wiki **pertinenti** (che citano gli stessi elementi o hanno parole in comune) entrano nella richiesta come dato, al massimo cinque pagine e circa **1500 token**. Con il server MCP lo strumento **wiki** legge la wiki di chi si collega, in sola lettura: mai quella degli altri, nemmeno le pagine condivise.
+
 ## Sicurezza in breve
 
 - L'assistente usa gli stessi permessi della persona: passa dagli stessi servizi dell'interfaccia, con l'isolamento tra organizzazioni e la visibilità degli spazi.
 - Il contenuto degli elementi (titoli, descrizioni, commenti) arriva al modello delimitato come **dato**: un testo che prova a dare ordini all'assistente non viene seguito.
 - Le scritture sono sempre proposte da confermare, e alla conferma i permessi si controllano di nuovo. Con il server MCP la conferma è uno strumento separato («conferma»), che il client chiama solo dopo il sì della persona. Nella scheda la conferma è il pulsante sotto la bozza riletta.
 - Il server MCP accetta solo token API: non la sessione del browser. Un token di sola lettura vede solo gli strumenti di lettura.
-- Ogni modifica della configurazione è nel registro di audit (`ai.settings.update`, `ai.provider.*`, `ai.proposal.apply`).
+- La wiki personale è separata per persona anche nel database (Row Level Security sul membro); l'assistente la aggiorna con i permessi della persona e ogni sua modifica si annulla.
+- Ogni modifica della configurazione è nel registro di audit (`ai.settings.update`, `ai.provider.*`, `ai.proposal.apply`; `wiki.promote` per le pagine della wiki promosse a Knowledge).

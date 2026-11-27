@@ -30,6 +30,7 @@ Il server accetta solo il token, non la sessione del browser.
 | Strumento | Cosa fa |
 |---|---|
 | `cerca`, `query`, `leggi` | letture: parole libere, linguaggio di query di Regia, un elemento per chiave |
+| `wiki` | lettura della **wiki personale** di chi si collega: elenco delle pagine, una pagina per titolo, ricerca; mai la wiki degli altri |
 | `crea`, `aggiorna`, `collega`, `commenta`, `registra_ore` | **non scrivono**: preparano una proposta con un identificativo |
 | `proposte` | le proposte ancora da decidere |
 | `conferma` | applica una proposta, con i permessi di adesso |
