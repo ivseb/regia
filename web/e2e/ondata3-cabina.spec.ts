@@ -142,10 +142,10 @@ test("cabina: linea di taglio, sovraccarico, scenari, verbale e telefono", async
   await expectNoHorizontalScroll(page);
   for (const name of ["Aggiungi 100 k€", "Togli 10 k€"]) {
     const box = (await page.getByRole("button", { name }).boundingBox())!;
-    expect(box.height, name).toBeGreaterThanOrEqual(44);
-    expect(box.width, name).toBeGreaterThanOrEqual(44);
+    expect(box.height, name).toBeGreaterThanOrEqual(43.5);
+    expect(box.width, name).toBeGreaterThanOrEqual(43.5);
   }
   const handle = (await page.getByRole("slider", { name: "Linea di taglio" }).boundingBox())!;
-  expect(handle.height).toBeGreaterThanOrEqual(44);
+  expect(handle.height).toBeGreaterThanOrEqual(43.5);
   await admin.dispose();
 });

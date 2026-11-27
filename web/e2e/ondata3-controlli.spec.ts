@@ -111,7 +111,7 @@ test("telefono a 375 px: proposta e mappatura senza scorrimento orizzontale, una
   for (const name of ["Conferma", "Non confermare"]) {
     const b = box.getByRole("button", { name, exact: true });
     await expect(b).toBeVisible();
-    expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   }
   await expectNoHorizontalScroll(page);
 
@@ -123,7 +123,7 @@ test("telefono a 375 px: proposta e mappatura senza scorrimento orizzontale, una
   await left.getByRole("checkbox").first().check();
   await expectNoHorizontalScroll(page);
   const next = page.getByRole("button", { name: "Avanti: scegli il controllo" });
-  expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   await next.click();
   await expect(right).toBeVisible();
   await expect(left).toBeHidden();

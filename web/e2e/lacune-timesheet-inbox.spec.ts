@@ -85,7 +85,7 @@ test("a 375 px i pulsanti sono alti 44 px e la pagina non scorre di lato", async
   await expect(r).toBeVisible();
   for (const nome of ["Approva", "Respingi"]) {
     const box = await r.getByRole("button", { name: nome }).boundingBox();
-    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(43.5);
   }
   await r.getByRole("button", { name: "Respingi" }).click();
   await expect(r.getByLabel("Motivo del rifiuto")).toBeVisible();

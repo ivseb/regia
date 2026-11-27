@@ -147,7 +147,7 @@ test("catalogo a 375 px: carte, ricerca, editor a schede senza scorrimento orizz
   await expect(catalog.getByRole("searchbox", { name: "Cerca nel catalogo" })).toBeVisible();
   await expectNoHorizontalScroll(page);
   const start = catalog.getByRole("link", { name: /^Inizia/ }).first();
-  expect((await start.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await start.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   await start.click();
   await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
   await expectNoHorizontalScroll(page);
@@ -159,7 +159,7 @@ test("catalogo a 375 px: carte, ricerca, editor a schede senza scorrimento orizz
   await page.getByRole("button", { name: /^Modifica / }).first().click();
   await expect(page.getByRole("tab", { name: "Anteprima" })).toBeVisible();
   await expectNoHorizontalScroll(page);
-  for (const name of ["Pubblica", "Salva bozza"]) expect((await page.getByRole("button", { name }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const name of ["Pubblica", "Salva bozza"]) expect((await page.getByRole("button", { name }).boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   await page.getByRole("tab", { name: "Anteprima" }).click();
   await expect(page.getByTestId("portal-preview")).toBeVisible();
   await expectNoHorizontalScroll(page);

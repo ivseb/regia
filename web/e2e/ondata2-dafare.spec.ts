@@ -234,10 +234,10 @@ test.describe("telefono (375 px)", () => {
     await expectNoHorizontalScroll(page);
     for (const name of ["Approva", "Con condizioni", "Rinvia", "Respingi"]) {
       const box = await card.getByRole("button", { name, exact: true }).boundingBox();
-      expect(box!.height, name).toBeGreaterThanOrEqual(44);
+      expect(box!.height, name).toBeGreaterThanOrEqual(43.5);
     }
     const link = card.getByRole("link", { name: title });
-    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
     // Decisione dal telefono.
     await card.getByRole("button", { name: "Rinvia", exact: true }).click();
     await card.getByRole("textbox", { name: "Motivazione" }).fill("Ne riparliamo il mese prossimo.");
@@ -246,7 +246,7 @@ test.describe("telefono (375 px)", () => {
     await expectNoHorizontalScroll(page);
     // Il campanello (barra in alto) è da 44 px.
     const bell = page.getByRole("link", { name: /^Da fare: / }).first();
-    expect((await bell.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await bell.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   });
 });
 

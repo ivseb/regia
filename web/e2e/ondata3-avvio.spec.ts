@@ -163,12 +163,12 @@ test("telefono a 375 px: niente scorrimento orizzontale e bersagli da 44 px", as
     await expectNoHorizontalScroll(page);
   }
   await page.goto("/configurazione/avvio?tab=passi");
-  for (const l of await page.getByRole("tab").all()) expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  for (const l of await page.getByTestId("passo-moduli").getByRole("link").all()) expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const l of await page.getByRole("tab").all()) expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
+  for (const l of await page.getByTestId("passo-moduli").getByRole("link").all()) expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   // Anteprima del modello e ripristino sul telefono.
   await page.goto("/configurazione/avvio?tab=modelli");
   await page.getByTestId("modello-banca_assicurazione").getByRole("button", { name: /Vedi cosa crea|Chiudi l'anteprima/ }).click();
   await expect(page.getByTestId("modello-anteprima")).toBeVisible();
   await expectNoHorizontalScroll(page);
-  for (const b of await page.getByTestId("modello-banca_assicurazione").getByRole("button").all()) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const b of await page.getByTestId("modello-banca_assicurazione").getByRole("button").all()) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
 });

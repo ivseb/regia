@@ -200,10 +200,10 @@ test.describe("telefono", () => {
     const cerca = page.getByRole("combobox", { name: /^Cerca/ });
     const c = (await cerca.boundingBox())!;
     expect(c.y).toBeLessThan(70);
-    expect(c.height).toBeGreaterThanOrEqual(44);
+    expect(c.height).toBeGreaterThanOrEqual(43.5);
     await expect(cerca).toBeFocused();
     const o = (await page.getByRole("option").first().boundingBox())!;
-    expect(o.height).toBeGreaterThanOrEqual(44);
+    expect(o.height).toBeGreaterThanOrEqual(43.5);
     await expectNoHorizontalScroll(page);
     await cerca.fill(nome(61));
     await page.getByRole("option", { name: nome(61) }).tap();

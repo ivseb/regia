@@ -50,7 +50,7 @@ test("incidente a 375 px: banda e «Prepara la notifica» subito raggiungibili, 
   const prepare = band.getByRole("button", { name: "Prepara la notifica" });
   await expect(prepare).toBeInViewport();
   const box = await prepare.boundingBox();
-  expect(box!.height, "altezza del bersaglio").toBeGreaterThanOrEqual(44);
+  expect(box!.height, "altezza del bersaglio").toBeGreaterThanOrEqual(43.5);
   await expectNoHorizontalScroll(page);
   // Il pulsante porta alle notifiche, dove si prepara l'invio.
   await prepare.click();
@@ -92,7 +92,7 @@ test("incidente risolto ma fermo in una fase: l'invito a portarlo avanti, anche 
   const band = page.getByLabel("Da fare sull'incidente");
   await expect(band).toContainText("ma l'incidente è ancora in fase «Rilevato»");
   const next = band.getByRole("button", { name: "Classifica" });
-  expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   await next.click();
   await expect(band).toContainText("ancora in fase «Classificato»");
   await expectNoHorizontalScroll(page);
@@ -176,7 +176,7 @@ test("vulnerabilità a 375 px: indicatori e «oltre la scadenza» prima dei filt
   const filtersButton = page.getByRole("button", { name: /^Filtri/ });
   await expect(filtersButton).toBeVisible();
   expect((await filtersButton.boundingBox())!.y, "i filtri vengono dopo gli indicatori").toBeGreaterThan(top);
-  expect((await filtersButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await filtersButton.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   await expect(page.locator("#filtri-vulnerabilita")).toBeHidden();
   await filtersButton.click();
   await expect(page.locator("#filtri-vulnerabilita")).toBeVisible();

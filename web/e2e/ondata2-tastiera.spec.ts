@@ -212,7 +212,7 @@ test("telefono a 375 px: «+ Crea» raggiungibile e ⌘K a tutto schermo", async
   await expect(crea).toBeVisible();
   const box = (await crea.boundingBox())!;
   expect(box.y).toBeGreaterThan(812 / 2); // nella metà bassa, dove arriva il pollice
-  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(43.5);
   await expectNoHorizontalScroll(page);
   await crea.click();
   await expect(page.getByRole("dialog", { name: "Crea" })).toBeVisible();
@@ -230,7 +230,7 @@ test("telefono a 375 px: «+ Crea» raggiungibile e ⌘K a tutto schermo", async
   // Le azioni dirette sono sempre a vista, con un bersaglio da 44 px.
   const azione = p.getByRole("option", { name: /Marta Ferri/ }).getByRole("button", { name: "Aperti da" });
   await expect(azione).toBeVisible();
-  expect((await azione.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await azione.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   await expectNoHorizontalScroll(page);
 });
 

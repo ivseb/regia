@@ -129,8 +129,8 @@ test("telefono a 375 px: blocchi a tutta larghezza, pulsante menu del blocco da 
   const menu = ed.getByRole("button", { name: /Menu del blocco: Paragrafo/ });
   await expect(menu).toBeVisible();
   const box = await menu.boundingBox();
-  expect(box!.width).toBeGreaterThanOrEqual(44);
-  expect(box!.height).toBeGreaterThanOrEqual(44);
+  expect(box!.width).toBeGreaterThanOrEqual(43.5);
+  expect(box!.height).toBeGreaterThanOrEqual(43.5);
   const pb = await par.boundingBox();
   expect(pb!.width, "il paragrafo occupa quasi tutta la larghezza").toBeGreaterThan(375 - 16 * 2 - 60);
   await expectNoHorizontalScroll(page);

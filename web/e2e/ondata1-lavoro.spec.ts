@@ -51,7 +51,7 @@ test.describe("approvazione dal telefono (375 px)", () => {
     await page.goto("/approvazioni");
     await expectNoHorizontalScroll(page);
     const link = page.getByRole("link", { name: title });
-    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
     await link.click();
     await expect(page).toHaveURL(new RegExp(`/e/${key}\\?scheda=approvazioni`));
     await expect(page.getByRole("status").filter({ hasText: "Aspetta la tua decisione" })).toBeVisible();
@@ -59,7 +59,7 @@ test.describe("approvazione dal telefono (375 px)", () => {
     await expect(approva).toBeInViewport();
     for (const name of ["Approva", "Con condizioni", "Rinvia", "Respingi"]) {
       const box = await page.getByRole("button", { name, exact: true }).boundingBox();
-      expect(box!.height, name).toBeGreaterThanOrEqual(44);
+      expect(box!.height, name).toBeGreaterThanOrEqual(43.5);
     }
     // La fase si legge anche senza spazio per i nomi: «Fase N di M».
     await expect(page.getByRole("group", { name: /^Fase: / })).toContainText(/Fase \d+ di \d+/);

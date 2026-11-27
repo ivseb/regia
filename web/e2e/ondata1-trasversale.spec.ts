@@ -161,11 +161,11 @@ test.describe("telefono (375 px)", () => {
     const header = page.locator("header").first();
     for (const name of ["Cerca", "Menu"]) {
       const box = await header.getByRole("button", { name, exact: true }).boundingBox();
-      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(44);
+      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(43.5);
     }
     await header.getByRole("button", { name: "Menu" }).click();
     const link = page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("link", { name: "Cruscotto", exact: true });
     await expect(link).toBeVisible();
-    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
   });
 });

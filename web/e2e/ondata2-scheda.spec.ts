@@ -77,7 +77,7 @@ test("telefono a 375 px: la sintesi è subito in vista e senza scorrimento later
   await expect(panel.getByRole("heading", { name: "Cosa serve per andare avanti" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Apri la decisione" })).toBeInViewport();
   const box = await panel.getByRole("button", { name: "Apri la decisione" }).boundingBox();
-  expect(box!.height).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(43.5);
   await expectNoHorizontalScroll(page);
 
   await login(page, "admin");

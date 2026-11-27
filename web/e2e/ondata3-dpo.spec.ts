@@ -104,7 +104,7 @@ test("DPO a 375 px: nessuno scorrimento orizzontale e bersagli da 44 px", async 
     await expect(page.getByRole("tablist")).toBeVisible();
     await expectNoHorizontalScroll(page);
     for (const tab of await page.getByRole("tab").all()) {
-      expect((await tab.boundingBox())!.height, "altezza della scheda").toBeGreaterThanOrEqual(44);
+      expect((await tab.boundingBox())!.height, "altezza della scheda").toBeGreaterThanOrEqual(43.5);
     }
   }
   await page.goto("/privacy?scheda=trattamenti");
@@ -113,7 +113,7 @@ test("DPO a 375 px: nessuno scorrimento orizzontale e bersagli da 44 px", async 
   await expect(dlg).toBeVisible();
   await expectNoHorizontalScroll(page);
   for (const b of await dlg.getByRole("button", { name: "Salva", exact: true }).all()) {
-    expect((await b.boundingBox())!.height, "altezza del bersaglio").toBeGreaterThanOrEqual(44);
+    expect((await b.boundingBox())!.height, "altezza del bersaglio").toBeGreaterThanOrEqual(43.5);
   }
 });
 

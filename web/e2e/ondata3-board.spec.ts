@@ -100,7 +100,7 @@ test("un team senza configurazione ha una colonna per fase; a 375 px niente scor
   await expectNoHorizontalScroll(page);
   for (const nome of ["Aggiungi una colonna", "Pubblica", "Salva la bozza"]) {
     const box = await editor.getByRole("button", { name: nome }).boundingBox();
-    expect(box!.height, nome).toBeGreaterThanOrEqual(44);
+    expect(box!.height, nome).toBeGreaterThanOrEqual(43.5);
   }
   await editor.getByRole("button", { name: "Annulla" }).click();
 

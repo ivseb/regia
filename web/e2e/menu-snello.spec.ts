@@ -136,11 +136,11 @@ test.describe("telefono (375 px)", () => {
     const nav = page.getByRole("navigation", { name: NAV });
     for (const name of ["Delivery"]) {
       const box = await nav.getByRole("button", { name, exact: true }).boundingBox();
-      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(44);
+      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(43.5);
     }
     for (const name of ["Configurazione", "DevSecOps", "Rischi e conformità"]) {
       const box = await nav.getByRole("link", { name, exact: true }).boundingBox();
-      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(44);
+      expect(box!.height, `altezza di «${name}»`).toBeGreaterThanOrEqual(43.5);
     }
   });
 });

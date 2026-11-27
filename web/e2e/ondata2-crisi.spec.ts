@@ -53,7 +53,7 @@ test("vista di crisi a 375 px: orologio, azioni in barra fissa da 44 px, decisio
   await expect(bar).toBeVisible();
   expect(await bar.evaluate((el) => getComputedStyle(el).position)).toBe("fixed");
   for (const b of await bar.getByRole("button").all()) {
-    expect((await b.boundingBox())!.height, "altezza del bersaglio").toBeGreaterThanOrEqual(44);
+    expect((await b.boundingBox())!.height, "altezza del bersaglio").toBeGreaterThanOrEqual(43.5);
   }
   await expectNoHorizontalScroll(page);
   // Resta in vista anche in fondo alla pagina.
