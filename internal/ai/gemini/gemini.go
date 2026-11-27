@@ -146,7 +146,7 @@ func build(req ai.Request) request {
 	gc := &generationConfig{MaxOutputTokens: req.MaxTokens}
 	if thinking(req.Model) {
 		gc.ThinkingConfig = &thinkingConfig{ThinkingLevel: "LOW"}
-		if req.Deep {
+		if req.Deep && !req.Brief {
 			gc.ThinkingConfig.ThinkingLevel = "HIGH"
 		}
 	}
@@ -168,6 +168,12 @@ func contents(msgs []ai.Message) []json.RawMessage {
 				names[c.ID] = c.Name
 			}
 			if n, ok := m.Native.(json.RawMessage); ok && len(n) > 0 {
+				// Una risposta troncata o bloccata può arrivare senza parti: Gemini rifiuta un
+				// contenuto vuoto nella richiesta successiva, quindi si salta.
+				var c content
+				if json.Unmarshal(n, &c) == nil && len(c.Parts) == 0 {
+					continue
+				}
 				out = append(out, n)
 				continue
 			}

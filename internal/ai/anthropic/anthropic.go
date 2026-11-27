@@ -120,7 +120,7 @@ func params(req ai.Request) sdk.MessageNewParams {
 	}
 	// Ragionamento: sui modelli Claude 5 è adattivo e sempre attivo; si regola con l'effort.
 	if supportsEffort(req.Model) {
-		if req.Deep {
+		if req.Deep && !req.Brief {
 			params.OutputConfig = sdk.OutputConfigParam{Effort: sdk.OutputConfigEffortHigh}
 		} else {
 			params.OutputConfig = sdk.OutputConfigParam{Effort: sdk.OutputConfigEffortLow}

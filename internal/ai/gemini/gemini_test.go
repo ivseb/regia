@@ -175,3 +175,34 @@ func TestGeminiStreamCountModels(t *testing.T) {
 		t.Fatalf("thinkingLevel su un modello che non lo accetta: %+v", b.GenerationConfig)
 	}
 }
+
+// Una risposta troncata dal limite di token può arrivare senza parti: non torna nella
+// richiesta successiva (Gemini rifiuterebbe il contenuto vuoto), e il livello di ragionamento
+// resta basso per le richieste brevi anche al livello approfondito.
+func TestGeminiRispostaVuotaEBreve(t *testing.T) {
+	vuota := convert(ai.Request{Model: "gemini-4-carbon"}, content{}, "MAX_TOKENS", "", nil, "")
+	if vuota.Stop != ai.StopMaxTokens || vuota.Message.Text != "" {
+		t.Fatalf("risposta troncata: %+v", vuota)
+	}
+	req := ai.Request{Model: "gemini-4-carbon", Deep: true, Brief: true, Messages: []ai.Message{
+		{Role: ai.RoleUser, Text: "domanda"},
+		vuota.Message,
+		{Role: ai.RoleUser, Text: "correggi"},
+	}}
+	w := build(req)
+	if len(w.Contents) != 2 {
+		t.Fatalf("contenuti: %d, voluti 2 (la risposta vuota si salta)", len(w.Contents))
+	}
+	for _, c := range w.Contents {
+		if strings.Contains(string(c), `"parts":[]`) {
+			t.Fatalf("contenuto vuoto nella richiesta: %s", c)
+		}
+	}
+	if w.GenerationConfig == nil || w.GenerationConfig.ThinkingConfig == nil || w.GenerationConfig.ThinkingConfig.ThinkingLevel != "LOW" {
+		t.Fatalf("ragionamento di una richiesta breve: %+v", w.GenerationConfig)
+	}
+	req.Brief = false
+	if l := build(req).GenerationConfig.ThinkingConfig.ThinkingLevel; l != "HIGH" {
+		t.Fatalf("ragionamento approfondito: %s", l)
+	}
+}

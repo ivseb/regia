@@ -155,7 +155,7 @@ func build(req ai.Request) request {
 		Store: &no, Include: []string{"reasoning.encrypted_content"}}
 	if reasoning(req.Model) {
 		w.Reasoning = &effort{Effort: "low"}
-		if req.Deep {
+		if req.Deep && !req.Brief {
 			w.Reasoning.Effort = "high"
 		}
 	}

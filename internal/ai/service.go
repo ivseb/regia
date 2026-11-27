@@ -169,6 +169,7 @@ func (s *Service) Call(ctx context.Context, t *Target, req Request, meta CallMet
 func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta CallMeta, onText func(string)) (*Response, error) {
 	req.Model = t.Model
 	req.Deep = t.Tier != TierFast
+	req.MaxTokens = thinkingHeadroom(req.MaxTokens, req.Deep && !req.Brief)
 	if !t.Tools {
 		req.Tools = nil
 	}
@@ -219,6 +220,9 @@ func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta C
 	}
 	rec.Duration = s.o.Now().Sub(start)
 	if err != nil {
+		// Nel log il motivo dato dal fornitore (mai il prompt): il registro ha solo il codice.
+		s.o.Log.Warn("chiamata al modello non riuscita", "funzione", t.Feature, "fornitore", t.Provider.Kind,
+			"modello", t.Model, "codice", ErrorCode(err), "errore", clipRunes(err.Error(), 500))
 		rec.Outcome, rec.ErrorCode = "error", ErrorCode(err)
 		s.record(ctx, meta.TenantID, rec)
 		return nil, err

@@ -238,9 +238,15 @@ func (s *Service) GraphQuestion(ctx context.Context, tenantID string, actor engi
 	msgs := []Message{{Role: RoleUser, Text: masker.Mask(q)}}
 	meta := CallMeta{TenantID: tenantID, Actor: actor}
 	ask := func() (string, string, error) {
-		resp, err := s.Call(ctx, target, Request{System: system, Messages: msgs, MaxTokens: 2000}, meta)
+		// Brief: tradurre in una query è un compito breve, basta poco ragionamento anche con il
+		// modello approfondito (risponde in pochi secondi invece che in decine).
+		resp, err := s.Call(ctx, target, Request{System: system, Messages: msgs, MaxTokens: 2000, Brief: true}, meta)
 		if err != nil {
 			return "", "", err
+		}
+		if resp.Stop == StopMaxTokens && strings.TrimSpace(resp.Message.Text) == "" {
+			// Senza testo non c'è niente da correggere: lo si dice invece di chiedere di nuovo.
+			return "", "", &ProviderError{Code: "max_tokens", Msg: "il modello ha esaurito i token prima di rispondere; riprova o semplifica la domanda"}
 		}
 		msgs = append(msgs, resp.Message)
 		q, e := parseGraphAnswer(resp.Message.Text)

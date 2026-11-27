@@ -70,6 +70,24 @@ type Request struct {
 	MaxTokens int
 	// Deep chiede più ragionamento (livello «approfondito»); l'adattatore decide come.
 	Deep bool
+	// Brief: la risposta è breve e strutturata (una query, una classificazione). Anche al
+	// livello approfondito basta poco ragionamento: risponde prima e non esaurisce i token.
+	Brief bool
+}
+
+// thinkingHeadroom: i modelli che ragionano contano il ragionamento nei token di uscita, quindi
+// MaxTokens (pensato per la risposta) si allarga di un margine, fino a un tetto che resta
+// sotto il limite delle chiamate senza streaming. Il costo è quello dei token usati davvero.
+func thinkingHeadroom(maxTokens int, deep bool) int {
+	const ceiling = 16000
+	if maxTokens <= 0 || maxTokens >= ceiling {
+		return maxTokens
+	}
+	extra := 2000
+	if deep {
+		extra = 8000
+	}
+	return min(maxTokens+extra, ceiling)
 }
 
 // Stop: perché il modello si è fermato.
