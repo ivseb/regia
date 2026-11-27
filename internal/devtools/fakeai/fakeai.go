@@ -264,10 +264,132 @@ func graphRules(req ai.Request) Step {
 	return Step{Text: "QUERY: " + strings.Join(clauses, " ") + "\nSPIEGAZIONE: Ho cercato gli elementi che la domanda nomina."}
 }
 
+// Marcatori dei compiti dell'assistente nella scheda (internal/ai/card.go).
+const (
+	CardSummaryMarker = "Compito: riassumi l'elemento"
+	CardGapsMarker    = "Compito: cosa manca per decidere"
+	CardDraftMarker   = "Compito: scrivi"
+	CardTriageMarker  = "Compito: la persona sta creando"
+)
+
+var (
+	dataRe     = regexp.MustCompile(`(?s)<dati origine="([^"]*)">\n(.*?)\n</dati>`)
+	lineFldRe  = regexp.MustCompile(`(?m)^(chiave|titolo|fase): (.+)$`)
+	commentQRe = regexp.MustCompile(`(?m)^\[(c\d+)\] ([^,]+), [0-9-]+: (.*\?.*)$`)
+	linkedRe   = regexp.MustCompile(`(?m)^- (?:genitore|figlio|relazione[^:]*): (\S+) `)
+	itemRe     = regexp.MustCompile(`(?m)^- (\S+) · ([^·\n]+) · (.+)$`)
+	fieldLnRe  = regexp.MustCompile(`(?m)^- (\S+) · [^:\n]+: (.+)$`)
+	fwordRe    = regexp.MustCompile(`[\p{L}\p{N}]{4,}`)
+)
+
+// blocks: i dati delimitati del messaggio, per origine.
+func blocks(text string) map[string]string {
+	out := map[string]string{}
+	for _, m := range dataRe.FindAllStringSubmatch(text, -1) {
+		out[m[1]] = m[2]
+	}
+	return out
+}
+
+// cardRules: risposte deterministiche per riassunto, mancanze, bozze e analisi alla creazione.
+func cardRules(req ai.Request) Step {
+	user := req.Messages[len(req.Messages)-1].Text
+	bl := blocks(user)
+	var el string
+	for k, v := range bl {
+		if strings.Contains(v, "chiave: ") {
+			el = bl[k]
+		}
+	}
+	f := map[string]string{}
+	for _, m := range lineFldRe.FindAllStringSubmatch(el, -1) {
+		if _, ok := f[m[1]]; !ok {
+			f[m[1]] = strings.TrimSpace(m[2])
+		}
+	}
+	switch {
+	case strings.Contains(req.System, CardSummaryMarker):
+		text := fmt.Sprintf("%s «%s» è in fase %s.", f["chiave"], f["titolo"], f["fase"])
+		if m := linkedRe.FindStringSubmatch(el); m != nil {
+			text += " È collegata a " + m[1] + "."
+		}
+		return Step{Text: text}
+	case strings.Contains(req.System, CardGapsMarker):
+		var items []map[string]string
+		for _, m := range commentQRe.FindAllStringSubmatch(el, -1) {
+			items = append(items, map[string]string{"tipo": "domanda", "testo": "Nessuno ha risposto alla domanda di " + strings.TrimSpace(m[2]) + ".", "commento": m[1]})
+		}
+		if strings.Contains(el, "inventa") {
+			items = append(items, map[string]string{"tipo": "relazione", "testo": "Manca il collegamento a un elemento inventato.", "elemento": "ZZZ-999"})
+		}
+		b, _ := json.Marshal(map[string]any{"mancanze": items})
+		return Step{Text: string(b)}
+	case strings.Contains(req.System, CardTriageMarker):
+		nuovo := strings.ToLower(bl["nuovo elemento"])
+		words := fwordRe.FindAllString(nuovo, -1)
+		out := map[string]any{"duplicati": []any{}, "campi": []any{}, "collegamenti": []any{}}
+		var dups, fields, links []any
+		for _, m := range itemRe.FindAllStringSubmatch(bl["simili"], -1) {
+			common := 0
+			for _, w := range fwordRe.FindAllString(strings.ToLower(m[3]), -1) {
+				if slices.Contains(words, w) {
+					common++
+				}
+			}
+			if common >= 2 {
+				dups = append(dups, map[string]string{"elemento": m[1], "motivo": "Stesse parole nel titolo."})
+			}
+		}
+		for _, m := range fieldLnRe.FindAllStringSubmatch(bl["campi"], -1) {
+			for _, o := range strings.Split(m[2], ",") {
+				o = strings.TrimSpace(o)
+				if o != "" && slices.Contains(words, strings.ToLower(o)) {
+					fields = append(fields, map[string]string{"campo": m[1], "valore": o, "motivo": "Il testo dice «" + strings.ToLower(o) + "»."})
+					break
+				}
+			}
+		}
+		for _, m := range itemRe.FindAllStringSubmatch(bl["collegamenti possibili"], -1) {
+			if t := strings.ToLower(strings.TrimSpace(m[3])); t != "" && strings.Contains(nuovo, t) {
+				links = append(links, map[string]string{"elemento": m[1], "motivo": "Il testo la nomina."})
+			}
+		}
+		if dups != nil {
+			out["duplicati"] = dups
+		}
+		if fields != nil {
+			out["campi"] = fields
+		}
+		if links != nil {
+			out["collegamenti"] = links
+		}
+		b, _ := json.Marshal(out)
+		return Step{Text: string(b)}
+	}
+	// Bozze.
+	hint := strings.TrimSpace(bl["indicazioni della persona"])
+	var text string
+	switch {
+	case strings.Contains(req.System, "nuova descrizione"):
+		text = "Contesto: " + f["titolo"] + ".\n\nBisogno: da definire."
+	case strings.Contains(req.System, "per chi ha aperto"):
+		text = "La sua richiesta " + f["chiave"] + " è in fase " + f["fase"] + "."
+	default:
+		text = "Aggiornamento su " + f["chiave"] + ": la fase è " + f["fase"] + "."
+	}
+	if hint != "" {
+		text += " " + hint
+	}
+	return Step{Text: text}
+}
+
 // rules è il comportamento a regole dei modelli non programmati.
 func rules(req ai.Request) Step {
 	if strings.Contains(req.System, GraphMarker) {
 		return graphRules(req)
+	}
+	if strings.Contains(req.System, "Lavori sulla scheda di un elemento") {
+		return cardRules(req)
 	}
 	last := req.Messages[len(req.Messages)-1]
 	if len(last.ToolResults) > 0 {

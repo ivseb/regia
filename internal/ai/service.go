@@ -353,6 +353,9 @@ type Status struct {
 	Budget  Budget `json:"budget"`
 	// RetentionDays: per quanti giorni restano le conversazioni.
 	RetentionDays int `json:"retention_days"`
+	// Features: le funzioni della scheda pronte (AI accesa e modello del loro livello), per
+	// mostrare solo i pulsanti che funzionano. Senza AI è vuoto e la scheda non cambia.
+	Features map[string]bool `json:"features"`
 }
 
 // StatusFor dice se l'assistente è usabile nel tenant.
@@ -365,6 +368,16 @@ func (s *Service) StatusFor(ctx context.Context, tx pgx.Tx) (Status, error) {
 	}
 	if t != nil {
 		out.Ready, out.Tools, out.Model, out.Masked = true, t.Tools, t.Model, t.Mask
+	}
+	out.Features = map[string]bool{}
+	if st.Enabled {
+		for _, f := range CardFeatures {
+			if ft, _, ferr := s.Resolve(ctx, tx, f); ferr == nil && ft != nil {
+				out.Features[f] = true
+			} else if ferr != nil && !errors.As(ferr, &ae) {
+				return out, ferr
+			}
+		}
 	}
 	if out.Budget, err = s.budget(ctx, tx); err != nil {
 		return out, err

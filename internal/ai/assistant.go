@@ -543,6 +543,15 @@ func citedRefs(answer string, refs []tools.Ref) []tools.Ref {
 // ---------------------------------------------------------------------
 
 func (s *Service) saveProposal(ctx context.Context, tenantID string, actor engine.Actor, convID, tool string, res *tools.Result) (string, error) {
+	return s.saveFeatureProposal0(ctx, tenantID, actor, convID, "", tool, res)
+}
+
+// saveFeatureProposal salva una proposta di una funzione della scheda (senza conversazione).
+func (s *Service) saveFeatureProposal(ctx context.Context, tenantID string, actor engine.Actor, feature, tool string, res *tools.Result) (string, error) {
+	return s.saveFeatureProposal0(ctx, tenantID, actor, "", feature, tool, res)
+}
+
+func (s *Service) saveFeatureProposal0(ctx context.Context, tenantID string, actor engine.Actor, convID, feature, tool string, res *tools.Result) (string, error) {
 	var conv any
 	if convID != "" {
 		conv = convID
@@ -557,8 +566,8 @@ func (s *Service) saveProposal(ctx context.Context, tenantID string, actor engin
 	input["_refs"] = res.Refs
 	ij, _ := json.Marshal(input)
 	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `insert into ai_proposals (tenant_id, id, conversation_id, member_id, tool, input, summary)
-			values (app_tenant(), $1, $2, $3, $4, $5, $6)`, id, conv, actor.MemberID, tool, ij, clipRunes(res.Summary, 2000))
+		_, err := tx.Exec(ctx, `insert into ai_proposals (tenant_id, id, conversation_id, member_id, tool, input, summary, feature)
+			values (app_tenant(), $1, $2, $3, $4, $5, $6, $7)`, id, conv, actor.MemberID, tool, ij, clipRunes(res.Summary, 2000), nullable(feature))
 		return err
 	})
 	return id, err
@@ -577,11 +586,11 @@ func (s *Service) Decide(ctx context.Context, tenantID string, actor engine.Acto
 	if !uuidRe.MatchString(id) {
 		return nil, ErrNotFound
 	}
-	var tool, convID, status string
+	var tool, convID, status, feature string
 	var input []byte
 	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `select tool, input, coalesce(conversation_id::text, ''), status from ai_proposals
-			where id = $1 and member_id = $2 for update`, id, actor.MemberID).Scan(&tool, &input, &convID, &status)
+		err := tx.QueryRow(ctx, `select tool, input, coalesce(conversation_id::text, ''), status, coalesce(feature, '') from ai_proposals
+			where id = $1 and member_id = $2 for update`, id, actor.MemberID).Scan(&tool, &input, &convID, &status, &feature)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -631,7 +640,11 @@ func (s *Service) Decide(ctx context.Context, tenantID string, actor engine.Acto
 	// proposta senza conversazione viene da un client MCP: funzione «mcp», fornitore «client».
 	rec := callRecord{MemberID: actor.MemberID, Feature: "assistente", Kind: "regia", Model: "proposta:" + tool,
 		Outcome: outcome, ConversationID: convID}
-	if convID == "" {
+	switch {
+	case feature != "":
+		// Bozze e collegamenti della scheda (ondata 3): la funzione della proposta.
+		rec.Feature = feature
+	case convID == "":
 		rec.Feature, rec.Kind = FeatureMCP, KindClient
 	}
 	s.record(ctx, tenantID, rec)

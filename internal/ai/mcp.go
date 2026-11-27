@@ -62,7 +62,7 @@ func (s *Service) ProposeMCP(ctx context.Context, tenantID string, actor engine.
 func (s *Service) PendingMCP(ctx context.Context, tenantID string, actor engine.Actor) ([]ProposalView, error) {
 	var out []ProposalView
 	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
-		props, err := queryProposals(ctx, tx, `conversation_id is null and member_id = $1 and status = 'pending'
+		props, err := queryProposals(ctx, tx, `conversation_id is null and feature is null and member_id = $1 and status = 'pending'
 			order by created_at desc limit 20`, actor.MemberID)
 		for _, p := range props {
 			out = append(out, p)

@@ -72,6 +72,11 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE "+b+"/conversations/{id}", inTenant(s.aiDeleteConversation))
 	mux.HandleFunc("POST "+b+"/ask", inTenant(s.aiAsk))
 	mux.HandleFunc("POST "+b+"/graph", inTenant(s.aiGraph))
+	// Assistente nella scheda (ondata 3).
+	mux.HandleFunc("POST "+b+"/card", inTenant(s.aiCard))
+	mux.HandleFunc("POST "+b+"/card/insert", inTenant(s.aiCardInsert))
+	mux.HandleFunc("POST "+b+"/card/triage", inTenant(s.aiCardTriage))
+	mux.HandleFunc("POST "+b+"/card/links", inTenant(s.aiCardLinks))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/confirm", inTenant(s.aiConfirm))
 	mux.HandleFunc("POST "+b+"/proposals/{id}/reject", inTenant(s.aiReject))
 	// Server MCP (ondata 2): solo con un token API, nel tenant del token.
@@ -325,6 +330,62 @@ func (s *Server) aiGraph(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// aiCard: riassunto, cosa manca per decidere o bozza sulla scheda di un elemento.
+func (s *Server) aiCard(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ai.CardInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.ai.Card(r.Context(), p.TenantID, actorOf(r, p), s.memberLang(r, p), in)
+	if err != nil {
+		s.aiError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// aiCardInsert inserisce una bozza riletta dalla persona (commento o descrizione).
+func (s *Server) aiCardInsert(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ai.InsertInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.ai.Insert(r.Context(), p.TenantID, actorOf(r, p), in)
+	if err != nil {
+		s.aiError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// aiCardTriage: duplicati probabili e classificazione proposta per un elemento in creazione.
+func (s *Server) aiCardTriage(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ai.TriageInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.ai.Triage(r.Context(), p.TenantID, actorOf(r, p), s.memberLang(r, p), in)
+	if err != nil {
+		s.aiError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// aiCardLinks crea i collegamenti accettati alla creazione.
+func (s *Server) aiCardLinks(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var in ai.LinksInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	res, err := s.ai.Links(r.Context(), p.TenantID, actorOf(r, p), in)
+	if err != nil {
+		s.aiError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": res})
 }
 
 func (s *Server) aiDecide(w http.ResponseWriter, r *http.Request, p *auth.Principal, confirm bool) {

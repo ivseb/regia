@@ -39,9 +39,12 @@ var Features = []Feature{
 	{Key: "assistente", Tier: TierDeep, NeedsTools: true, Active: true},
 	// Domande sul grafo (ondata 2): il modello scrive una query, Regia la prova; non chiama strumenti.
 	{Key: "domande_grafo", Tier: TierDeep, Active: true},
-	{Key: "riassunti", Tier: TierFast},
-	{Key: "classificazione", Tier: TierFast},
-	{Key: "bozze", Tier: TierDeep},
+	// Assistente nella scheda (ondata 3): riassunto, cosa manca per decidere, bozze; duplicati e
+	// classificazione alla creazione. Il modello non chiama strumenti: Regia gli dà il contesto.
+	{Key: "riassunti", Tier: TierFast, Active: true},
+	{Key: "mancanze", Tier: TierDeep, Active: true},
+	{Key: "bozze", Tier: TierDeep, Active: true},
+	{Key: "classificazione", Tier: TierFast, Active: true},
 	{Key: "wiki", Tier: TierFast, NeedsTools: true},
 	{Key: "grc", Tier: TierDeep, NeedsTools: true},
 }
