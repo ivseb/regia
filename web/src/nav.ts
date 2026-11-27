@@ -145,6 +145,8 @@ function allSections(me: Me, c: NavCounts, names: NavNames): NavSection[] {
           { to: "/configurazione/integrazioni/github", label: tr("shell.nav.github") },
           { to: "/configurazione/integrazioni/gitlab", label: tr("shell.nav.gitlab") },
           { to: "/configurazione/integrazioni/gitea", label: tr("shell.nav.gitea") },
+          { to: "/configurazione/ai", label: tr("ai.nav.settings") },
+          { to: "/configurazione/ai/consumo", label: tr("ai.nav.usage") },
         ]
       : []),
   ];
