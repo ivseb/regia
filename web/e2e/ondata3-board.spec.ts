@@ -72,11 +72,12 @@ test("modello Kanban con anteprima, colonna a due fasi, spostamento e WIP supera
   await page.getByRole("article", { name: new RegExp(`^${bugs[0].key} `) }).dragTo(doing);
   await expect(doing).toHaveAccessibleName("In corso: 1 elemento");
   await expect(page.getByTestId("wip-superato")).toHaveCount(0);
+  // La board sposta la card subito; il salvataggio può arrivare un attimo dopo, sotto carico:
+  // il secondo spostamento parte solo a salvataggio fatto.
+  await expect.poll(async () => (await call(req, "GET", `/api/v1/elements/${bugs[0].key}`)).element.state).toBe("In corso");
   await page.getByRole("article", { name: new RegExp(`^${bugs[1].key} `) }).dragTo(doing);
   await expect(doing).toHaveAccessibleName("In corso: 2 elementi");
   await expect(page.getByTestId("wip-superato")).toContainText("Oltre il limite: 2 su 1");
-  // La board sposta la card subito; il salvataggio può arrivare un attimo dopo, sotto carico.
-  await expect.poll(async () => (await call(req, "GET", `/api/v1/elements/${bugs[0].key}`)).element.state).toBe("In corso");
   await req.dispose();
 });
 
