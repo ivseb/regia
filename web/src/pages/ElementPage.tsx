@@ -16,6 +16,7 @@ import { ImpactFacts, TechnicalAnalysis } from "./Analysis";
 import { Attachments, CommentComposer, CommentItem, FollowButton, useScrollToHash } from "./Collaboration";
 import { ApplicationFacts, Approvals, DemandFacts, People, Transitions, awaitsMyDecision, describe, fieldNamesOf, useRefreshElement } from "./ElementSections";
 import { useMe } from "../shell";
+import { moduleOn } from "../modules";
 import { Evaluation } from "./Evaluation";
 import { IncidentBand } from "./IncidentBand";
 import { RequestFinance } from "./RequestFinance";
@@ -66,10 +67,10 @@ const RequirementLinks = lazy(() => import("./ComplianceSections").then((m) => (
 
 export type TabKey =
   | "sintesi" | "panoramica" | "attivita" | "dettagli" | "analisi" | "valutazioni" | "requisiti" | "piano" | "wp" | "milestone"
-  | "stato" | "approvazioni" | "allegati" | "produzione" | "gate";
+  | "stato" | "approvazioni" | "allegati" | "produzione" | "gate" | "progetti";
 export const TAB_KEYS: TabKey[] = [
   "sintesi", "panoramica", "attivita", "dettagli", "analisi", "valutazioni", "requisiti", "piano", "wp", "milestone",
-  "stato", "approvazioni", "allegati", "produzione", "gate",
+  "stato", "approvazioni", "allegati", "produzione", "gate", "progetti",
 ];
 
 // Progetti (replica/progetti.md, passi 1 e 2): Panoramica del PM, Piano, Work package e Milestone del
@@ -81,12 +82,13 @@ const WorkPackagesTab = lazy(() => import("./progetti/ProjectTables").then((m) =
 const MilestonesTab = lazy(() => import("./progetti/ProjectTables").then((m) => ({ default: m.MilestonesTab })));
 const PlanItemPanel = lazy(() => import("./progetti/PlanItemPanel").then((m) => ({ default: m.PlanItemPanel })));
 const RequestProjectBanner = lazy(() => import("./progetti/RequestProject").then((m) => ({ default: m.RequestProjectBanner })));
+const ApplicationProjects = lazy(() => import("./progetti/ApplicationProjects").then((m) => ({ default: m.ApplicationProjects })));
 const PLAN_ITEM_TYPES = ["work_package", "plan_activity", "milestone"];
 
 type Tab = { key: TabKey; label: string; count?: number };
 
 /** Schede presenti per tipo di elemento. */
-function tabsFor(t: T, d: ElementDetail, tn: ReturnType<typeof useTypeNames>): Tab[] {
+function tabsFor(t: T, d: ElementDetail, tn: ReturnType<typeof useTypeNames>, projectsOn = false): Tab[] {
   const ty = d.element.type;
   const tabs: Tab[] = [];
   // La sintesi apre la richiesta («decisione prima») e l'applicazione (vista 360).
@@ -111,6 +113,8 @@ function tabsFor(t: T, d: ElementDetail, tn: ReturnType<typeof useTypeNames>): T
   if (ty === "logical_asset") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabProduction") });
   if (ty === "application") tabs.push({ key: "produzione", label: t("lavoro.elementpage.tabServices") });
   if (ty === "application" || ty === "business_request") tabs.push({ key: "gate", label: t("lavoro.elementpage.tabGate") });
+  // Passo 6 dei progetti: i progetti che toccano l'applicazione, nel tempo, con i conflitti.
+  if (ty === "application" && projectsOn) tabs.push({ key: "progetti", label: tn.plural("project", t("progetti.passo6.app.tab")) });
   if (ty === "business_request" || d.approvals.length > 0) tabs.push({ key: "approvazioni", label: t("lavoro.elementpage.tabApprovals"), count: d.approvals.length });
   tabs.push({ key: "allegati", label: t("lavoro.elementpage.tabAttachments") });
   return tabs;
@@ -152,7 +156,7 @@ export function ElementPage({ refKey, tab, onTab }: { refKey: string; tab?: TabK
   if (detail.isPending) return <Loading className="px-4 py-6 text-muted md:px-7" />;
   if (!d) return <div className="px-4 py-6 md:px-7"><ErrorNote error={detail.error} /></div>;
   if (d.element.type === "page" && d.element.key) return <Navigate to="/documenti/$key" params={{ key: d.element.key }} replace />;
-  const tabs = tabsFor(t, d, tn);
+  const tabs = tabsFor(t, d, tn, moduleOn(me.data, "projects"));
   const active = tabs.find((x) => x.key === tab)?.key ?? defaultTab(d, tabs, me.data?.active_tenant?.member_id);
   return (
     <article className="flex min-w-0 flex-1 flex-col" aria-label={`${d.element.key} ${d.element.title}`}>
@@ -455,6 +459,12 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
   switch (tab) {
     case "sintesi":
       return el.type === "application" ? <Application360 detail={detail} onTab={onTab} /> : <RequestSummaryTab detail={detail} onTab={onTab} />;
+    case "progetti":
+      return (
+        <Suspense fallback={<Loading className="text-muted" />}>
+          <ApplicationProjects appKey={key} />
+        </Suspense>
+      );
     case "panoramica":
       return (
         <Suspense fallback={<Loading className="text-muted" />}>

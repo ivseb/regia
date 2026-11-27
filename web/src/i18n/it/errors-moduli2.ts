@@ -161,6 +161,7 @@ export default {
   "errors.validation.report.portal_type_unavailable": "Tipo di richiesta non disponibile nel portale.",
   "errors.validation.report.regulatory_too_many": "Al massimo 8 indicatori.",
   "errors.validation.report.status_no_previous": "Non c'è un report precedente da confrontare.",
+  "errors.validation.report.status_in_project": "La richiesta è confluita in un progetto: lo status report si scrive sul progetto.",
   "errors.validation.report.status_not_awaiting": "Il report non è in attesa di presa visione.",
   "errors.validation.report.status_other_requests": "I report sono di richieste diverse.",
   "errors.validation.report.status_period_inverted": "L'inizio del periodo è dopo la fine.",

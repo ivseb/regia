@@ -127,7 +127,32 @@ export type ProjectPlan = {
   /** Tolleranze proprie del progetto (null = quella del tenant) e se l'attore può cambiarle (passo 5). */
   project_tolerance: { days: number | null; budget_pct: number | null };
   can_edit_tolerance: boolean;
+  /** Dipendenze tra progetti (passo 6): da milestone di altri progetti e di altri progetti da queste milestone. */
+  external: CrossDep[];
+  dependents: CrossDep[];
 };
+
+/** Dipendenza tra progetti (passo 6): project/item dipendono dalla milestone di milestone_project.
+ * Le parti che l'attore non legge sono null (restricted). late_days > 0: la milestone va oltre need_by. */
+export type CrossDep = {
+  id: string;
+  project: Ref | null;
+  item_id: string | null;
+  item: Ref | null;
+  milestone_id: string;
+  milestone: Ref | null;
+  milestone_project: Ref | null;
+  milestone_date: string | null;
+  milestone_baseline: string | null;
+  milestone_state_category: string;
+  need_by: string | null;
+  need_by_set: string | null;
+  note: string;
+  late_days: number;
+  restricted?: boolean;
+};
+
+export type DepCandidate = { milestone: Ref; project: Ref; date: string | null; state_category: string; same_program: boolean };
 
 export type ItemRef = {
   id: string;
@@ -178,7 +203,8 @@ export type Reason =
   | "blocked"
   | "conflicts"
   | "scope_changed"
-  | "missing_roles";
+  | "missing_roles"
+  | "external_late";
 
 export type Numbers = {
   progress: number;
@@ -221,6 +247,8 @@ export type Numbers = {
   /** Perimetro (passo 5): work package e milestone aggiunti dopo la baseline o tolti. */
   scope_added: ItemRef[];
   scope_removed: ItemRef[];
+  /** Dipendenze da milestone di altri progetti oltre la data che serve (passo 6). */
+  external_late: CrossDep[];
   /** Budget del progetto (null per chi non lo vede o se non c'è); budget_visible anche se è vuoto. */
   budget: Budget | null;
   budget_visible: boolean;
@@ -389,8 +417,9 @@ export type SupplierView = {
   /** Il contatto del fornitore dichiara i SAL e consegna i deliverable (altrimenti solo il PM). */
   supplier_updates: boolean;
   contacts: { id: string; name: string }[];
-  /** amount_cents è null per chi non vede gli importi. */
-  contract: { ref: string | null; amount_cents: number | null; currency: string };
+  /** ref, amount_cents e currency valgono: quelli del work package o, dove mancano, del contratto collegato.
+   * own_* sono quelli scritti sul work package; gli importi sono null per chi non li vede. */
+  contract: { ref: string | null; amount_cents: number | null; currency: string; own_ref: string | null; own_amount_cents: number | null; linked: LinkedContract | null };
   claims: Claim[];
   deliverables: Deliverable[];
   progress: number;
@@ -412,7 +441,24 @@ export type SupplierPatch = Partial<{
   clear_amount: boolean;
   contract_currency: string;
   contact_id: string;
+  /** Contratto del registro ICT (passo 6); "" scollega. */
+  contract_id: string;
 }>;
+
+/** Contratto del registro ICT collegato al work package del fornitore (passo 6). */
+export type LinkedContract = {
+  id: string;
+  reference: string;
+  provider_id: string;
+  provider: string;
+  service_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  annual_cost_cents: number | null;
+  currency: string | null;
+  expired: boolean;
+};
+export type ContractOption = Omit<LinkedContract, "annual_cost_cents" | "currency">;
 
 export type NewClaim = { percent?: number; amount_cents?: number; period_end?: string; note?: string; accept?: boolean };
 export type Decision = { outcome: "accepted" | "rejected"; note?: string };
@@ -453,7 +499,32 @@ export type ProgramProject = {
   milestones: RoadmapMilestone[];
   /** Budget del progetto, solo a chi lo vede (passo 5). */
   budget: Budget | null;
+  /** Dipendenze da milestone di altri progetti (passo 6). */
+  external: CrossDep[];
 };
+
+// ---- Passo 6: mappa dei semafori del portafoglio e applicazione nel tempo.
+
+export type AreaSignal = Signal | "hidden";
+export type Signals = { schedule: AreaSignal; budget: AreaSignal; scope: AreaSignal; risk: AreaSignal; conflicts: AreaSignal };
+export type PortfolioProject = ProgramProject & { program: Ref | null; template: Template; signals: Signals };
+export type Portfolio = { projects: PortfolioProject[]; programs: Ref[] };
+
+export type AppWork = {
+  id: string;
+  work_package: Ref | null;
+  project: Ref | null;
+  phase: string | null;
+  delivery_mode: DeliveryMode | null;
+  team: string | null;
+  start: string | null;
+  end: string | null;
+  state: string;
+  state_category: string;
+  open: boolean;
+  restricted?: boolean;
+};
+export type AppProjects = { application: Ref; items: AppWork[]; conflicts: { a: string; b: string; from: string | null; until: string | null }[] };
 
 /** Pagina del programma: numbers sono quelli di computeNumbers su tutte le voci dei progetti. */
 export type ProgramView = { program: Ref; state: string; numbers: Numbers; projects: ProgramProject[]; can_edit: boolean };
@@ -522,6 +593,7 @@ const veilCR = (c: ChangeRequest): ChangeRequest => ({ ...c, deviations: c.devia
 const veilConflict = (c: Conflict): Conflict => (c.restricted ? { ...c, project: { id: "", key: "", title: tr("progetti.restricted") } } : c);
 const veilItem = (it: PlanItem): PlanItem => ({ ...veil(it), ...(it.conflicts ? { conflicts: it.conflicts.map(veilConflict) } : {}) });
 const veilSupplier = (v: SupplierView): SupplierView => ({ ...v, deliverables: v.deliverables.map(veil) });
+const veilRoadmap = <T extends ProgramProject>(p: T): T => ({ ...p, milestones: p.milestones.map(veil), external: p.external ?? [] });
 const veilNumbers = (n: Numbers): Numbers => ({
   ...n,
   late: n.late.map(veil),
@@ -531,6 +603,7 @@ const veilNumbers = (n: Numbers): Numbers => ({
   conflicts: (n.conflicts ?? []).map(veilConflict),
   scope_added: (n.scope_added ?? []).map(veil),
   scope_removed: (n.scope_removed ?? []).map(veil),
+  external_late: n.external_late ?? [],
 });
 
 export const projectsApi = {
@@ -594,8 +667,17 @@ export const projectsApi = {
     call<ProgramView>("GET", `/programs/${q(ref)}`).then((v) => ({
       ...v,
       numbers: veilNumbers(v.numbers),
-      projects: v.projects.map((p) => ({ ...p, milestones: p.milestones.map(veil) })),
+      projects: v.projects.map(veilRoadmap),
     })),
+  // Passo 6.
+  portfolio: (closed = false) =>
+    call<Portfolio>("GET", `/projects/portfolio${closed ? "?closed=true" : ""}`).then((r) => ({ ...r, projects: r.projects.map(veilRoadmap) })),
+  applicationProjects: (app: string) => call<AppProjects>("GET", `/projects/by-application?app=${q(app)}`),
+  dependencyCandidates: (ref: string) => call<{ items: DepCandidate[] }>("GET", `/projects/${q(ref)}/dependency-candidates`),
+  createCrossDep: (ref: string, d: { milestone_id: string; item_id?: string; need_by?: string; note?: string }) =>
+    call<ProjectPlan>("POST", `/projects/${q(ref)}/dependencies`, d),
+  deleteCrossDep: (ref: string, id: string) => call<ProjectPlan>("DELETE", `/projects/${q(ref)}/dependencies/${q(id)}`),
+  contractOptions: (id: string) => call<{ items: ContractOption[] }>("GET", `/plan-items/${q(id)}/contracts`),
   /** Mette il progetto in un programma ("" lo toglie). */
   setProgram: (ref: string, program: string) => call<{ program: Ref | null }>("PUT", `/projects/${q(ref)}/program`, { program }),
 
@@ -654,5 +736,9 @@ export const projectKeys = {
   supplier: (id: string) => ["plan-item-supplier", id] as const,
   programs: ["programs"] as const,
   program: (ref: string) => ["program", ref] as const,
+  portfolio: (closed: boolean) => ["projects-portfolio", closed] as const,
+  application: (ref: string) => ["application-projects", ref] as const,
+  candidates: (ref: string) => ["project-dep-candidates", ref] as const,
+  contracts: (id: string) => ["plan-item-contracts", id] as const,
   incoming: (space: string, weeks: number) => ["projects-incoming", space, weeks] as const,
 };

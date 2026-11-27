@@ -9,6 +9,7 @@ import { projectKeys, projectsApi, type ProgramSummary, type ProjectSummary, typ
 import { useTypeNames } from "../../typesApi";
 import { useT } from "../../i18n/react";
 import { ItemLink, ProgressBar, SignalName } from "./shared";
+import { PortfolioMap } from "./PortfolioMap";
 
 function dates(p: ProjectSummary, none: string): string {
   if (p.start && p.end) return `${date(p.start)} – ${date(p.end)}`;
@@ -22,11 +23,14 @@ export function ProjectsPage() {
   const t = useT();
   const tn = useTypeNames();
   // I programmi sono facoltativi: le schede compaiono se sono accesi nella configurazione o se ne esiste uno.
-  const [tab, setTab] = useState<"progetti" | "programmi">("progetti");
+  // Passo 6: la scheda «Semafori» (mappa del portafoglio) c'è sempre.
+  const [tab, setTab] = useState<"progetti" | "programmi" | "semafori">("progetti");
   const settings = useQuery({ queryKey: ["project-settings-default"], queryFn: () => projectsApi.settings(), retry: false });
   const programs = useQuery({ queryKey: [...projectKeys.programs, true], queryFn: () => projectsApi.programs(true), retry: false });
   const withPrograms = !!settings.data?.programs_enabled || (programs.data?.items.length ?? 0) > 0;
   const onPrograms = withPrograms && tab === "programmi";
+  const onMap = tab === "semafori";
+  const tabKeys = withPrograms ? (["progetti", "programmi", "semafori"] as const) : (["progetti", "semafori"] as const);
   // Con «anche i chiusi» l'elenco include i progetti completati o annullati.
   const [closed, setClosed] = useState(true);
   const q = useQuery({ queryKey: [...projectKeys.list, closed], queryFn: () => projectsApi.list(closed) });
@@ -42,16 +46,17 @@ export function ProjectsPage() {
         title={t("progetti.list.title")}
         actions={
           canWrite &&
-          !onPrograms && (
+          !onPrograms &&
+          !onMap && (
             <Link to="/progetti/nuovo" className="btn btn-primary no-underline">
               {t("progetti.list.new")}
             </Link>
           )
         }
       />
-      {withPrograms && (
+      {(
         <div role="tablist" aria-label={t("progetti.programmi.tabs")} className="flex gap-6 border-b border-hair px-4 pt-1 md:px-7">
-          {(["progetti", "programmi"] as const).map((k) => (
+          {tabKeys.map((k) => (
             <button
               key={k}
               type="button"
@@ -62,13 +67,22 @@ export function ProjectsPage() {
               onClick={() => setTab(k)}
               className={`min-h-[44px] cursor-pointer border-0 border-b-2 bg-transparent px-0 pb-2.5 md:min-h-0 ${tab === k ? "border-fg font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}`}
             >
-              {k === "progetti" ? tn.plural("project", t("progetti.programmi.tabProjects")) : tn.plural("program", t("progetti.programmi.tabPrograms"))}
+              {k === "progetti"
+                ? tn.plural("project", t("progetti.programmi.tabProjects"))
+                : k === "programmi"
+                  ? tn.plural("program", t("progetti.programmi.tabPrograms"))
+                  : t("progetti.passo6.map.tab")}
             </button>
           ))}
         </div>
       )}
       {onPrograms && <ProgramsTab canWrite={canWrite} items={programs.data?.items ?? []} loaded={!!programs.data} error={programs.error} />}
-      {!onPrograms && <div id="prj-panel-progetti" role={withPrograms ? "tabpanel" : undefined} aria-labelledby={withPrograms ? "prj-tab-progetti" : undefined} className="flex flex-col gap-4 px-4 py-5 md:px-7">
+      {onMap && (
+        <div id="prj-panel-semafori" role="tabpanel" aria-labelledby="prj-tab-semafori" className="flex flex-col gap-4 px-4 py-5 md:px-7">
+          <PortfolioMap />
+        </div>
+      )}
+      {!onPrograms && !onMap && <div id="prj-panel-progetti" role="tabpanel" aria-labelledby="prj-tab-progetti" className="flex flex-col gap-4 px-4 py-5 md:px-7">
         <label className="flex min-h-[44px] items-center gap-2 text-[12.5px] md:min-h-0">
           <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
           {t("progetti.list.includeClosed")}

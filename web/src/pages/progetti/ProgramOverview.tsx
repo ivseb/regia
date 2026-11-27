@@ -2,7 +2,8 @@
 // e la roadmap con una riga per progetto. Tutti i numeri li calcola il server con la funzione dei progetti.
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { projectKeys, projectsApi, type ProgramProject, type ProgramView, type RoadmapMilestone } from "../../projectsApi";
+import { projectKeys, projectsApi, type CrossDep, type ProgramProject, type ProgramView, type RoadmapMilestone } from "../../projectsApi";
+import { XDepChip } from "./CrossDeps";
 import { EmptyState } from "../../emptyState";
 import { ErrorNote, Loading, SectionTitle, date, euro } from "../../ui";
 import { useT } from "../../i18n/react";
@@ -295,7 +296,9 @@ function milestoneLabel(m: RoadmapMilestone, t: ReturnType<typeof useT>): string
   return `${base} · ${state}${m.contractual ? ` · ${t("progetti.programmi.roadmap.stateContractual")}` : ""}`;
 }
 
-function Roadmap({ projects }: { projects: ProgramProject[] }) {
+/** Roadmap dei progetti con le milestone e (passo 6) le dipendenze da milestone di altri progetti. La usano il
+ * programma e la roadmap di portafoglio. */
+export function Roadmap({ projects }: { projects: ProgramProject[] }) {
   const t = useT();
   const none = t("progetti.common.none");
   // Intervallo: dal primo giorno del mese del primo punto all'inizio del mese dopo l'ultimo.
@@ -303,6 +306,7 @@ function Roadmap({ projects }: { projects: ProgramProject[] }) {
   for (const p of projects) {
     for (const d of [p.start, p.end, p.baseline_start, p.baseline_end]) if (d) pts.push(cal.parse(d));
     for (const m of p.milestones) for (const d of [m.date, m.baseline_date]) if (d) pts.push(cal.parse(d));
+    for (const x of p.external ?? []) if (x.need_by) pts.push(cal.parse(x.need_by));
   }
   const todayDay = cal.today();
   const hasDates = pts.length > 0;
@@ -370,6 +374,21 @@ function Roadmap({ projects }: { projects: ProgramProject[] }) {
                         style={{ left: pct(cal.parse(bs)), width: widthPct(cal.parse(bs), cal.parse(be)) }}
                       />
                     )}
+                    {(p.external ?? []).map((d) =>
+                      d.need_by ? (
+                        <span
+                          key={d.id}
+                          role="img"
+                          aria-label={depLabel(d, t)}
+                          title={depLabel(d, t)}
+                          data-testid="roadmap-dipendenza"
+                          className={`absolute top-0 z-10 text-[11px] leading-none font-bold ${d.late_days > 0 ? "text-danger" : "text-muted"}`}
+                          style={{ left: pct(cal.parse(d.need_by)), transform: "translateX(-50%)" }}
+                        >
+                          ⇠
+                        </span>
+                      ) : null,
+                    )}
                     {p.milestones.map((m) =>
                       m.date ? (
                         <span
@@ -395,6 +414,7 @@ function Roadmap({ projects }: { projects: ProgramProject[] }) {
             <li className="flex items-center gap-2"><Diamond mark="late" contractual={false} size={11} />{t("progetti.programmi.roadmap.legendLate")}</li>
             <li className="flex items-center gap-2"><Diamond mark="planned" contractual size={11} />{t("progetti.programmi.roadmap.legendContractual")}</li>
             <li className="flex items-center gap-2"><span aria-hidden="true" className="block h-1.5 w-6 border border-muted bg-muted/25" />{t("progetti.programmi.roadmap.legendBaseline")}</li>
+            <li className="flex items-center gap-2"><span aria-hidden="true" className="font-bold">⇠</span>{t("progetti.passo6.dep.legend")}</li>
           </ul>
         </div>
       )}
@@ -408,6 +428,11 @@ function Roadmap({ projects }: { projects: ProgramProject[] }) {
             </div>
             <span className="font-semibold">{p.title}</span>
             {(p.baseline_start || p.baseline_end) && <span className="tabular text-[12.5px] text-muted">{t("progetti.baseline.phone", { dates: range(p.baseline_start, p.baseline_end, none) })}</span>}
+            {(p.external ?? []).map((d) => (
+              <span key={d.id} className={`text-[12.5px] ${d.late_days > 0 ? "font-semibold text-danger" : "text-muted"}`}>
+                ⇠ {depLabel(d, t)}
+              </span>
+            ))}
             {p.milestones.length === 0 ? (
               <span className="text-[12.5px] text-muted">{t("progetti.programmi.roadmap.noMilestones")}</span>
             ) : (
@@ -427,11 +452,21 @@ function Roadmap({ projects }: { projects: ProgramProject[] }) {
   );
 }
 
+/** «Ha bisogno di PRJ-3 IDP pronto entro il 31/03 (prevista il 08/04, in ritardo di 6 giorni)». */
+function depLabel(d: CrossDep, t: ReturnType<typeof useT>): string {
+  const ms = d.milestone_project ? `${d.milestone_project.key} ${d.milestone?.title ?? t("progetti.restricted")}` : t("progetti.restricted");
+  const base = t("progetti.passo6.dep.roadmap", { milestone: ms, need: d.need_by ? date(d.need_by) : "—", date: d.milestone_date ? date(d.milestone_date) : "—" });
+  return d.late_days > 0 ? `${base} · ${t("progetti.passo6.dep.late", { count: d.late_days })}` : base;
+}
+
 function RoadmapRow({ p, children }: { p: ProgramProject; children: ReactNode }) {
   return (
     <>
       <div className="flex min-w-0 flex-col justify-center border-b border-hair py-1">
-        <ItemLink itemKey={p.key} />
+        <span className="flex items-center gap-2">
+          <ItemLink itemKey={p.key} />
+          <XDepChip deps={p.external ?? []} />
+        </span>
         <span className="truncate text-[12.5px] font-semibold" title={p.title}>
           {p.title}
         </span>

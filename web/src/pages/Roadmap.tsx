@@ -3,13 +3,16 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type RequestWindow } from "../api";
 import * as cal from "../calendar";
-import { PageHeader } from "../shell";
-import { DRIVERS, ErrorNote, date } from "../ui";
+import { PageHeader, useMe } from "../shell";
+import { DRIVERS, ErrorNote, SectionTitle, date } from "../ui";
 import { fmtDate } from "../i18n/format";
 import { useT } from "../i18n/react";
 import { Markers, NonWorkdays, PX_PER_DAY, TimeHeader, ZoomSwitch, useNarrow, type Zoom } from "./timeline";
 import { phaseTint } from "../tinte";
 import { crumbs } from "../crumbs";
+import { moduleOn } from "../modules";
+import { projectKeys, projectsApi } from "../projectsApi";
+import { Roadmap as ProjectsRoadmap } from "./progetti/ProgramOverview";
 
 // Roadmap di portafoglio: ogni richiesta è una barra sulla sua finestra (l'inviluppo dei
 // suoi impatti pianificati, o la finestra impostata a mano). Dentro la barra i segmenti
@@ -26,7 +29,13 @@ export function Roadmap() {
   const [onlyRegulatory, setOnlyRegulatory] = useState(false);
   const [closed, setClosed] = useState(false);
   const rm = useQuery({ queryKey: ["roadmap", closed], queryFn: () => api.roadmap(closed) });
-  const items = (rm.data?.items ?? []).filter((r) => !onlyRegulatory || r.is_mandatory || r.regulatory_deadline);
+  // Progetti, passo 6 (progetti.md §4): la roadmap mostra i progetti e le richieste non ancora diventate progetto.
+  const projectsOn = moduleOn(useMe().data, "projects");
+  const pf = useQuery({ queryKey: projectKeys.portfolio(closed), queryFn: () => projectsApi.portfolio(closed), enabled: projectsOn });
+  const projects = pf.data?.projects ?? [];
+  const all = (rm.data?.items ?? []).filter((r) => !onlyRegulatory || r.is_mandatory || r.regulatory_deadline);
+  const items = projectsOn ? all.filter((r) => !r.in_project) : all;
+  const merged = all.length - items.length;
   return (
     <>
       <PageHeader
@@ -61,8 +70,21 @@ export function Roadmap() {
         </span>
       </div>
       <div className="flex flex-col gap-3 px-4 md:px-7 py-5">
+        {projectsOn && (
+          <section className="flex flex-col gap-2" aria-label={t("progetti.passo6.roadmap.projects")} data-testid="roadmap-progetti">
+            <SectionTitle>{t("progetti.passo6.roadmap.projects")}</SectionTitle>
+            <ErrorNote error={pf.error} />
+            {pf.data && projects.length === 0 ? (
+              <p className="m-0 text-[13px] text-muted">{t("progetti.passo6.roadmap.noProjects")}</p>
+            ) : (
+              <ProjectsRoadmap projects={projects} />
+            )}
+          </section>
+        )}
+        {projectsOn && <SectionTitle>{t("progetti.passo6.roadmap.requests")}</SectionTitle>}
         <p className="m-0 text-[12.5px] text-muted">
           {t("lavoro.roadmap.help")}
+          {projectsOn && merged > 0 && ` ${t("progetti.passo6.roadmap.merged", { count: merged })}`}
         </p>
         <RoadmapChart items={items} zoom={zoom} error={rm.error} />
         {items.length === 0 && rm.data && <p className="text-muted">{t("lavoro.roadmap.empty")}</p>}

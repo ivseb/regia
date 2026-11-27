@@ -240,6 +240,8 @@ export type RequestWindow = {
   scheduled: number;
   phase_index: number;
   phase_count: number;
+  /** La richiesta è confluita in un progetto (progetti, passo 6). */
+  in_project?: boolean;
 };
 export type Plan = { request: RequestWindow; tasks: PlanTask[]; can_edit: boolean };
 export type PlanChange = { id: string; key: string; start: string; end: string; cause: string };

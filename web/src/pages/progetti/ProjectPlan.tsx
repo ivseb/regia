@@ -16,6 +16,7 @@ import { ErrorNote, Loading } from "../../ui";
 import { useT } from "../../i18n/react";
 import { Markers, NonWorkdays, PX_PER_DAY, TimeHeader, ZoomSwitch, useNarrow, type Zoom } from "../timeline";
 import { BaselinePanel } from "./ProjectBaseline";
+import { CrossDepsPanel, XDepChip } from "./CrossDeps";
 import { ConflictChip, PendingChip, useConflictText } from "./shared";
 import { H, cascadeFrom, criticalPath, envelope, itemsByPhase, proposedDuration, rowHeight, violated, type Row, type Span } from "./plan-logic";
 
@@ -120,6 +121,7 @@ function PlanView({ plan, refKey }: { plan: ProjectPlan; refKey: string }) {
       ) : (
         <Gantt plan={plan} refKey={refKey} zoom={zoom} canEdit={canEdit} busy={busy} run={run} showBaseline={showBaseline && plan.baseline != null} />
       )}
+      <CrossDepsPanel plan={plan} refKey={refKey} run={run} busy={busy} />
       <BaselinePanel plan={plan} refKey={refKey} />
     </div>
   );
@@ -529,6 +531,7 @@ function LabelCell(p: LabelProps) {
       <div className="flex items-center border-b border-hair/60 pr-3" style={{ height: rowHeight(r), paddingLeft: r.depth === 1 ? 32 : 12 }}>
         {it.kind === "milestone" && <span aria-hidden="true" className="mr-2 inline-block h-2 w-2 shrink-0 rotate-45 bg-fg" />}
         {title}
+        <XDepChip deps={(p.plan.external ?? []).filter((d) => d.item_id === it.id)} />
       </div>
     );
   }
@@ -562,6 +565,7 @@ function LabelCell(p: LabelProps) {
           </button>
         )}
         <ConflictChip conflicts={it.conflicts ?? []} />
+        <XDepChip deps={(p.plan.external ?? []).filter((d) => d.item_id === it.id)} />
         <PendingChip count={it.claims_pending} />
         {mode === "agile" && it.epics.length > 0 && (
           <Link to="/e/$key" params={{ key: it.epics[0].key }} className="truncate font-mono text-[11px] text-accent">
