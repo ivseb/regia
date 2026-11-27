@@ -112,3 +112,58 @@ func TestAnthropicAdapter(t *testing.T) {
 		t.Fatal("adattatore senza chiave")
 	}
 }
+
+// Streaming e cache del prompt contro un server locale che risponde in SSE come l'API:
+// il testo arriva a pezzi, l'input dello strumento si ricompone, il marcatore cache_control
+// è in cima alla richiesta e i token della cache tornano separati.
+func TestAnthropicStreamAndCache(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		ev := func(name, data string) { _, _ = io.WriteString(w, "event: "+name+"\ndata: "+data+"\n\n") }
+		ev("message_start", `{"type":"message_start","message":{"id":"msg_s","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":20,"output_tokens":1,"cache_read_input_tokens":900,"cache_creation_input_tokens":80}}}`)
+		ev("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+		ev("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Ciao, "}}`)
+		ev("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"cerco."}}`)
+		ev("content_block_stop", `{"type":"content_block_stop","index":0}`)
+		ev("content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_s","name":"cerca","input":{}}}`)
+		ev("content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"testo\": \"magaz"}}`)
+		ev("content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"zino\"}"}}`)
+		ev("content_block_stop", `{"type":"content_block_stop","index":1}`)
+		ev("message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":30}}`)
+		ev("message_stop", `{"type":"message_stop"}`)
+	}))
+	defer srv.Close()
+	p, err := New(ai.ProviderConfig{APIKey: "sk-ant-finta-test", BaseURL: srv.URL + "/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parts []string
+	resp, err := p.(ai.Streamer).ChatStream(context.Background(), ai.Request{Model: ModelDeep, System: "regole",
+		Messages: []ai.Message{{Role: ai.RoleUser, Text: "cerca magazzino"}}}, func(s string) { parts = append(parts, s) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(parts, "|") != "Ciao, |cerco." || resp.Message.Text != "Ciao, cerco." || resp.Stop != ai.StopToolUse {
+		t.Fatalf("testo in streaming: %q %+v", parts, resp)
+	}
+	if len(resp.Message.ToolCalls) != 1 {
+		t.Fatalf("chiamate: %+v", resp.Message.ToolCalls)
+	}
+	var in map[string]string
+	if err := json.Unmarshal(resp.Message.ToolCalls[0].Input, &in); err != nil || in["testo"] != "magazzino" {
+		t.Fatalf("input ricomposto: %s", resp.Message.ToolCalls[0].Input)
+	}
+	if resp.InputTokens != 1000 || resp.CacheReadTokens != 900 || resp.CacheWriteTokens != 80 || resp.OutputTokens != 30 {
+		t.Fatalf("token: %+v", resp)
+	}
+	if cc, _ := body["cache_control"].(map[string]any); cc["type"] != "ephemeral" || body["stream"] != true {
+		t.Fatalf("richiesta senza cache o senza stream: %v", body)
+	}
+	// Costo: 20 normali, 900 letti al 10%, 80 scritti al 125% (Opus 5.5: 4 $ e 20 $ per milione).
+	want := (20*4 + 900*4*0.1 + 80*4*1.25 + 30*20) / 1e6
+	if got := ai.CostCached(nil, ModelDeep, resp.InputTokens, resp.CacheReadTokens, resp.CacheWriteTokens, resp.OutputTokens); got < want-1e-12 || got > want+1e-12 {
+		t.Fatalf("costo con la cache: %v, atteso %v", got, want)
+	}
+}

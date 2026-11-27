@@ -184,7 +184,9 @@ func (s *Server) withToken(w http.ResponseWriter, r *http.Request, next http.Han
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 	default:
-		if p.ReadOnly() {
+		// Il server MCP usa POST anche per leggere: con un token di sola lettura espone solo
+		// gli strumenti di lettura (internal/ai/mcpserver).
+		if p.ReadOnly() && r.URL.Path != MCPPath {
 			writeProblem(w, r, http.StatusForbidden, "auth.token_read_only", "token API di sola lettura")
 			return
 		}

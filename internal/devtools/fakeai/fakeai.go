@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"regia/internal/ai"
 )
@@ -152,6 +153,34 @@ func (provider) Chat(ctx context.Context, req ai.Request) (*ai.Response, error) 
 	}
 	return resp, nil
 }
+
+// ChatStream risponde come Chat e passa il testo a pezzi (una parola alla volta, con una
+// piccola pausa), così l'interfaccia e i test vedono la risposta crescere.
+func (p provider) ChatStream(ctx context.Context, req ai.Request, onText func(string)) (*ai.Response, error) {
+	resp, err := p.Chat(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	text := resp.Message.Text
+	for text != "" {
+		i := strings.IndexByte(text, ' ')
+		part := text
+		if i >= 0 {
+			part = text[:i+1]
+		}
+		text = text[len(part):]
+		onText(part)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(StreamPause):
+		}
+	}
+	return resp, nil
+}
+
+// StreamPause è la pausa fra i pezzi del testo in streaming.
+var StreamPause = 15 * time.Millisecond
 
 var (
 	keyRe     = regexp.MustCompile(`\b[A-Z][A-Z0-9_]{0,19}-[1-9][0-9]*\b`)

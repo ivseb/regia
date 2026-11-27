@@ -101,6 +101,9 @@ type Settings struct {
 	Fast               TierChoice       `json:"fast"`
 	Deep               TierChoice       `json:"deep"`
 	Routes             map[string]Route `json:"routes"`
+	// MCPEnabled: il server MCP è acceso (interruttore suo, indipendente da Enabled: il modello
+	// è quello della persona e Regia non chiama nessun fornitore).
+	MCPEnabled bool `json:"mcp_enabled"`
 	// Saved: le impostazioni sono già state salvate una volta (altrimenti sono i valori di partenza).
 	Saved bool `json:"saved"`
 	// Regulated: il tenant ha normative attive (DORA, NIS2...): il mascheramento parte acceso.
@@ -143,9 +146,9 @@ func LoadSettings(ctx context.Context, tx pgx.Tx) (Settings, error) {
 	var fastP, deepP, fastM, deepM *string
 	var routes []byte
 	err = tx.QueryRow(ctx, `select enabled, mask_personal_data, monthly_budget_usd::float8, monthly_token_budget, retention_days,
-		fast_provider_id::text, fast_model, deep_provider_id::text, deep_model, routes
+		fast_provider_id::text, fast_model, deep_provider_id::text, deep_model, routes, mcp_enabled
 		from ai_settings where tenant_id = app_tenant()`).Scan(&st.Enabled, &st.MaskPersonalData, &st.MonthlyBudgetUSD, &st.MonthlyTokenBudget,
-		&st.RetentionDays, &fastP, &fastM, &deepP, &deepM, &routes)
+		&st.RetentionDays, &fastP, &fastM, &deepP, &deepM, &routes, &st.MCPEnabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return st, nil
 	}
@@ -190,6 +193,7 @@ type SettingsInput struct {
 	Fast               TierChoice       `json:"fast"`
 	Deep               TierChoice       `json:"deep"`
 	Routes             map[string]Route `json:"routes"`
+	MCPEnabled         bool             `json:"mcp_enabled"`
 }
 
 // SaveSettings valida e salva le impostazioni (solo l'amministratore del tenant, controllato dall'API).
@@ -257,20 +261,21 @@ func (s *Service) SaveSettings(ctx context.Context, tx pgx.Tx, actor engine.Acto
 	}
 	rj, _ := json.Marshal(routes)
 	if _, err := tx.Exec(ctx, `insert into ai_settings (tenant_id, enabled, mask_personal_data, monthly_budget_usd, monthly_token_budget,
-			retention_days, fast_provider_id, fast_model, deep_provider_id, deep_model, routes, updated_at)
-		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+			retention_days, fast_provider_id, fast_model, deep_provider_id, deep_model, routes, mcp_enabled, updated_at)
+		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
 		on conflict (tenant_id) do update set enabled = excluded.enabled, mask_personal_data = excluded.mask_personal_data,
 			monthly_budget_usd = excluded.monthly_budget_usd, monthly_token_budget = excluded.monthly_token_budget,
 			retention_days = excluded.retention_days, fast_provider_id = excluded.fast_provider_id, fast_model = excluded.fast_model,
-			deep_provider_id = excluded.deep_provider_id, deep_model = excluded.deep_model, routes = excluded.routes, updated_at = now()`,
+			deep_provider_id = excluded.deep_provider_id, deep_model = excluded.deep_model, routes = excluded.routes,
+			mcp_enabled = excluded.mcp_enabled, updated_at = now()`,
 		in.Enabled, in.MaskPersonalData, in.MonthlyBudgetUSD, in.MonthlyTokenBudget, in.RetentionDays,
-		nullable(in.Fast.ProviderID), nullable(in.Fast.Model), nullable(in.Deep.ProviderID), nullable(in.Deep.Model), rj); err != nil {
+		nullable(in.Fast.ProviderID), nullable(in.Fast.Model), nullable(in.Deep.ProviderID), nullable(in.Deep.Model), rj, in.MCPEnabled); err != nil {
 		return Settings{}, err
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "ai.settings.update", EntityType: "ai_settings",
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
 		Payload: map[string]any{"enabled": in.Enabled, "mask_personal_data": in.MaskPersonalData, "retention_days": in.RetentionDays,
-			"fast_model": in.Fast.Model, "deep_model": in.Deep.Model, "routes": len(routes),
+			"fast_model": in.Fast.Model, "deep_model": in.Deep.Model, "routes": len(routes), "mcp_enabled": in.MCPEnabled,
 			"monthly_budget_usd": in.MonthlyBudgetUSD, "monthly_token_budget": in.MonthlyTokenBudget}}); err != nil {
 		return Settings{}, err
 	}

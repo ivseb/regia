@@ -177,8 +177,13 @@ func loadMessages(ctx context.Context, tx pgx.Tx, convID string, fromSeq int) ([
 }
 
 func proposalsOf(ctx context.Context, tx pgx.Tx, convID string) (map[string]ProposalView, error) {
+	return queryProposals(ctx, tx, `conversation_id = $1`, convID)
+}
+
+// queryProposals legge le proposte che soddisfano where (con i suoi argomenti).
+func queryProposals(ctx context.Context, tx pgx.Tx, where string, args ...any) (map[string]ProposalView, error) {
 	rows, err := tx.Query(ctx, `select id::text, tool, summary, status, coalesce(error, ''), coalesce(input->'_refs', '[]'), result, created_at
-		from ai_proposals where conversation_id = $1`, convID)
+		from ai_proposals where `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,8 +244,47 @@ func langName(actorLang string) string {
 	return "italiano"
 }
 
+// AskEvent è un evento della risposta mentre arriva (streaming):
+//   - text: un pezzo del testo del giro in corso (già smascherato);
+//   - tool: l'assistente usa uno strumento;
+//   - step: il testo arrivato finora era un passaggio intermedio prima degli strumenti, e la
+//     risposta ricomincia.
+type AskEvent struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+	Tool string `json:"tool,omitempty"`
+}
+
+// textSink smaschera il testo in arrivo e lo passa avanti a pezzi. Un segnaposto spezzato
+// fra due pezzi («[perso» + «na-1]») resta in attesa finché non è completo.
+type textSink struct {
+	masker *Masker
+	acc    strings.Builder
+	sent   int
+	emit   func(AskEvent)
+}
+
+func (t *textSink) add(s string) {
+	t.acc.WriteString(s)
+	full := t.acc.String()
+	safe := full
+	if i := strings.LastIndexByte(full, '['); i >= 0 && !strings.Contains(full[i:], "]") {
+		safe = full[:i]
+	}
+	out := t.masker.Unmask(safe)
+	if len(out) > t.sent {
+		t.emit(AskEvent{Type: "text", Text: out[t.sent:]})
+		t.sent = len(out)
+	}
+}
+
 // Ask fa una domanda all'assistente. lang è la lingua della persona («it», «en»).
 func (s *Service) Ask(ctx context.Context, tenantID string, actor engine.Actor, lang string, in AskInput) (*AskResult, error) {
+	return s.AskStream(ctx, tenantID, actor, lang, in, nil)
+}
+
+// AskStream è Ask con gli eventi della risposta mentre arriva (emit può essere nil).
+func (s *Service) AskStream(ctx context.Context, tenantID string, actor engine.Actor, lang string, in AskInput, emit func(AskEvent)) (*AskResult, error) {
 	in.Question = strings.TrimSpace(in.Question)
 	if in.Question == "" || utf8.RuneCountInString(in.Question) > maxQuestion {
 		return nil, invalid("question", "ai.question_invalid", "scrivi una domanda (al massimo 4000 caratteri)")
@@ -342,7 +386,14 @@ func (s *Service) Ask(ctx context.Context, tenantID string, actor engine.Actor, 
 			// Ultimo giro: niente più strumenti, si risponde con ciò che si è letto.
 			req.Tools = nil
 		}
-		resp, err := s.Call(ctx, target, req, CallMeta{TenantID: tenantID, Actor: actor, ConversationID: conv.ID, ElementIDs: elemIDs})
+		var onText func(string)
+		if emit != nil {
+			if step > 0 {
+				emit(AskEvent{Type: "step"})
+			}
+			onText = (&textSink{masker: masker, emit: emit}).add
+		}
+		resp, err := s.CallStream(ctx, target, req, CallMeta{TenantID: tenantID, Actor: actor, ConversationID: conv.ID, ElementIDs: elemIDs}, onText)
 		if err != nil {
 			return nil, err
 		}
@@ -358,6 +409,9 @@ func (s *Service) Ask(ctx context.Context, tenantID string, actor engine.Actor, 
 		results := make([]ToolResult, 0, len(resp.Message.ToolCalls))
 		for _, call := range resp.Message.ToolCalls {
 			used = appendOnce(used, call.Name)
+			if emit != nil {
+				emit(AskEvent{Type: "tool", Tool: call.Name})
+			}
 			input := json.RawMessage(masker.Unmask(string(call.Input)))
 			res, err := s.o.Tools.Prepare(ctx, env, call.Name, input)
 			if err != nil {
@@ -489,6 +543,10 @@ func citedRefs(answer string, refs []tools.Ref) []tools.Ref {
 // ---------------------------------------------------------------------
 
 func (s *Service) saveProposal(ctx context.Context, tenantID string, actor engine.Actor, convID, tool string, res *tools.Result) (string, error) {
+	var conv any
+	if convID != "" {
+		conv = convID
+	}
 	id := db.NewID()
 	// Gli elementi citati viaggiano con l'input (chiave «_refs», ignorata da Apply).
 	var input map[string]any
@@ -500,7 +558,7 @@ func (s *Service) saveProposal(ctx context.Context, tenantID string, actor engin
 	ij, _ := json.Marshal(input)
 	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `insert into ai_proposals (tenant_id, id, conversation_id, member_id, tool, input, summary)
-			values (app_tenant(), $1, $2, $3, $4, $5, $6)`, id, convID, actor.MemberID, tool, ij, clipRunes(res.Summary, 2000))
+			values (app_tenant(), $1, $2, $3, $4, $5, $6)`, id, conv, actor.MemberID, tool, ij, clipRunes(res.Summary, 2000))
 		return err
 	})
 	return id, err
@@ -569,12 +627,17 @@ func (s *Service) Decide(ctx context.Context, tenantID string, actor engine.Acto
 			outcome = "error"
 		}
 	}
-	// La decisione della persona entra nel registro delle chiamate (senza token né costo).
-	s.record(ctx, tenantID, callRecord{MemberID: actor.MemberID, Feature: "assistente", Kind: "regia", Model: "proposta:" + tool,
-		Outcome: outcome, ConversationID: convID})
+	// La decisione della persona entra nel registro delle chiamate (senza token né costo). Una
+	// proposta senza conversazione viene da un client MCP: funzione «mcp», fornitore «client».
+	rec := callRecord{MemberID: actor.MemberID, Feature: "assistente", Kind: "regia", Model: "proposta:" + tool,
+		Outcome: outcome, ConversationID: convID}
+	if convID == "" {
+		rec.Feature, rec.Kind = FeatureMCP, KindClient
+	}
+	s.record(ctx, tenantID, rec)
 	var out *ProposalView
 	err = s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
-		props, err := proposalsOf(ctx, tx, convID)
+		props, err := queryProposals(ctx, tx, `id = $1`, id)
 		if p, ok := props[id]; ok {
 			out = &p
 		}
@@ -593,7 +656,7 @@ func (s *Service) Decide(ctx context.Context, tenantID string, actor engine.Acto
 // PurgeExpired cancella in tutti i tenant le conversazioni ferme da più di retention_days
 // giorni (90 se il tenant non ha impostazioni). Restituisce quante ne ha cancellate.
 func (s *Service) PurgeExpired(ctx context.Context) (int64, error) {
-	rows, err := s.o.DB.Owner.Query(ctx, `select distinct tenant_id::text from ai_conversations`)
+	rows, err := s.o.DB.Owner.Query(ctx, `select tenant_id::text from ai_conversations union select tenant_id::text from ai_proposals where conversation_id is null`)
 	if err != nil {
 		return 0, err
 	}
@@ -607,7 +670,13 @@ func (s *Service) PurgeExpired(ctx context.Context) (int64, error) {
 		err := s.o.DB.InTenant(ctx, t, db.TenantOpts{}, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(ctx, `delete from ai_conversations where updated_at < now() - make_interval(days =>
 				coalesce((select retention_days from ai_settings where tenant_id = app_tenant()), 90))`)
+			if err != nil {
+				return err
+			}
 			total += tag.RowsAffected()
+			// Le proposte dei client MCP non hanno conversazione: scadono dalla loro creazione.
+			_, err = tx.Exec(ctx, `delete from ai_proposals where conversation_id is null and created_at < now() - make_interval(days =>
+				coalesce((select retention_days from ai_settings where tenant_id = app_tenant()), 90))`)
 			return err
 		})
 		if err != nil {
