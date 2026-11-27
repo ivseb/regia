@@ -49,6 +49,8 @@ type ondata2Env struct {
 	ctx            context.Context
 	obj            func(any) map[string]any
 	list           func(any) []any
+	// api è il server, per i lavori in background (wiki personale, ondata 4).
+	api *api.Server
 }
 
 func newOndata2(t *testing.T, prefix string) *ondata2Env {
@@ -81,7 +83,7 @@ func newOndata2(t *testing.T, prefix string) *ondata2Env {
 	})
 	srv := httptest.NewServer(apiSrv.Handler())
 	t.Cleanup(srv.Close)
-	e := &ondata2Env{d: d, srv: srv, slug: slug, ctx: ctx,
+	e := &ondata2Env{d: d, srv: srv, slug: slug, ctx: ctx, api: apiSrv,
 		obj:  func(v any) map[string]any { m, _ := v.(map[string]any); return m },
 		list: func(v any) []any { l, _ := v.([]any); return l }}
 	if err := d.Owner.QueryRow(ctx, `select id::text from tenants where slug = $1`, slug).Scan(&e.tid); err != nil {

@@ -166,6 +166,8 @@ func (s *Server) notify(next http.Handler) http.Handler {
 			r.URL.Path == MCPPath || r.URL.Path == "/api/v1/ai/graph" ||
 			// Assistente nella scheda: riassunto, mancanze, bozze e analisi alla creazione sono letture.
 			r.URL.Path == "/api/v1/ai/card" || r.URL.Path == "/api/v1/ai/card/triage" ||
+			// Wiki personale: è della persona (solo la promozione a Knowledge cambia le viste degli altri).
+			(strings.HasPrefix(r.URL.Path, "/api/v1/wiki") && !strings.HasSuffix(r.URL.Path, "/promote")) ||
 			// Salvataggio automatico dei questionari e controllo dei modelli: non cambiano le viste degli altri.
 			(strings.HasPrefix(r.URL.Path, "/api/v1/reviews/") && strings.HasSuffix(r.URL.Path, "/answers")) || r.URL.Path == "/api/v1/review-config/templates/validate" {
 			return

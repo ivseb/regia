@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"regia/internal/ai/tools"
+	"regia/internal/ai/wiki"
 	"regia/internal/engine"
 	"regia/internal/platform/audit"
 	"regia/internal/platform/db"
@@ -297,10 +298,15 @@ func (s *Service) AskStream(ctx context.Context, tenantID string, actor engine.A
 		conv    *Conversation
 		history []ChatMessage
 		names   []string
+		wctx    string
 	)
-	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
+	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true, Member: actor.MemberID}, func(tx pgx.Tx) error {
 		var err error
 		if target, _, err = s.Resolve(ctx, tx, "assistente"); err != nil {
+			return err
+		}
+		// Le pagine pertinenti della wiki personale (ondata 4) entrano come dato con la domanda.
+		if wctx, err = wikiContext(ctx, tx, actor.MemberID, in.Question, wiki.Cited(in.Question)); err != nil {
 			return err
 		}
 		if in.ConversationID != "" {
@@ -339,7 +345,11 @@ func (s *Service) AskStream(ctx context.Context, tenantID string, actor engine.A
 	for i := range msgs {
 		msgs[i].Text = masker.Mask(msgs[i].Text)
 	}
-	msgs = append(msgs, Message{Role: RoleUser, Text: masker.Mask(in.Question)})
+	q := in.Question
+	if wctx != "" {
+		q = wctx + "\n\n" + q
+	}
+	msgs = append(msgs, Message{Role: RoleUser, Text: masker.Mask(q)})
 
 	// Conversazione nuova: si crea prima della prima chiamata, così il registro la cita. Se la
 	// domanda non arriva a una risposta, la conversazione nuova e vuota si toglie.
@@ -709,6 +719,12 @@ func (s *Service) Run(ctx context.Context, interval time.Duration, log *slog.Log
 			log.Warn("conservazione delle conversazioni AI", "errore", err)
 		} else if n > 0 {
 			log.Info("conversazioni AI scadute cancellate", "numero", n)
+		}
+		// Wiki personali: storia, pagine tolte e fonti usate oltre la conservazione del tenant.
+		if n, err := s.PurgeWiki(ctx); err != nil {
+			log.Warn("conservazione delle wiki personali", "errore", err)
+		} else if n > 0 {
+			log.Info("storia delle wiki personali scaduta cancellata", "righe", n)
 		}
 	}
 	run()

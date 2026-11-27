@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"regia/internal/ai/tools"
+	"regia/internal/ai/wiki"
 	"regia/internal/engine"
 	"regia/internal/platform/db"
 )
@@ -196,10 +197,14 @@ func (s *Service) GraphQuestion(ctx context.Context, tenantID string, actor engi
 		target  *Target
 		catalog string
 		names   []string
+		wctx    string
 	)
-	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
+	err := s.o.DB.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true, Member: actor.MemberID}, func(tx pgx.Tx) error {
 		var err error
 		if target, _, err = s.Resolve(ctx, tx, "domande_grafo"); err != nil {
+			return err
+		}
+		if wctx, err = wikiContext(ctx, tx, actor.MemberID, in.Question, wiki.Cited(in.Question)); err != nil {
 			return err
 		}
 		if catalog, err = s.graphCatalog(ctx, tx); err != nil {
@@ -220,7 +225,12 @@ func (s *Service) GraphQuestion(ctx context.Context, tenantID string, actor engi
 	// Istruzioni e catalogo prima, identici fra le domande dello stesso tenant: con Anthropic
 	// stanno nella cache del prompt.
 	system := fmt.Sprintf(graphPrompt, langName(lang)) + "\n\n" + tools.Data("catalogo", masker.Mask(catalog))
-	msgs := []Message{{Role: RoleUser, Text: masker.Mask(in.Question)}}
+	q := in.Question
+	if wctx != "" {
+		// La wiki della persona aiuta a capire «i miei progetti», «il comitato»…
+		q = wctx + "\n\n" + q
+	}
+	msgs := []Message{{Role: RoleUser, Text: masker.Mask(q)}}
 	meta := CallMeta{TenantID: tenantID, Actor: actor}
 	ask := func() (string, string, error) {
 		resp, err := s.Call(ctx, target, Request{System: system, Messages: msgs, MaxTokens: 2000}, meta)

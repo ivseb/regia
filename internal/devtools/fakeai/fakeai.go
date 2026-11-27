@@ -383,8 +383,86 @@ func cardRules(req ai.Request) Step {
 	return Step{Text: text}
 }
 
+var wikiCtxRe = regexp.MustCompile(`(?s)<dati origine="wiki personale">.*?</dati>\s*`)
+
+// withoutWiki toglie dai messaggi il contesto della wiki personale, così le regole dell'assistente
+// e delle domande sul grafo leggono solo la domanda della persona.
+func withoutWiki(req ai.Request) ai.Request {
+	msgs := make([]ai.Message, len(req.Messages))
+	for i, m := range req.Messages {
+		m.Text = wikiCtxRe.ReplaceAllString(m.Text, "")
+		msgs[i] = m
+	}
+	req.Messages = msgs
+	return req
+}
+
+var (
+	wikiElemRe = regexp.MustCompile(`(?m)^([A-Z][A-Z0-9_]{0,19}-[1-9][0-9]*) · ([^·\n]+) · ([^·\n]*) · ([^·\n]+?)(?: · .*)?$`)
+	wikiConvRe = regexp.MustCompile(`(?m)^\[(\d{4}-\d{2}-\d{2}), «[^»]*»\] (Domanda|Risposta): (.+)$`)
+)
+
+// wikiRules aggiorna la wiki in modo deterministico: «Le mie priorità» con gli elementi delle
+// fonti, una pagina per ogni progetto, «Registro delle decisioni» con le frasi delle
+// conversazioni che parlano di una decisione. Dopo i risultati degli strumenti conclude.
+func wikiRules(req ai.Request) Step {
+	last := req.Messages[len(req.Messages)-1]
+	if len(last.ToolResults) > 0 {
+		n := 0
+		var errs []string
+		for _, r := range last.ToolResults {
+			if r.IsError {
+				errs = append(errs, r.Content)
+			} else if strings.Contains(r.Content, "salvata") {
+				n++
+			}
+		}
+		if len(errs) > 0 {
+			return Step{Text: fmt.Sprintf("Aggiornate %d pagine; non riuscite: %s", n, strings.Join(errs, "; "))}
+		}
+		return Step{Text: fmt.Sprintf("Aggiornate %d pagine della wiki.", n)}
+	}
+	bl := blocks(last.Text)
+	var prio []string
+	var calls []Call
+	for _, origin := range []string{"elementi seguiti o creati, cambiati dall'ultimo aggiornamento", "aggiunte a mano"} {
+		for _, m := range wikiElemRe.FindAllStringSubmatch(bl[origin], -1) {
+			key, typ, state, title := m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3]), strings.TrimSpace(m[4])
+			prio = append(prio, fmt.Sprintf("- %s — %s (%s)", key, title, state))
+			if strings.Contains(strings.ToLower(typ), "progetto") || strings.Contains(strings.ToLower(typ), "project") {
+				calls = append(calls, Call{Name: "wiki_scrivi", Input: map[string]any{"pagina": title,
+					"testo": fmt.Sprintf("Progetto %s, fase %s.\n\nDa seguire: avanzamento e decisioni.", key, state), "nota": "progetto " + key}})
+			}
+		}
+	}
+	var decisions []string
+	for _, m := range wikiConvRe.FindAllStringSubmatch(bl["conversazioni con l'assistente"], -1) {
+		if strings.Contains(strings.ToLower(m[3]), "decis") {
+			decisions = append(decisions, fmt.Sprintf("- %s: %s", m[1], m[3]))
+		}
+	}
+	if len(prio) > 0 {
+		calls = append([]Call{{Name: "wiki_scrivi", Input: map[string]any{"pagina": "Le mie priorità",
+			"testo": "Elementi da seguire:\n\n" + strings.Join(prio, "\n"), "nota": "priorità dalle fonti"}}}, calls...)
+	}
+	if len(decisions) > 0 {
+		calls = append(calls, Call{Name: "wiki_scrivi", Input: map[string]any{"pagina": "Registro delle decisioni",
+			"testo": strings.Join(decisions, "\n"), "nota": "decisioni dalle conversazioni"}})
+	}
+	if len(calls) == 0 {
+		return Step{Text: "Niente da aggiornare."}
+	}
+	return Step{Calls: calls}
+}
+
 // rules è il comportamento a regole dei modelli non programmati.
 func rules(req ai.Request) Step {
+	if strings.Contains(req.System, ai.WikiMarker) {
+		return wikiRules(req)
+	}
+	if !strings.Contains(req.System, "Lavori sulla scheda di un elemento") {
+		req = withoutWiki(req)
+	}
 	if strings.Contains(req.System, GraphMarker) {
 		return graphRules(req)
 	}

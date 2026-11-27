@@ -141,6 +141,8 @@ func cmdServe(ctx context.Context, args []string) error {
 	})
 	// AI: conservazione delle conversazioni (retention_days del tenant, 90 di default).
 	go apiSrv.AI().Run(ctx, time.Hour, log)
+	// Wiki personali (ondata 4): aggiornamento con l'AI per chi l'ha acceso o l'ha chiesto.
+	go apiSrv.AI().RunWiki(ctx, 5*time.Minute, log)
 	go grcSvc.RunRecompute(ctx, rt.db, time.Hour, log)
 	// Metriche DORA: ricalcolo orario dei punti di metric_points (DevSecOps, fase 5a).
 	go dsoSvc.RunDora(ctx, rt.db, time.Hour, log)

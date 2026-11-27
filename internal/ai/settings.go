@@ -45,7 +45,8 @@ var Features = []Feature{
 	{Key: "mancanze", Tier: TierDeep, Active: true},
 	{Key: "bozze", Tier: TierDeep, Active: true},
 	{Key: "classificazione", Tier: TierFast, Active: true},
-	{Key: "wiki", Tier: TierFast, NeedsTools: true},
+	// Wiki personale (ondata 4): aggiornamento in background con gli strumenti di lettura.
+	{Key: "wiki", Tier: TierFast, NeedsTools: true, Active: true},
 	{Key: "grc", Tier: TierDeep, NeedsTools: true},
 }
 

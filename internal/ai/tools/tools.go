@@ -24,6 +24,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"regia/internal/ai/wiki"
 	"regia/internal/engine"
 	"regia/internal/modules/architecture"
 	"regia/internal/modules/collab"
@@ -612,6 +613,9 @@ var all = []Tool{
 	{Name: "leggi", Description: "Legge un elemento per chiave (DEM-12) o codice (APP-MOB): campi, descrizione, collegamenti e ultimi commenti.",
 		Schema:  obj(map[string]any{"elemento": str("chiave o codice dell'elemento")}, "elemento"),
 		prepare: prepareRead},
+	{Name: "wiki", Description: "Legge la wiki personale della persona (le sue pagine di appunti su progetti, comitati, priorità e decisioni). Senza input elenca le pagine; con «pagina» (titolo) ne legge il testo; con «testo» cerca nelle pagine. Solo la wiki della persona, mai quella degli altri.",
+		Schema:  obj(map[string]any{"pagina": str("titolo della pagina da leggere"), "testo": str("parole da cercare nelle pagine")}),
+		prepare: prepareWiki},
 	{Name: "crea", Write: true, Description: "Propone di creare un elemento di lavoro (task, story, bug, epic) in uno spazio. La persona conferma prima che sia creato.",
 		Schema: obj(map[string]any{"spazio": str("chiave dello spazio di lavoro"), "tipo": str("task, story, bug o epic"), "titolo": str("titolo"),
 			"testo": str("descrizione"), "genitore": str("chiave dell'elemento genitore, facoltativa")}, "spazio", "titolo"),
@@ -629,4 +633,52 @@ var all = []Tool{
 		Schema: obj(map[string]any{"elemento": str("chiave dell'elemento"), "durata": str("durata, per esempio 1h30, 2h, 45m"),
 			"data": str("giorno AAAA-MM-GG, vuoto = oggi"), "nota": str("nota facoltativa")}, "elemento", "durata"),
 		prepare: prepareTime, apply: applyTime},
+}
+
+// ---------------------------------------------------------------------
+// Wiki personale (ondata 4): sola lettura, solo le pagine della persona
+// ---------------------------------------------------------------------
+
+type wikiIn struct {
+	Page string `json:"pagina"`
+	Text string `json:"testo"`
+}
+
+func prepareWiki(ctx context.Context, s *Services, tx pgx.Tx, env Env, in json.RawMessage) (*Result, error) {
+	var x wikiIn
+	if err := decode(in, &x); err != nil {
+		return nil, err
+	}
+	if env.Actor.MemberID == "" {
+		return nil, bad("la wiki è della persona: serve un membro")
+	}
+	x.Page, x.Text = strings.TrimSpace(x.Page), strings.TrimSpace(x.Text)
+	if x.Page != "" {
+		p, err := wiki.FindByTitle(ctx, tx, env.Actor.MemberID, x.Page)
+		if errors.Is(err, wiki.ErrNotFound) {
+			return nil, bad("nella wiki non c'è una pagina «%s»: chiama wiki senza input per l'elenco", clip(x.Page, 120))
+		}
+		if err != nil {
+			return nil, err
+		}
+		head := fmt.Sprintf("titolo: %s\nversione: %d\nultima modifica: %s, %s\n\n", p.Title, p.Version, p.UpdatedBy, p.UpdatedAt.Format("2006-01-02"))
+		return &Result{Text: Data("wiki: "+p.Title, head+p.Body)}, nil
+	}
+	pages, err := wiki.All(ctx, tx, env.Actor.MemberID)
+	if err != nil {
+		return nil, err
+	}
+	var b strings.Builder
+	n := 0
+	for _, p := range pages {
+		if x.Text != "" && len(wiki.Pertinent([]wiki.Page{p}, x.Text, nil, 1<<20)) == 0 {
+			continue
+		}
+		n++
+		fmt.Fprintf(&b, "%s · v%d · %s · %s\n", p.Title, p.Version, p.UpdatedAt.Format("2006-01-02"), wiki.Excerpt(p.Body, 160))
+	}
+	if n == 0 {
+		b.WriteString("nessuna pagina\n")
+	}
+	return &Result{Text: Data("wiki", strings.TrimSpace(b.String()))}, nil
 }

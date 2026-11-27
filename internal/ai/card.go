@@ -107,6 +107,8 @@ type cardCtx struct {
 	refs     []tools.Ref
 	reporter string
 	text     string
+	// wiki: le pagine pertinenti della wiki personale, già delimitate come dato.
+	wiki string
 }
 
 func (c *cardCtx) refByKey(key string) *tools.Ref {
@@ -412,7 +414,14 @@ func (s *Service) Card(ctx context.Context, tenantID string, actor engine.Actor,
 		if target, masker, err = s.cardTarget(ctx, tx, feature); err != nil {
 			return err
 		}
-		c, err = s.loadCard(ctx, tx, actor, in.Element)
+		if c, err = s.loadCard(ctx, tx, actor, in.Element); err != nil {
+			return err
+		}
+		keys := make([]string, 0, len(c.refs))
+		for _, r := range c.refs {
+			keys = append(keys, r.Key)
+		}
+		c.wiki, err = wikiContext(ctx, tx, actor.MemberID, c.el.Title, keys)
 		return err
 	})
 	if err != nil {
@@ -434,6 +443,10 @@ func (s *Service) Card(ctx context.Context, tenantID string, actor engine.Actor,
 	}
 	if in.Hint != "" {
 		user += "\n\n" + tools.Data("indicazioni della persona", masker.Mask(in.Hint))
+	}
+	if c.wiki != "" {
+		// Le pagine della wiki personale che citano l'elemento o i suoi collegamenti (ondata 4).
+		user += "\n\n" + masker.Mask(c.wiki)
 	}
 	// Istruzioni fisse prima (cache del prompt), il compito e i dati dopo.
 	system := fmt.Sprintf(cardSystem, langName(lang)) + "\n\n" + task

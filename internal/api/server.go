@@ -314,6 +314,7 @@ func (s *Server) Handler() http.Handler {
 	s.guideRoutes(mux)
 	s.projectRoutes(mux)
 	s.aiRoutes(mux)
+	s.wikiRoutes(mux)
 
 	mux.HandleFunc("GET /api/v1/types/{key}", inTenant(s.getType))
 	mux.HandleFunc("GET /api/v1/elements", inTenant(s.search))
