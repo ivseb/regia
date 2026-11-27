@@ -121,8 +121,8 @@ function streamError(p: { status?: number; code?: string; detail?: string; field
 
 /**
  * Domanda all'assistente con la risposta in streaming (Server-Sent Events): onEvent riceve i
- * pezzi del testo e gli strumenti usati, la promessa il risultato finale. Se lo streaming non
- * arriva (un proxy che lo blocca), si ripiega sulla domanda normale.
+ * pezzi del testo e gli strumenti usati, la promessa il risultato finale. Se arriva una risposta
+ * JSON invece dello streaming, si usa quella.
  */
 export async function askStream(question: string, conversation_id: string | undefined, onEvent: (e: AskEvent) => void, signal?: AbortSignal): Promise<AskResult> {
   const res = await fetch("/api/v1/ai/ask", {
@@ -137,7 +137,8 @@ export async function askStream(question: string, conversation_id: string | unde
       const problem = await res.json().catch(() => ({ status: res.status }));
       throw streamError({ status: res.status, ...problem });
     }
-    return aiApi.ask(question, conversation_id);
+    // Risposta normale (JSON): un proxy ha tolto lo streaming, il risultato è già qui.
+    return (await res.json()) as AskResult;
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buf = "";
