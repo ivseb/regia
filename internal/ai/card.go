@@ -85,7 +85,7 @@ type CardResult struct {
 	// Text: il riassunto o la bozza (Markdown leggero, le chiavi diventano link).
 	Text string `json:"text,omitempty"`
 	// Gaps: per «mancanze», prima quelle trovate da Regia, poi quelle del modello.
-	Gaps []CardGap  `json:"gaps,omitempty"`
+	Gaps []CardGap   `json:"gaps,omitempty"`
 	Refs []tools.Ref `json:"refs"`
 	// Unverified: elementi o campi citati dal modello che non esistono nel contesto (tolti).
 	Unverified int    `json:"unverified,omitempty"`

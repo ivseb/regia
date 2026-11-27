@@ -47,7 +47,10 @@ func TestAIScheda(t *testing.T) {
 		}
 	}
 	feats := e.list(e.admin.do("GET", "/api/v1/ai/settings", nil, http.StatusOK)["features"])
-	if !slices.ContainsFunc(feats, func(f any) bool { m := e.obj(f); return m["key"] == "mancanze" && m["active"] == true && m["tier"] == "approfondito" }) {
+	if !slices.ContainsFunc(feats, func(f any) bool {
+		m := e.obj(f)
+		return m["key"] == "mancanze" && m["active"] == true && m["tier"] == "approfondito"
+	}) {
 		t.Fatalf("funzione «mancanze» nelle impostazioni: %v", feats)
 	}
 
