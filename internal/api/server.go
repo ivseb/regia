@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"regia/internal/ai"
 	"regia/internal/engine"
 	"regia/internal/engine/approval"
 	"regia/internal/engine/notify"
@@ -112,6 +113,8 @@ type Server struct {
 	prob *problems.Service
 	// Vista DPO (privacy.go).
 	privacy *privacy.Service
+	// AI: impostazioni, assistente e strumenti (ai.go; replica/ai.md).
+	ai *ai.Service
 }
 
 type Options struct {
@@ -184,6 +187,8 @@ type Options struct {
 	// ai connettori API di raggiungere indirizzi interni (Jira o YouTrack on-premise).
 	Importer           *importer.Service
 	ImportAllowPrivate bool
+	// AI (ai.go): nil = servizio creato qui, con il fornitore finto solo se Dev.
+	AI *ai.Service
 }
 
 func New(o Options) *Server {
@@ -265,8 +270,13 @@ func New(o Options) *Server {
 	s.prob = problems.New(o.Engine)
 	// Vista DPO (ondata 3): trattamenti, DPIA, violazioni e flussi di dati.
 	s.privacy = privacy.New()
+	// AI (replica/ai.md, ondata 1): dopo i moduli, perché gli strumenti li usano.
+	s.aiInit(o)
 	return s
 }
+
+// AI è il servizio dell'AI (per il job di conservazione in serve.go).
+func (s *Server) AI() *ai.Service { return s.ai }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -303,6 +313,7 @@ func (s *Server) Handler() http.Handler {
 	s.percorsoRichiestaRoutes(mux)
 	s.guideRoutes(mux)
 	s.projectRoutes(mux)
+	s.aiRoutes(mux)
 
 	mux.HandleFunc("GET /api/v1/types/{key}", inTenant(s.getType))
 	mux.HandleFunc("GET /api/v1/elements", inTenant(s.search))
