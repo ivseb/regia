@@ -10,6 +10,7 @@ import (
 
 	"regia/internal/engine"
 	"regia/internal/modules/architecture"
+	"regia/internal/modules/continuity"
 	"regia/internal/modules/demand"
 	"regia/internal/modules/finance"
 	"regia/internal/modules/grc"
@@ -81,7 +82,8 @@ type provisionFn = func(ctx context.Context, tx pgx.Tx, adminMemberID string) er
 // avvioProvisioners sono le Provision dei moduli, nello stesso ordine di cmd/regia/tenant.go.
 func avvioProvisioners() []provisionFn {
 	return []provisionFn{demand.Provision, architecture.Provision, portfolio.Provision, finance.Provision, reviews.Provision,
-		work.Provision, projects.Provision, requirements.Provision, risk.Provision, grc.Provision, knowledge.Provision}
+		work.Provision, projects.Provision, requirements.Provision, risk.Provision, grc.Provision, knowledge.Provision,
+		continuity.Provision}
 }
 
 func (b avvioBody) name(lang string) string {

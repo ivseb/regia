@@ -51,6 +51,7 @@ const DEFS: Def[] = [
   { id: "catalogs", goal: "compliance", to: "/conformita", search: { tab: "cataloghi" }, perms: ["grc.read", "grc.admin"] },
   { id: "requirements", goal: "compliance", to: "/configurazione/requisiti", perms: ["process.admin"] },
   { id: "risks", goal: "compliance", to: "/rischi", search: { tab: "configurazione" }, perms: ["element.read"] },
+  { id: "continuity", goal: "compliance", to: "/configurazione/continuita", perms: ["continuity.admin", "tenant.admin"] },
   { id: "webhooks", goal: "integrations", to: "/configurazione/webhook", perms: ["tenant.admin"] },
   { id: "github", goal: "integrations", to: "/configurazione/integrazioni/github", perms: ["tenant.admin"] },
   { id: "gitlab", goal: "integrations", to: "/configurazione/integrazioni/gitlab", perms: ["tenant.admin"] },

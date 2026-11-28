@@ -411,6 +411,8 @@ type Contract struct {
 	ExitTestedOn       *string         `json:"exit_tested_on"`
 	GoverningLaw       *string         `json:"governing_law"`
 	AutoRenewal        bool            `json:"auto_renewal"`
+	RTOMinutes         *int            `json:"rto_minutes"`
+	RPOMinutes         *int            `json:"rpo_minutes"`
 	Applications       []Ref           `json:"applications"`
 	DaysToEnd          *int            `json:"days_to_end"`
 	Expiring           bool            `json:"expiring"`
@@ -428,7 +430,8 @@ type Subcontractor struct {
 const selectContract = `
 	select c.id::text, c.provider_element_id::text, s.key || '-' || e.number, e.title, c.reference, c.service_type, c.services, c.functions,
 	       c.supports_critical_function, c.criticality, c.start_date, c.end_date, c.notice_days, c.annual_cost_cents, c.currency::text,
-	       c.data_locations, c.processing_locations, c.subcontractors, c.exit_strategy, c.exit_tested_on, c.governing_law, c.auto_renewal
+	       c.data_locations, c.processing_locations, c.subcontractors, c.exit_strategy, c.exit_tested_on, c.governing_law, c.auto_renewal,
+	       c.rto_minutes, c.rpo_minutes
 	from ict_contracts c
 	join elements e on e.tenant_id = c.tenant_id and e.id = c.provider_element_id and e.deleted_at is null
 	join spaces s on s.tenant_id = e.tenant_id and s.id = e.space_id`
@@ -441,7 +444,8 @@ func (s *Service) scanContracts(ctx context.Context, tx pgx.Tx, rows pgx.Rows, n
 		var subs []byte
 		if err := rows.Scan(&c.ID, &c.ProviderID, &c.ProviderKey, &c.Provider, &c.Reference, &c.ServiceType, &c.Services, &c.Functions,
 			&c.CriticalFunction, &c.Criticality, &start, &end, &c.NoticeDays, &c.AnnualCostCents, &c.Currency,
-			&c.DataLocations, &c.ProcessingLocation, &subs, &c.ExitStrategy, &tested, &c.GoverningLaw, &c.AutoRenewal); err != nil {
+			&c.DataLocations, &c.ProcessingLocation, &subs, &c.ExitStrategy, &tested, &c.GoverningLaw, &c.AutoRenewal,
+			&c.RTOMinutes, &c.RPOMinutes); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -503,6 +507,20 @@ type ContractInput struct {
 	GoverningLaw        *string          `json:"governing_law"`
 	AutoRenewal         *bool            `json:"auto_renewal"`
 	Applications        *[]string        `json:"applications"`
+	// Impegno contrattuale di ripristino (continuità operativa): presente e null = cancellato.
+	RTOMinutes optMinutes `json:"rto_minutes"`
+	RPOMinutes optMinutes `json:"rpo_minutes"`
+}
+
+// optMinutes distingue un campo assente da uno messo a null.
+type optMinutes struct {
+	Set bool
+	V   *int
+}
+
+func (o *optMinutes) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	return json.Unmarshal(b, &o.V)
 }
 
 func countries(field string, in []string) ([]string, error) {
@@ -656,6 +674,17 @@ func (s *Service) SaveContract(ctx context.Context, tx pgx.Tx, actor engine.Acto
 			return nil, engine.Duplicate("reference", "c'è già un contratto con questo riferimento")
 		}
 		return nil, err
+	}
+	for col, o := range map[string]optMinutes{"rto_minutes": in.RTOMinutes, "rpo_minutes": in.RPOMinutes} {
+		if !o.Set {
+			continue
+		}
+		if o.V != nil && (*o.V < 0 || *o.V > 5256000) {
+			return nil, engine.OutOfRange(col, 0, 5256000, "minuti fuori intervallo")
+		}
+		if _, err := tx.Exec(ctx, "update ict_contracts set "+col+" = $2 where id = $1", id, o.V); err != nil {
+			return nil, err
+		}
 	}
 	if in.Applications != nil {
 		if _, err := tx.Exec(ctx, "delete from ict_contract_applications where contract_id = $1", id); err != nil {

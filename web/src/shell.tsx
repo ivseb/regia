@@ -483,6 +483,7 @@ const MODULE_NAMES: Record<ModuleKey, Key> = {
   devsecops: "shell.module.devsecops",
   grc: "shell.module.grc",
   architecture: "shell.module.architecture",
+  continuity: "continuita.module.name",
 };
 
 /** Pagina di un modulo spento per l'organizzazione: dice perché e dove si riaccende. */

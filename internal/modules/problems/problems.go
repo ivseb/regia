@@ -43,6 +43,30 @@ var Kinds = []string{KindFinding, KindGate, KindRequirement, KindAdherence}
 // Actions sono le azioni che un collegamento può registrare.
 var Actions = []string{"work_item", "exception", "override", "adoption_pr"}
 
+// Subject è un problema di un tipo registrato da un altro modulo: applicazione e team a cui va il
+// lavoro, elemento da collegare oltre all'applicazione, testi già nella lingua di chi agisce.
+type Subject struct {
+	App, Team, Element string
+	Label              string
+	Title, Body        string
+	Reason             string
+	Extra              map[string]string
+}
+
+// Resolver legge un problema del suo tipo dal riferimento.
+type Resolver func(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) (*Subject, error)
+
+var resolvers = map[string]Resolver{}
+
+// RegisterKind aggiunge un tipo di problema (per esempio «continuity» della continuità operativa).
+// Va chiamata all'avvio, prima di servire le richieste.
+func RegisterKind(kind string, fn Resolver) {
+	resolvers[kind] = fn
+	if !slices.Contains(Kinds, kind) {
+		Kinds = append(Kinds, kind)
+	}
+}
+
 // Service è il modulo.
 type Service struct {
 	eng *engine.Service
@@ -98,10 +122,12 @@ type Context struct {
 }
 
 type subject struct {
-	label string
-	app   string // id dell'applicazione
-	team  string // team proposto
-	extra map[string]string
+	// custom: problema di un tipo registrato da un altro modulo (RegisterKind), con i suoi testi.
+	custom *Subject
+	label  string
+	app    string // id dell'applicazione
+	team   string // team proposto
+	extra  map[string]string
 	// elemento a cui collegare il lavoro oltre all'applicazione (il requisito)
 	element string
 }
@@ -214,7 +240,18 @@ func (s *Service) resolve(ctx context.Context, tx pgx.Tx, actor engine.Actor, ki
 		sub.label = el.Title
 		sub.extra["controls"] = strings.TrimSpace(control)
 	default:
-		return nil, engine.InvalidValue("kind", "tipo di problema non ammesso (%s)", strings.Join(Kinds, ", "))
+		fn, ok := resolvers[kind]
+		if !ok {
+			return nil, engine.InvalidValue("kind", "tipo di problema non ammesso (%s)", strings.Join(Kinds, ", "))
+		}
+		c, err := fn(ctx, tx, actor, ref)
+		if err != nil {
+			return nil, err
+		}
+		sub.custom, sub.label, sub.app, sub.team, sub.element = c, c.Label, c.App, c.Team, c.Element
+		for k, v := range c.Extra {
+			sub.extra[k] = v
+		}
 	}
 	if sub.app != "" && sub.team == "" {
 		_ = tx.QueryRow(ctx, `select owner_team_id::text from ext_application where element_id = $1`, sub.app).Scan(&sub.team)
@@ -253,6 +290,9 @@ func compose(ctx context.Context, kind string, sub *subject, app *AppRef) (title
 		name = app.Title
 	}
 	x := sub.extra
+	if c := sub.custom; c != nil {
+		return c.Title, c.Body, c.Reason
+	}
 	switch kind {
 	case KindFinding:
 		p := i18n.P{"cve": x["cve"], "app": name, "severity": x["severity"], "package": x["package"], "version": x["version"], "fixed": orDash(lang, x["fixed_in"]), "due": x["due"]}

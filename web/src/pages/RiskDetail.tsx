@@ -24,6 +24,8 @@ import { RiskControlsPanel } from "./ControlLiving";
 import { Countdown, Fact, Facts, Heatmap, RefList, ScoreBadge, dateTime, euroCents, fromLocalInput, toLocalInput } from "./riskUi";
 import { tr } from "../i18n/core";
 import { loc } from "../i18n/format";
+import { fmtMinutes } from "../continuityModel";
+import { DurationInput } from "./continuita/ui";
 
 export default function GrcDetail({ refKey, type }: { refKey: string; type: string }) {
   if (type === "risk") return <RiskDetail refKey={refKey} />;
@@ -1069,6 +1071,9 @@ function ContractBlock({ c, p, refKey }: { c: Contract; p: ProviderView; refKey:
           {c.exit_tested_on && <span className="block text-[12px] text-muted">{tr("governance.riskdetail.provata_il", { date: date(c.exit_tested_on) })}</span>}
         </Fact>
         <Fact k={tr("governance.riskdetail.legge_applicabile")}>{c.governing_law ?? "—"}</Fact>
+        <Fact k={tr("continuita.contract.commitment")}>
+          {tr("continuita.contract.values", { rto: fmtMinutes(c.rto_minutes), rpo: fmtMinutes(c.rpo_minutes) })}
+        </Fact>
         <Fact k={tr("governance.compliance.applicazioni")}>{c.applications.map((a) => a.title).join(", ") || "—"}</Fact>
       </Facts>
       <ErrorNote error={del.error} />
@@ -1105,6 +1110,8 @@ function ContractForm({ p, refKey, c, onDone }: { p: ProviderView; refKey: strin
     law: c?.governing_law ?? "",
     renewal: c?.auto_renewal ?? false,
     apps: c?.applications.map((a) => a.id) ?? [],
+    rto: c?.rto_minutes ?? null,
+    rpo: c?.rpo_minutes ?? null,
   });
   const save = useMutation({
     mutationFn: () => {
@@ -1132,6 +1139,8 @@ function ContractForm({ p, refKey, c, onDone }: { p: ProviderView; refKey: strin
         governing_law: f.law,
         auto_renewal: f.renewal,
         applications: f.apps,
+        rto_minutes: f.rto,
+        rpo_minutes: f.rpo,
       };
       return c ? riskApi.updateContract(c.id, body) : riskApi.createContract(refKey, body);
     },
@@ -1205,6 +1214,11 @@ function ContractForm({ p, refKey, c, onDone }: { p: ProviderView; refKey: strin
         {input(tr("governance.riskdetail.uscita_provata_il"), "tested", { type: "date" })}
         <label className="flex items-center gap-2 pb-2 text-[13px]">
           <input type="checkbox" checked={f.renewal} onChange={(e) => setF({ ...f, renewal: e.target.checked })} />{tr("governance.riskdetail.rinnovo_automatico_2")}</label>
+      </div>
+      {/* Impegno di ripristino del fornitore: lo legge la continuità operativa. */}
+      <div className="flex flex-wrap items-end gap-4">
+        <DurationInput label={tr("continuita.contract.rto")} value={f.rto} onChange={(m) => setF({ ...f, rto: m })} />
+        <DurationInput label={tr("continuita.contract.rpo")} value={f.rpo} onChange={(m) => setF({ ...f, rpo: m })} />
       </div>
       {p.application_refs.length > 0 && (
         <fieldset className="m-0 flex flex-wrap gap-x-4 gap-y-1 border-0 p-0">

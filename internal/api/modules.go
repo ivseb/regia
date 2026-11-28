@@ -77,6 +77,12 @@ var moduleDefs = []Module{
 		Effect:      "Spariscono mappa, capability e diagrammi; le loro API rispondono 404. Il catalogo delle applicazioni e degli asset resta in lettura, perché lo usano le altre aree.",
 		prefixes:    []string{"architecture"},
 	},
+	{
+		Key: "continuity", Name: "Continuità operativa",
+		Description: "BIA delle capability, RTO e RPO richiesti contro dichiarati, incoerenze lungo le dipendenze, piani di continuità e test di resilienza.",
+		Effect:      "Spariscono la scheda Continuità, il livello sulla mappa e i blocchi nelle applicazioni; le API della continuità rispondono 404. BIA e test restano come elementi.",
+		prefixes:    []string{"continuity"},
+	},
 }
 
 func moduleByKey(key string) (Module, bool) {

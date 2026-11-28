@@ -3,7 +3,7 @@
 // barra laterale, ⌘K e pagine; i suoi dati restano e le sue API rispondono 404.
 import { call, type Me } from "./api";
 
-export type ModuleKey = "demand" | "projects" | "work" | "knowledge" | "devsecops" | "grc" | "architecture";
+export type ModuleKey = "demand" | "projects" | "work" | "knowledge" | "devsecops" | "grc" | "architecture" | "continuity";
 
 export type ModuleInfo = {
   key: ModuleKey;
@@ -32,16 +32,25 @@ const MODULE_PATHS: Record<ModuleKey, string[]> = {
   devsecops: ["/devsecops", "/rilasci", "/change", "/configurazione/devsecops", "/configurazione/gate", "/configurazione/vulnerabilita", "/configurazione/integrazioni"],
   grc: ["/conformita", "/audit-spazio", "/privacy", "/rischi", "/crisi", "/elenco/rischi", "/elenco/incidenti", "/elenco/controlli"],
   architecture: ["/architettura", "/elenco/applicazioni", "/elenco/asset"],
+  // Continuità operativa: sta dentro Architettura, quindi vince il percorso più specifico.
+  continuity: ["/architettura/continuita", "/configurazione/continuita"],
 };
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
 
-/** Modulo a cui appartiene la pagina (undefined = pagina della piattaforma). */
+/** Modulo a cui appartiene la pagina (undefined = pagina della piattaforma); vince il percorso più lungo. */
 export function moduleOfPath(path: string): ModuleKey | undefined {
+  let best: ModuleKey | undefined;
+  let len = -1;
   for (const [key, bases] of Object.entries(MODULE_PATHS) as [ModuleKey, string[]][]) {
-    if (bases.some((b) => under(path, b))) return key;
+    for (const b of bases) {
+      if (under(path, b) && b.length > len) {
+        best = key;
+        len = b.length;
+      }
+    }
   }
-  return undefined;
+  return best;
 }
 
 /** Tipi di elemento che appartengono a un modulo (la ricerca ⌘K non cerca nei moduli spenti). */
@@ -53,6 +62,7 @@ export const MODULE_TYPES: Record<ModuleKey, string[]> = {
   devsecops: [],
   grc: ["risk", "incident", "ict_provider", "control", "evidence"],
   architecture: ["application", "logical_asset", "capability"],
+  continuity: ["bia", "resilience_test"],
 };
 
 /** Il modulo è acceso? Senza informazioni (versione vecchia del server) tutto è acceso. */

@@ -746,6 +746,60 @@ const eaDiagramRoute = createRoute({
   },
 }); // i18n-ok: codice TypeScript letto come testo
 const eaRoutes = [eaMapRoute, eaCapabilityRoute, eaDependenciesRoute, eaRationalizationRoute, eaDiagramsRoute, eaDiagramRoute];
+// Continuità operativa (docs/sviluppo/continuita.md): scheda di Architettura, BIA, piano dei test e configurazione.
+const ContinuityPage = lazy(() => import("./pages/continuita/ContinuityPage").then((m) => ({ default: m.ContinuityPage }))); // i18n-ok: codice TypeScript letto come testo
+const BiaListPage = lazy(() => import("./pages/continuita/BiaListPage").then((m) => ({ default: m.BiaListPage }))); // i18n-ok: codice TypeScript letto come testo
+const TestPlanPage = lazy(() => import("./pages/continuita/TestPlanPage").then((m) => ({ default: m.TestPlanPage }))); // i18n-ok: codice TypeScript letto come testo
+const ContinuityConfigPage = lazy(() => import("./pages/continuita/ContinuityConfigPage").then((m) => ({ default: m.ContinuityConfigPage }))); // i18n-ok: codice TypeScript letto come testo
+const continuityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/architettura/continuita",
+  validateSearch: (s: Record<string, unknown>): { capability?: string; team?: string; tipo?: string } => ({
+    capability: str(s.capability),
+    team: str(s.team),
+    tipo: str(s.tipo),
+  }),
+  component: function ContinuityRoute() {
+    const search = continuityRoute.useSearch();
+    return (
+      <Suspense fallback={eaLoading}>
+        <ContinuityPage search={search} />
+      </Suspense>
+    );
+  },
+}); // i18n-ok: codice TypeScript letto come testo
+const continuityBiaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/architettura/continuita/bia",
+  validateSearch: (s: Record<string, unknown>): { capability?: string } => ({ capability: str(s.capability) }),
+  component: function ContinuityBiaRoute() {
+    const { capability } = continuityBiaRoute.useSearch();
+    return (
+      <Suspense fallback={eaLoading}>
+        <BiaListPage capability={capability} />
+      </Suspense>
+    );
+  },
+}); // i18n-ok: codice TypeScript letto come testo
+const continuityTestsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/architettura/continuita/test",
+  validateSearch: (s: Record<string, unknown>): { anno?: number; riga?: string } => {
+    const y = num(s.anno);
+    return { anno: y && y >= 2000 && y <= 2100 ? y : undefined, riga: str(s.riga) };
+  },
+  component: function ContinuityTestsRoute() {
+    const search = continuityTestsRoute.useSearch();
+    return (
+      <Suspense fallback={eaLoading}>
+        <TestPlanPage search={search} />
+      </Suspense>
+    );
+  },
+}); // i18n-ok: codice TypeScript letto come testo
+const continuityConfigRoute = eaPage("/configurazione/continuita", ContinuityConfigPage);
+const continuityRoutes = [continuityRoute, continuityBiaRoute, continuityTestsRoute, continuityConfigRoute];
+
 // DevSecOps: connettore GitHub e profili di pipeline (Configurazione → Integrazioni → GitHub).
 const GitHubPage = lazyRouteComponent(() => import("./pages/GitHub"), "GitHubPage");
 type GitHubTabKey = "integrazioni" | "repository" | "profili" | "sincronizzazioni";
@@ -957,6 +1011,7 @@ export const router = createRouter({
     ...pipelineRoutes,
     ...knowledgeRoutes,
     ...eaRoutes,
+    ...continuityRoutes,
     risksRoute,
     crisisRoute,
     ...grcRoutes,

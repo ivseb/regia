@@ -1,0 +1,29 @@
+{
+  "format": "regia.process/v1",
+  "key": "bia_standard",
+  "name": "Ciclo di vita della BIA",
+  "description": "Pacchetto di partenza: la BIA di una capability si compila in bozza, passa in revisione e si approva; i valori approvati restano in vigore mentre si prepara la versione successiva.",
+  "type": "bia",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Bozza", "category": "todo", "color": "#6B7280", "description": "Impatti nel tempo, MTPD, RTO e RPO da compilare."},
+      {"name": "In revisione", "category": "in_progress", "color": "#6B4FC8", "description": "In attesa dell'approvazione."},
+      {"name": "Approvata", "category": "done", "color": "#3A7A1C", "description": "Valori in vigore per le applicazioni della capability."},
+      {"name": "Archiviata", "category": "cancelled", "color": "#1F2937", "off_path": true, "description": "Non più usata."}
+    ],
+    "initial": "Bozza",
+    "gates": [
+      {"key": "completa", "name": "BIA completa", "check": "bia_completa", "message": "compila tutta la griglia degli impatti e indica RTO e RPO"}
+    ],
+    "transitions": [
+      {"from": ["Bozza"], "to": "In revisione", "label": "Invia in revisione", "gates": ["completa"]},
+      {"from": ["In revisione"], "to": "Bozza", "label": "Rimanda in bozza", "comment_required": true},
+      {"from": ["In revisione"], "to": "Approvata", "label": "Approva", "system": true, "gates": ["completa"]},
+      {"from": ["Approvata"], "to": "Bozza", "label": "Aggiorna la BIA"},
+      {"from": ["Bozza", "In revisione", "Approvata"], "to": "Archiviata", "label": "Archivia", "comment_required": true},
+      {"from": ["Archiviata"], "to": "Bozza", "label": "Riapri"}
+    ]
+  }
+}
