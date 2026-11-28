@@ -3,23 +3,26 @@ package ai
 import "testing"
 
 // Il ragionamento della funzione vince; poi le richieste brevi ragionano poco; poi quello del
-// livello; in automatico il rapido poco e l'approfondito molto.
+// livello; in automatico il rapido poco e l'approfondito molto, o quanto dice la funzione.
 func TestEffortFor(t *testing.T) {
 	for _, c := range []struct {
-		route, tier string
-		deep, brief bool
-		want        string
+		route, tier, feature string
+		deep, brief          bool
+		want                 string
 	}{
-		{"", "", false, false, EffortLow},
-		{"", "", true, false, EffortHigh},
-		{"", "", true, true, EffortLow},
-		{"", EffortMedium, true, false, EffortMedium},
-		{"", EffortHigh, true, true, EffortLow},
-		{EffortHigh, "", true, true, EffortHigh},
-		{EffortMedium, EffortLow, false, false, EffortMedium},
+		{"", "", "", false, false, EffortLow},
+		{"", "", "", true, false, EffortHigh},
+		{"", "", "", true, true, EffortLow},
+		{"", EffortMedium, "", true, false, EffortMedium},
+		{"", EffortHigh, "", true, true, EffortLow},
+		{EffortHigh, "", "", true, true, EffortHigh},
+		{EffortMedium, EffortLow, "", false, false, EffortMedium},
+		{"", "", EffortMedium, true, false, EffortMedium},
+		{"", "", EffortMedium, false, false, EffortLow},
+		{"", EffortHigh, EffortMedium, true, false, EffortHigh},
 	} {
-		if got := effortFor(c.route, c.tier, c.deep, c.brief); got != c.want {
-			t.Errorf("effortFor(%q, %q, %v, %v) = %q, voluto %q", c.route, c.tier, c.deep, c.brief, got, c.want)
+		if got := effortFor(c.route, c.tier, c.feature, c.deep, c.brief); got != c.want {
+			t.Errorf("effortFor(%q, %q, %q, %v, %v) = %q, voluto %q", c.route, c.tier, c.feature, c.deep, c.brief, got, c.want)
 		}
 	}
 	if EffortOf(Request{Deep: true}) != EffortHigh || EffortOf(Request{Deep: true, Effort: EffortMedium}) != EffortMedium {

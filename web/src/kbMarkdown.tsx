@@ -78,7 +78,7 @@ export function headingsOf(md: string): Heading[] {
   return out;
 }
 
-type Ctx = { mentions: Mention[]; refs: Map<string, RefInfo>; mentionRe: RegExp | null };
+type Ctx = { mentions: Mention[]; refs: Map<string, RefInfo>; mentionRe: RegExp | null; codeRe: RegExp | null; compact?: boolean };
 
 function inline(text: string, ctx: Ctx, k: string): ReactNode[] {
   const parts = [
@@ -91,6 +91,7 @@ function inline(text: string, ctx: Ctx, k: string): ReactNode[] {
     "(\\[[^\\]\\n]+\\]\\([^)\\s]+\\))",
     "(https?:\\/\\/[^\\s<>()]+[^\\s<>().,;:!?'\"])",
     "(\\b[A-Z][A-Z0-9_]{1,19}-[1-9][0-9]{0,17}\\b)",
+    ctx.codeRe ? ctx.codeRe.source : "(\\u0000#never)",
   ];
   const re = new RegExp(parts.join("|"), "gu");
   const out: ReactNode[] = [];
@@ -100,7 +101,7 @@ function inline(text: string, ctx: Ctx, k: string): ReactNode[] {
     const at = m.index ?? 0;
     if (at > last) out.push(text.slice(last, at));
     const key = `${k}-${i++}`;
-    const [all, mention, code, image, bold, strike, italic, link, url, elKey] = m;
+    const [all, mention, code, image, bold, strike, italic, link, url, elKey, extraCode] = m;
     if (mention) {
       out.push(<span key={key} className="font-semibold text-accent">{mention}</span>);
     } else if (code) {
@@ -153,6 +154,8 @@ function inline(text: string, ctx: Ctx, k: string): ReactNode[] {
       );
     } else if (elKey) {
       out.push(<ElementRef key={key} k={elKey} info={ctx.refs.get(elKey)} />);
+    } else if (extraCode) {
+      out.push(<ElementRef key={key} k={extraCode} info={ctx.refs.get(extraCode)} />);
     } else out.push(all);
     last = at + all.length;
   }
@@ -164,7 +167,7 @@ function inline(text: string, ctx: Ctx, k: string): ReactNode[] {
 function ElementRef({ k, info }: { k: string; info?: RefInfo }) {
   const closed = info?.state_category === "done" || info?.state_category === "cancelled";
   return (
-    <Link to="/e/$key" params={{ key: k }} title={info ? `${info.type_name}: ${info.title}` : undefined} className="whitespace-nowrap no-underline">
+    <Link to="/e/$key" params={{ key: k }} title={info ? (info.type_name ? `${info.type_name}: ${info.title}` : info.title) : undefined} className="whitespace-nowrap no-underline">
       <span className={`font-mono text-[0.92em] ${closed ? "text-muted line-through" : "text-accent"}`}>{k}</span>
       {info?.state && <span className="text-[0.85em] text-muted"> · {info.state}</span>}
     </Link>
@@ -252,7 +255,9 @@ function parseBlocks(lines: string[], ctx: Ctx, prefix: string, ids: Map<string,
       const n = ids.get(base) ?? 0;
       ids.set(base, n + 1);
       const id = n ? `${base}-${n + 1}` : base;
-      const cls = {
+      const cls = ctx.compact
+        ? "text-[14.5px] font-bold mt-1"
+        : {
         1: "text-[26px] leading-[1.15] font-bold tracking-[-0.02em] mt-2",
         2: "text-[19px] leading-tight font-bold mt-3 border-b border-hair pb-1",
         3: "text-[15.5px] font-bold mt-2",
@@ -260,7 +265,7 @@ function parseBlocks(lines: string[], ctx: Ctx, prefix: string, ids: Map<string,
       }[level];
       const Tag = `h${level + 1 > 6 ? 6 : level === 1 ? 2 : level + 1}` as "h2" | "h3" | "h4" | "h5";
       blocks.push(
-        <Tag key={k} id={id} className={`m-0 scroll-mt-20 ${cls}`}>
+        <Tag key={k} id={ctx.compact ? undefined : id} className={`m-0 scroll-mt-20 ${cls}`}>
           {inline(text, ctx, k)}
         </Tag>,
       );
@@ -385,18 +390,24 @@ function parseBlocks(lines: string[], ctx: Ctx, prefix: string, ids: Map<string,
   return blocks;
 }
 
-/** Pagina in Markdown esteso. refs: stato degli elementi citati (facoltativo). */
-export function PageMarkdown({ text, mentions = [], refs }: { text: string; mentions?: Mention[]; refs?: RefInfo[] }) {
+/** Pagina in Markdown esteso. refs: stato degli elementi citati (facoltativo). codes: codici
+ * da rendere come link oltre alle chiavi (APP-MOB). compact: testo di un pannello (risposte
+ * dell'AI): titoli più piccoli e spazi più stretti. */
+export function PageMarkdown({ text, mentions = [], refs, codes, compact }: { text: string; mentions?: Mention[]; refs?: RefInfo[]; codes?: string[]; compact?: boolean }) {
   const content = useMemo(() => {
     const names = [...mentions].sort((a, b) => b.name.length - a.name.length).map((m) => escapeRe(m.name));
+    const extra = [...new Set(codes ?? [])].filter((c) => c && !KEY.test(c)).sort((a, b) => b.length - a.length).map(escapeRe);
     const ctx: Ctx = {
       mentions,
       refs: new Map((refs ?? []).map((r) => [r.key, r])),
       mentionRe: names.length ? new RegExp(`(@(?:${names.join("|")}))(?![\\p{L}\\p{N}])`, "u") : null,
+      codeRe: extra.length ? new RegExp(`((?<![\\p{L}\\p{N}_-])(?:${extra.join("|")})(?![\\p{L}\\p{N}_-]))`, "u") : null,
+      compact,
     };
     return parseBlocks(text.replace(/\r\n/g, "\n").split("\n"), ctx, "b", new Map());
-  }, [text, mentions, refs]);
-  return <div className="kb-page flex min-w-0 flex-col gap-3 text-[14.5px] leading-relaxed break-words">{content.map((c, i) => <Fragment key={i}>{c}</Fragment>)}</div>;
+  }, [text, mentions, refs, codes, compact]);
+  const cls = compact ? "gap-2 text-[14px]" : "gap-3 text-[14.5px]";
+  return <div className={`kb-page flex min-w-0 flex-col leading-relaxed break-words ${cls}`}>{content.map((c, i) => <Fragment key={i}>{c}</Fragment>)}</div>;
 }
 
 /** Chiavi degli elementi citate nel testo (fuori dai blocchi di codice). */

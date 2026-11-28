@@ -210,6 +210,7 @@ func TestAIOndata6(t *testing.T) {
 	}
 
 	// --- Livelli su OpenAI: l'assistente chiama lo strumento e risponde; registro con la cache.
+	// In automatico l'assistente sull'approfondito ragiona a medio.
 	dem := admin.do("POST", "/api/v1/demand/requests", map[string]any{"title": "Magazzino sigma da rifare", "description": "Testo."}, http.StatusCreated)
 	demKey := dem["key"].(string)
 	admin.do("PUT", "/api/v1/ai/settings", map[string]any{"enabled": true,
@@ -220,7 +221,7 @@ func TestAIOndata6(t *testing.T) {
 		t.Fatalf("risposta via OpenAI: %v", res)
 	}
 	bodies := openaiBodies()
-	if len(bodies) != 2 || bodies[0]["store"] != false || e.obj(bodies[0]["reasoning"])["effort"] != "high" {
+	if len(bodies) != 2 || bodies[0]["store"] != false || e.obj(bodies[0]["reasoning"])["effort"] != "medium" {
 		t.Fatalf("richieste a OpenAI: %v", bodies)
 	}
 	replayed := false

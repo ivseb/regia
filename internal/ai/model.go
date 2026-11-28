@@ -92,7 +92,7 @@ func EffortOf(req Request) string {
 	if req.Effort != "" {
 		return req.Effort
 	}
-	return effortFor("", "", req.Deep, req.Brief)
+	return effortFor("", "", "", req.Deep, req.Brief)
 }
 
 // ValidEffort: valore ammesso nella configurazione (vuoto = automatico).
@@ -102,8 +102,9 @@ func ValidEffort(e string) bool {
 
 // effortFor sceglie il ragionamento di una chiamata: quello configurato per la funzione vince;
 // altrimenti le richieste brevi ragionano poco; poi quello configurato per il livello; in
-// automatico il rapido ragiona poco e l'approfondito molto.
-func effortFor(route, tier string, deep, brief bool) string {
+// automatico il rapido ragiona poco e l'approfondito molto, o quanto dice la funzione
+// (featureDeep: l'assistente, che fa più giri con gli strumenti, si ferma a medio).
+func effortFor(route, tier, featureDeep string, deep, brief bool) string {
 	switch {
 	case route != "":
 		return route
@@ -111,6 +112,8 @@ func effortFor(route, tier string, deep, brief bool) string {
 		return EffortLow
 	case tier != "":
 		return tier
+	case deep && featureDeep != "":
+		return featureDeep
 	case deep:
 		return EffortHigh
 	}

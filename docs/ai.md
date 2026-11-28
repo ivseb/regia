@@ -115,13 +115,15 @@ In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello 
 | GRC assistito | approfondito | schede di evidenze, controlli e rischi; requisito normativo; notifica DORA dell'incidente (sezione 10) |
  Domande sul grafo, funzioni della scheda, collegamenti del GRC e notifica DORA non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare. La **wiki personale** invece li usa (legge con cerca, query e leggi e scrive le pagine con uno strumento suo): con un modello segnato «senza strumenti» l'aggiornamento non parte, e la wiki resta da scrivere a mano. Le **bozze di policy e runbook** usano gli strumenti di lettura se il modello li sa usare (per cercare gli elementi da citare); senza, si scrivono con i dati che Regia passa.
 
+**Quanto è veloce l'assistente.** Il tempo di una risposta dipende soprattutto da quanti giri fa con gli strumenti: ogni giro è una chiamata al modello, di qualche secondo sull'approfondito. Per questo l'assistente riceve con le istruzioni il **catalogo** dei tipi di elemento e delle loro fasi (da fare, in corso, chiuse), e scrive la query giusta al primo colpo invece di provare. Inoltre chiama insieme gli strumenti indipendenti e risponde appena ha i dati. Se le risposte restano lente, porta l'assistente sul livello rapido o abbassa il suo ragionamento (sotto).
+
 Regia usa la **cache del prompt** dove il fornitore la offre: istruzioni, strumenti e catalogo restano uguali fra le domande e il fornitore li rilegge dalla cache a una frazione del prezzo (Anthropic, anche su Bedrock e Vertex; OpenAI; Gemini con la cache implicita; Ollama tiene il contesto in memoria). I token letti dalla cache sono nel registro e il costo stimato li conta al prezzo ridotto.
 
 ### Ragionamento
 
 I modelli che ragionano prima di rispondere (Claude, GPT, Gemini) si regolano con **Ragionamento**: automatico, basso, medio o alto. Più ragionamento vuol dire risposte più accurate, ma più lente e più costose (il ragionamento si paga come testo in uscita).
 
-- **Per livello**, accanto al modello. In automatico il rapido ragiona poco e l'approfondito molto.
+- **Per livello**, accanto al modello. In automatico il rapido ragiona poco e l'approfondito molto; l'assistente, che fa più giri con gli strumenti, sull'approfondito ragiona a medio (ogni giro ad alto fa aspettare molti secondi in più).
 - **Per funzione**, sotto la scelta del livello o del modello: vince su quello del livello. Per esempio le bozze ad «alto» e l'assistente a «medio».
 - **Richieste brevi.** Domande sul grafo, riassunti della scheda, duplicati e classificazione, riassunti delle conversazioni hanno una risposta breve e strutturata: ragionano poco anche sul livello approfondito, salvo un valore scelto per la funzione.
 - Regia lo traduce nel parametro di ogni fornitore: l'*effort* di Claude, il *reasoning effort* di GPT, il *thinkingLevel* di Gemini (su Gemini 3 Pro il medio diventa alto, perché quel modello ha solo basso e alto). Con Ollama e i servizi compatibili il ragionamento lo decide il modello.

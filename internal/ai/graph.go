@@ -49,9 +49,8 @@ type GraphResult struct {
 	Status Status             `json:"status"`
 }
 
-const graphPrompt = `Traduci la domanda della persona in una query nel linguaggio di query di Regia, la piattaforma dell'organizzazione per demand, progetti, architettura, DevSecOps e conformità. Non rispondi alla domanda: scrivi la query che trova gli elementi giusti.
-
-Linguaggio di query:
+// queryLanguage riassume al modello il linguaggio di query (domande sul grafo e assistente).
+const queryLanguage = `Linguaggio di query:
 - clausole «campo: valore», separate da spazi; più valori con la virgola («fase: Triage,Valutazione») sono in alternativa;
 - «-campo: valore» esclude; «campo: vuoto» e «campo: presente» per i campi senza o con un valore;
 - confronti e intervalli per numeri e date: «importo: >10000», «importo: 10000..50000», «fine: <oggi»;
@@ -62,7 +61,11 @@ Linguaggio di query:
 - parole senza «campo:» sono testo libero (ricerca nel titolo e nella descrizione);
 - relazioni: «collegata: (sottoquery)» trova gli elementi collegati a quelli della sottoquery tra parentesi, con qualsiasi relazione e nei due versi; al posto di «collegata» si scrive un tipo di relazione del catalogo, per chiave o per nome nel verso giusto, tra virgolette se ha spazi («"dipende da": (…)»); «collegata: presente» e «-collegata: presente» per gli elementi con o senza collegamenti; si possono indicare anche chiavi («collegata: DEM-12»);
 - una sottoquery tra parentesi vale anche per i campi che puntano a elementi: «genitore: (tipo: epic fase: aperta)»;
-- ordinamento: «ordina per: campo asc» oppure «desc» (non dentro una sottoquery).
+- ordinamento: «ordina per: campo asc» oppure «desc» (non dentro una sottoquery).`
+
+const graphPrompt = `Traduci la domanda della persona in una query nel linguaggio di query di Regia, la piattaforma dell'organizzazione per demand, progetti, architettura, DevSecOps e conformità. Non rispondi alla domanda: scrivi la query che trova gli elementi giusti.
+
+` + queryLanguage + `
 
 Esempi:
 - «richieste aperte urgenti aggiornate nell'ultima settimana» → tipo: business_request fase: aperta urgenza: Alta aggiornata: -7g

@@ -174,7 +174,8 @@ func (s *Service) Call(ctx context.Context, t *Target, req Request, meta CallMet
 func (s *Service) CallStream(ctx context.Context, t *Target, req Request, meta CallMeta, onText func(string)) (*Response, error) {
 	req.Model = t.Model
 	req.Deep = t.Tier != TierFast
-	req.Effort = effortFor(t.RouteEffort, t.TierEffort, req.Deep, req.Brief)
+	f, _ := featureByKey(t.Feature)
+	req.Effort = effortFor(t.RouteEffort, t.TierEffort, f.DeepEffort, req.Deep, req.Brief)
 	req.MaxTokens = thinkingHeadroom(req.MaxTokens, req.Effort != EffortLow)
 	if !t.Tools {
 		req.Tools = nil

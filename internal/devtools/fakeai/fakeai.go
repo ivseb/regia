@@ -506,7 +506,8 @@ func rules(req ai.Request) Step {
 		case len(props) > 0:
 			return Step{Text: "Ho preparato la proposta: confermala o rifiutala qui sotto."}
 		case len(found) > 0:
-			return Step{Text: "Ho trovato: " + strings.Join(found, ", ") + "."}
+			// In Markdown, come i modelli veri: il pannello lo rende (grassetto, elenco).
+			return Step{Text: "Ho **trovato**:\n\n- " + strings.Join(found, "\n- ")}
 		case len(errs) > 0:
 			return Step{Text: "Non ci sono riuscito: " + strings.Join(errs, "; ")}
 		}

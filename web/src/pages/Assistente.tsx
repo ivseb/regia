@@ -10,6 +10,8 @@ import { api } from "../api";
 import { viewsApi } from "../views/viewsApi";
 import { Select } from "../select";
 import { WikiAdd } from "./WikiAdd";
+import { PageMarkdown } from "../kbMarkdown";
+import type { RefInfo } from "../knowledgeApi";
 import { ErrorNote, Loading } from "../ui";
 import { useT } from "../i18n/react";
 import { lookup } from "../i18n/core";
@@ -41,6 +43,14 @@ export function LinkedText({ text, refs }: { text: string; refs: Ref[] }) {
     return out;
   }, [text, refs]);
   return <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{parts}</p>;
+}
+
+/** La risposta dell'AI in Markdown (grassetto, elenchi, tabelle), con le chiavi e i codici
+ * degli elementi citati come link. */
+export function AnswerText({ text, refs }: { text: string; refs: Ref[] }) {
+  const infos = useMemo<RefInfo[]>(() => refs.map((r) => ({ key: r.key, title: r.title, type: r.type, type_name: "", state: "", state_category: "" })), [refs]);
+  const codes = useMemo(() => refs.map((r) => r.key), [refs]);
+  return <PageMarkdown text={text} refs={infos} codes={codes} compact />;
 }
 
 function ProposalCard({ p, onDecided }: { p: Proposal; onDecided: (p: Proposal) => void }) {
@@ -87,7 +97,7 @@ function Message({ m, onProposal }: { m: ChatMessage; onProposal: (p: Proposal) 
   return (
     <div className="mr-4 flex flex-col gap-2" data-testid="risposta">
       <span className="label">{t("ai.panel.assistant")}</span>
-      <LinkedText text={m.text} refs={m.refs} />
+      <AnswerText text={m.text} refs={m.refs} />
       {m.refs.length > 0 && (
         <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t("ai.panel.refs")}>
           {m.refs.map((r) => (
@@ -368,7 +378,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             {ask.isPending && draft?.text && (
               <div className="mr-4 flex flex-col gap-2" data-testid="risposta-in-arrivo" aria-busy="true">
                 <span className="label">{t("ai.panel.assistant")}</span>
-                <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{draft.text}</p>
+                <AnswerText text={draft.text} refs={[]} />
               </div>
             )}
             {ask.isPending && !draft?.text && (

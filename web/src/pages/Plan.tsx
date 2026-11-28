@@ -500,7 +500,8 @@ function LoadStrip({ plan, from, days, px, label }: { plan: Plan; from: number; 
         <h3 className="label m-0">{tr("lavoro.plan.teamLoad")}</h3>
         <span className="hidden text-[12px] text-muted md:inline">{tr("lavoro.plan.teamLoadHelp")}</span>
       </div>
-      <div className="overflow-x-auto">
+      {/* Regione scorrevole raggiungibile da tastiera (axe: scrollable-region-focusable). */}
+      <div className="overflow-x-auto outline-none focus-visible:outline-2 focus-visible:outline-accent" tabIndex={0} role="region" aria-label={tr("lavoro.plan.teamLoad")}>
         <div style={{ width: label + days * px }}>
           {rows.map((t) => (
             <div key={t.id} className="flex border-b border-hair/60" style={{ height: 30 }}>

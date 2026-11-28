@@ -3,7 +3,7 @@ import type it from "../it/ai-ragionamento";
 
 export default {
   "ai.cfg.reasoning": "Reasoning",
-  "ai.cfg.reasoningHelp": "How much the model reasons before answering: more means more accurate answers, but slower and more expensive. On automatic, the fast tier reasons little and the deep tier a lot; short requests (graph questions, summaries, classification) always reason little, unless the feature has its own value. Ollama and compatible services decide for themselves.",
+  "ai.cfg.reasoningHelp": "How much the model reasons before answering: more means more accurate answers, but slower and more expensive. On automatic, the fast tier reasons little and the deep tier a lot (the assistant medium, since it takes several rounds with tools); short requests (graph questions, summaries, classification) always reason little, unless the feature has its own value. Ollama and compatible services decide for themselves.",
   "ai.cfg.reasoning.auto": "Automatic",
   "ai.cfg.reasoning.low": "Low",
   "ai.cfg.reasoning.medium": "Medium",

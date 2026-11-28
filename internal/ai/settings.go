@@ -32,11 +32,15 @@ type Feature struct {
 	Tier       string `json:"tier"`
 	NeedsTools bool   `json:"needs_tools"`
 	Active     bool   `json:"active"`
+	// DeepEffort: il ragionamento automatico al livello approfondito, se non è «alto».
+	DeepEffort string `json:"-"`
 }
 
 // Features sono le funzioni dell'AI (replica/ai.md §2 e §4).
 var Features = []Feature{
-	{Key: "assistente", Tier: TierDeep, NeedsTools: true, Active: true},
+	// L'assistente fa più giri con gli strumenti: in automatico ragiona a medio, perché ogni
+	// giro ad alto fa aspettare la persona molti secondi in più.
+	{Key: "assistente", Tier: TierDeep, NeedsTools: true, Active: true, DeepEffort: EffortMedium},
 	// Domande sul grafo (ondata 2): il modello scrive una query, Regia la prova; non chiama
 	// strumenti. Tradurre in una query è un compito breve: di default il livello rapido.
 	{Key: "domande_grafo", Tier: TierFast, Active: true},

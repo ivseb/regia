@@ -95,6 +95,16 @@ func TestAIRagionamentoERiassunto(t *testing.T) {
 	if reqs[0].Effort != ai.EffortMedium {
 		t.Fatalf("ragionamento dell'assistente: %q", reqs[0].Effort)
 	}
+	// Le istruzioni portano il linguaggio di query e il catalogo dei tipi con le fasi per
+	// categoria, come dato, uguali a ogni giro (cache del prompt).
+	sys := reqs[0].System
+	if !strings.Contains(sys, "Linguaggio di query") || !strings.Contains(sys, `<dati origine="catalogo">`) ||
+		!strings.Contains(sys, "- business_request (") || !strings.Contains(sys, "da fare: ") {
+		t.Fatalf("catalogo nelle istruzioni: %s", sys)
+	}
+	if reqs[asks-1].System != sys {
+		t.Fatal("istruzioni diverse fra le domande")
+	}
 	// Prima della settima nessun riassunto; alla settima il riassunto è in testa, come dato,
 	// e la prima domanda non c'è più per intero.
 	if strings.Contains(reqs[5].Messages[0].Text, "riassunto della conversazione") {

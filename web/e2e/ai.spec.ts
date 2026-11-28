@@ -89,6 +89,10 @@ test.describe("AI: fondamenta e assistente", () => {
     const panel = await ask(page, `cerca ${title}`);
     const answer = panel.getByTestId("risposta").last();
     await expect(answer).toContainText(el.key);
+    // La risposta in Markdown si vede formattata: grassetto ed elenco, senza asterischi.
+    await expect(answer.locator("strong", { hasText: "trovato" })).toBeVisible();
+    await expect(answer.locator("ul.list-disc li").first()).toContainText(el.key);
+    await expect(answer).not.toContainText("**");
     await answer.getByRole("link", { name: el.key, exact: true }).first().click();
     await expect(page).toHaveURL(new RegExp(`/e/${el.key}$`));
     await expect(page.getByRole("heading", { name: title })).toBeVisible();

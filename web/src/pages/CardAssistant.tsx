@@ -10,7 +10,7 @@ import type { ElementDetail } from "../api";
 import { ErrorNote } from "../ui";
 import { useT } from "../i18n/react";
 import { lookup } from "../i18n/core";
-import { LinkedText } from "./Assistente";
+import { AnswerText, LinkedText } from "./Assistente";
 import type { TabKey } from "./ElementPage";
 
 /** Porta la vista a un elemento della pagina (campo, descrizione, commento) e gli dà il fuoco. */
@@ -218,7 +218,7 @@ export function CardAssistant({ detail, onTab }: { detail: ElementDetail; onTab:
             {result.action === "riassunto" && (
               <>
                 <span className="label">{t("ai.card.summaryTitle")}</span>
-                <LinkedText text={result.text ?? ""} refs={result.refs} />
+                <AnswerText text={result.text ?? ""} refs={result.refs} />
               </>
             )}
             {result.action === "mancanze" && (
