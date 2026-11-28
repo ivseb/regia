@@ -2,6 +2,7 @@ package contract
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -36,5 +37,27 @@ func TestCommitTitle(t *testing.T) {
 	}
 	if got := CommitTitle("abcdefghij", 5); got != "abcd…" {
 		t.Errorf("troncato = %q", got)
+	}
+}
+
+func TestCloseKeys(t *testing.T) {
+	cases := map[string]string{
+		"fixes HL-12":                  "HL-12:fixes",
+		"Closes: HL-3 e closes HL-3":   "HL-3:closes",
+		"Resolved  HL-7, fix ABC-1":    "HL-7:resolved ABC-1:fix",
+		"fix(HL-12): tolto il refuso":  "",
+		"HL-12 fixes nulla":            "",
+		"fixes hl-12":                  "",
+		"prefixes HL-12":               "",
+		"corregge HL-12\n\nfixed HL-9": "HL-9:fixed",
+	}
+	for in, want := range cases {
+		var got []string
+		for _, k := range CloseKeys(in) {
+			got = append(got, k.Ref.String()+":"+k.Keyword)
+		}
+		if strings.Join(got, " ") != want {
+			t.Errorf("CloseKeys(%q) = %v, atteso %q", in, got, want)
+		}
 	}
 }

@@ -493,6 +493,8 @@ func (s *Server) Handler() http.Handler {
 	s.gateRoutes(mux)
 	// DevSecOps: metriche DORA delle quattro chiavi (devsecops_dora.go).
 	s.doraRoutes(mux)
+	// DevSecOps: rilasci con elementi, «in produzione dal…», certificazione del rilascio (rilasci.go).
+	s.releaseRoutes(mux)
 	// DevSecOps, vulnerabilità governate: SLA, ciclo di vita, eccezioni, cruscotto (devsecops_vuln.go).
 	s.vulnRoutes(mux)
 	// DevSecOps fase 3: politica centrale della pipeline, aderenza e adozione guidata (devsecops_policy.go).

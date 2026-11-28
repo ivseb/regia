@@ -83,3 +83,32 @@ func CommitTitle(msg string, max int) string {
 	}
 	return line
 }
+
+// closeKeyRe: «fixes HL-12», «Closes: HL-12», «resolved HL-12». La parola chiave deve
+// precedere la chiave, separata da spazi (o da due punti); «fix(HL-12):» non chiude.
+var closeKeyRe = regexp.MustCompile(`(?i)\b(fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved)\b:?[ \t]+([A-Z][A-Z0-9]{1,19})-([0-9]+)\b`)
+
+// CloseKey è una chiave citata con una parola chiave di chiusura.
+type CloseKey struct {
+	Ref     ElementRef
+	Keyword string // in minuscolo, come scritta
+}
+
+// CloseKeys riconosce le chiavi precedute da una parola chiave di chiusura (fixes, closes,
+// resolves e varianti). Lo spazio della chiave va in maiuscolo, come in CommitKeys.
+func CloseKeys(text string) []CloseKey {
+	var out []CloseKey
+	seen := map[ElementRef]bool{}
+	for _, m := range closeKeyRe.FindAllStringSubmatch(strings.ReplaceAll(text, "_", " "), -1) {
+		n, err := strconv.ParseInt(m[3], 10, 64)
+		if err != nil || n < 1 || m[2] != strings.ToUpper(m[2]) {
+			continue
+		}
+		ref := ElementRef{Space: m[2], Number: n}
+		if !seen[ref] {
+			seen[ref] = true
+			out = append(out, CloseKey{Ref: ref, Keyword: strings.ToLower(m[1])})
+		}
+	}
+	return out
+}

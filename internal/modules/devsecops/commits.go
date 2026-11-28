@@ -43,23 +43,30 @@ func (s *Service) IngestCommits(ctx context.Context, tx pgx.Tx, actor engine.Act
 		return 0, err
 	}
 	repo := clip(svc.Repository, 300)
-	elements := map[contract.ElementRef]string{} // chiave → id dell'elemento ("" = non esiste)
+	type target struct{ id, space string }
+	elements := map[contract.ElementRef]target{} // chiave → elemento (id "" = non esiste)
+	closing := map[string]bool{}                 // spazio → chiusura con le parole chiave accesa
 	n := 0
 	for _, c := range commits {
 		sha := strings.ToLower(strings.TrimSpace(c.SHA))
 		if sha == "" || c.At.IsZero() {
 			continue
 		}
+		closes := map[contract.ElementRef]contract.CloseKey{}
+		for _, ck := range contract.CloseKeys(c.Message) {
+			closes[ck.Ref] = ck
+		}
 		for _, ref := range contract.CommitKeys(c.Message, c.Branch) {
-			id, seen := elements[ref]
+			tg, seen := elements[ref]
 			if !seen {
-				err := tx.QueryRow(ctx, `select e.id::text from elements e join spaces sp on sp.tenant_id = e.tenant_id and sp.id = e.space_id
-					where sp.key = $1 and e.number = $2 and e.deleted_at is null`, ref.Space, ref.Number).Scan(&id)
+				err := tx.QueryRow(ctx, `select e.id::text, e.space_id::text from elements e join spaces sp on sp.tenant_id = e.tenant_id and sp.id = e.space_id
+					where sp.key = $1 and e.number = $2 and e.deleted_at is null`, ref.Space, ref.Number).Scan(&tg.id, &tg.space)
 				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 					return n, err
 				}
-				elements[ref] = id
+				elements[ref] = tg
 			}
+			id := tg.id
 			if id == "" {
 				continue
 			}
@@ -80,6 +87,22 @@ func (s *Service) IngestCommits(ctx context.Context, tx pgx.Tx, actor engine.Act
 				return n, err
 			}
 			n += int(tag.RowsAffected())
+			// Chiusura con le parole chiave: solo per un collegamento nuovo (una rilettura non
+			// richiude un elemento riaperto a mano).
+			if ck, ok := closes[ref]; ok && tag.RowsAffected() == 1 {
+				on, seen := closing[tg.space]
+				if !seen {
+					if on, err = closeEnabled(ctx, tx, tg.space); err != nil {
+						return n, err
+					}
+					closing[tg.space] = on
+				}
+				if on {
+					if err := s.closeByCommit(ctx, tx, actor, id, c, sha, ck); err != nil {
+						return n, err
+					}
+				}
+			}
 		}
 	}
 	return n, nil
@@ -124,13 +147,15 @@ type CommitRelease struct {
 	Version  string    `json:"version"`
 	At       time.Time `json:"at"`
 	LeadDays float64   `json:"lead_days"`
+	// ReleaseID: il rilascio registrato di quella versione (per la pagina del rilascio).
+	ReleaseID *string `json:"release_id"`
 }
 
 // ElementCommits è la risposta di GET /api/v1/elements/{key}/commits.
 type ElementCommits struct {
 	Commits []ElementCommit `json:"commits"`
-	// Release: il primo rilascio in produzione, dello stesso servizio, successivo all'ultimo
-	// commit dell'elemento. Assente se non ancora rilasciato.
+	// Release: il rilascio in produzione che completa l'elemento (per ogni servizio con commit,
+	// il primo successivo all'ultimo commit; si mostra il più recente). Assente se non ancora.
 	Release *CommitRelease `json:"release"`
 	// FirstAt: data del primo commit dell'elemento (inizio del lead time dell'elemento).
 	FirstAt *time.Time `json:"first_at"`
@@ -140,25 +165,20 @@ type ElementCommits struct {
 // l'elemento sia visibile) e il rilascio che li contiene.
 func (s *Service) ElementCommitsOf(ctx context.Context, tx pgx.Tx, elementID string) (*ElementCommits, error) {
 	out := &ElementCommits{Commits: []ElementCommit{}}
-	rows, err := tx.Query(ctx, `select c.sha, c.title, c.author, c.committed_at, c.repository, c.url, c.source, c.pr_number, sv.name, c.service_id::text
+	rows, err := tx.Query(ctx, `select c.sha, c.title, c.author, c.committed_at, c.repository, c.url, c.source, c.pr_number, sv.name
 		from element_commits c join services sv on sv.tenant_id = c.tenant_id and sv.id = c.service_id
 		where c.element_id = $1 order by c.committed_at desc, c.sha limit 200`, elementID)
 	if err != nil {
 		return nil, err
 	}
-	var first, last time.Time
-	var lastSvc string
+	var first time.Time
 	for rows.Next() {
 		var c ElementCommit
-		var svcID string
-		if err := rows.Scan(&c.SHA, &c.Title, &c.Author, &c.At, &c.Repository, &c.URL, &c.Source, &c.PullRequest, &c.Service, &svcID); err != nil {
+		if err := rows.Scan(&c.SHA, &c.Title, &c.Author, &c.At, &c.Repository, &c.URL, &c.Source, &c.PullRequest, &c.Service); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		c.At = c.At.UTC()
-		if len(out.Commits) == 0 { // il più recente: da qui si cerca il rilascio
-			last, lastSvc = c.At, svcID
-		}
 		if first.IsZero() || c.At.Before(first) {
 			first = c.At
 		}
@@ -172,28 +192,17 @@ func (s *Service) ElementCommitsOf(ctx context.Context, tx pgx.Tx, elementID str
 		return out, nil
 	}
 	out.FirstAt = &first
-	// Il primo deploy di produzione (o, se mancano, la prima release) del servizio dell'ultimo
-	// commit, con data ≥ dell'ultimo commit.
-	var rel CommitRelease
-	err = tx.QueryRow(ctx, `select sv.name, d.version, d.started_at from deployments d
-		join environments e on e.tenant_id = d.tenant_id and e.id = d.environment_id and e.is_production
-		join services sv on sv.tenant_id = d.tenant_id and sv.id = d.service_id
-		where d.service_id = $1 and d.status = 'succeeded' and d.started_at >= $2 order by d.started_at limit 1`, lastSvc, last).
-		Scan(&rel.Service, &rel.Version, &rel.At)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = tx.QueryRow(ctx, `select sv.name, r.version, r.released_at from releases r
-			join environments e on e.tenant_id = r.tenant_id and e.id = r.environment_id and e.is_production
-			join services sv on sv.tenant_id = r.tenant_id and sv.id = r.service_id
-			where r.service_id = $1 and r.released_at >= $2 order by r.released_at limit 1`, lastSvc, last).
-			Scan(&rel.Service, &rel.Version, &rel.At)
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return out, nil
-	}
+	// In produzione quando ogni servizio con commit ha un deploy (o rilascio) di produzione
+	// successivo all'ultimo commit su quel servizio: si mostra quello che entra per ultimo.
+	prod, err := productionOf(ctx, tx, []string{elementID})
 	if err != nil {
 		return nil, err
 	}
-	rel.At = rel.At.UTC()
+	p := prod[elementID]
+	if p == nil || !p.InProduction || p.At == nil {
+		return out, nil
+	}
+	rel := CommitRelease{Service: p.Service, Version: p.Version, At: *p.At, ReleaseID: p.ReleaseID}
 	rel.LeadDays = rel.At.Sub(first).Hours() / 24
 	if rel.LeadDays < 0 {
 		rel.LeadDays = 0
