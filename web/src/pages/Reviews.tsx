@@ -26,6 +26,7 @@ import { Trans } from "../i18n/Trans";
 import { tr } from "../i18n/core";
 import { fmtDateTime, fmtTime } from "../i18n/format";
 import { crumbs } from "../crumbs";
+import { ProposalBox, SectionAI } from "./ReviewsAI";
 
 // Valutazioni con questionari (piano, passo 4): inbox «Le mie valutazioni», pagina di
 // compilazione ed esame, questionario condiviso con l'anteprima della configurazione.
@@ -213,6 +214,8 @@ type QuestionnaireProps = {
   /** Controlli in fondo alla domanda (storia, allegati). */
   questionFooter?: (q: Question) => ReactNode;
   attachment?: (q: Question, disabled: boolean) => ReactNode;
+  /** Domande da guardare con attenzione (cambiano il punteggio o le regole). */
+  highlights?: Record<string, string[]>;
 };
 
 export function Questionnaire(p: QuestionnaireProps) {
@@ -250,6 +253,7 @@ export function Questionnaire(p: QuestionnaireProps) {
                   factValue={q.prefill ? p.facts[q.prefill.toLowerCase()] : undefined}
                   footer={p.questionFooter?.(q)}
                   attachment={p.attachment}
+                  highlight={p.highlights?.[q.key]}
                 />
               ),
             )}
@@ -276,6 +280,8 @@ function QuestionField({
   factValue,
   footer,
   attachment,
+  highlight,
+  idPrefix = "q",
 }: {
   q: Question;
   value: unknown;
@@ -287,9 +293,12 @@ function QuestionField({
   factValue?: unknown[];
   footer?: ReactNode;
   attachment?: QuestionnaireProps["attachment"];
+  highlight?: string[];
+  /** Prefisso degli id: un secondo campo della stessa domanda (la modifica di una proposta) non li ripete. */
+  idPrefix?: string;
 }) {
   const t = useT();
-  const id = `q-${q.key}`;
+  const id = `${idPrefix}-${q.key}`;
   const prefilled = meta?.source === "prefill";
   const input = () => {
     switch (q.type) {
@@ -475,7 +484,7 @@ function QuestionField({
     }
   };
   return (
-    <div className={`flex flex-col gap-2 ${prefilled ? "border-l-2 border-accent pl-3" : ""}`}>
+    <div id={idPrefix === "q" ? `domanda-${q.key}` : undefined} className={`flex scroll-mt-24 flex-col gap-2 ${prefilled ? "border-l-2 border-accent pl-3" : ""}`}>
       <label id={`${id}-label`} htmlFor={["text", "number", "date"].includes(q.type) ? id : undefined} className="flex flex-col gap-0.5">
         <span className="text-[14.5px] leading-snug font-semibold">
           {q.label}
@@ -487,6 +496,13 @@ function QuestionField({
         </span>
         {q.help && <span className="text-[12.5px] text-muted">{q.help}</span>}
       </label>
+      {highlight && highlight.length > 0 && (
+        <p className="m-0 flex flex-wrap gap-x-3 text-[12px] font-semibold text-flag">
+          {highlight.map((h) => (
+            <span key={h}>{h === "score" ? t("lavoro.reviews.hl.score") : t("lavoro.reviews.hl.rules")}</span>
+          ))}
+        </p>
+      )}
       {prefilled && (
         <p className="m-0 flex flex-wrap items-center gap-x-2 text-[12px] text-accent">
           <span className="label">{t("lavoro.reviews.prefilled")}</span>
@@ -666,6 +682,8 @@ export function ReviewPage({ reviewKey }: { reviewKey: string }) {
   const r = v.review;
   const canAnswer = (s: string) => v.can.answer_all || v.can.sections.includes(s);
   const anyEditable = v.can.answer_all || v.can.sections.length > 0;
+  const sectionOf: Record<string, string> = {};
+  for (const s of v.template.sections) for (const q of s.questions) sectionOf[q.key] = s.key;
   const refresh = (nv?: ReviewView) => {
     if (nv) qc.setQueryData(["review", reviewKey], nv);
     else qc.invalidateQueries({ queryKey: ["review", reviewKey] });
@@ -758,8 +776,27 @@ export function ReviewPage({ reviewKey }: { reviewKey: string }) {
             canAnswer={canAnswer}
             onChange={change}
             onBlur={flush}
-            sectionAside={(s) => <Assignee v={v} section={s} onDone={refresh} />}
-            questionFooter={(q) => <QuestionHistory reviewKey={reviewKey} q={q} meta={v.answers[q.key]} />}
+            highlights={v.highlights}
+            sectionAside={(s) => (
+              <>
+                <Assignee v={v} section={s} onDone={refresh} />
+                <SectionAI v={v} reviewKey={reviewKey} section={s} editable={canAnswer(s.key)} onDone={refresh} />
+              </>
+            )}
+            questionFooter={(q) => (
+              <>
+                <ProposalBox
+                  v={v}
+                  reviewKey={reviewKey}
+                  q={q}
+                  editable={canAnswer(sectionOf[q.key] ?? "")}
+                  format={formatValue}
+                  editor={(q, val, set) => <QuestionField q={q} value={val} idPrefix="proposta-campo" missing={false} disabled={false} onChange={(x) => set(x)} />}
+                  onDone={refresh}
+                />
+                <QuestionHistory reviewKey={reviewKey} q={q} meta={v.answers[q.key]} />
+              </>
+            )}
             attachment={(q, disabled) => (
               <AttachmentAnswer reviewKey={reviewKey} v={v} value={values[q.key]} disabled={disabled} onChange={(ids) => change(q.key, ids, true)} />
             )}
@@ -952,7 +989,12 @@ function QuestionHistory({ reviewKey, q, meta }: { reviewKey: string; q: Questio
     <div className="flex flex-col gap-1 text-[12px] text-muted">
       <span className="flex flex-wrap gap-x-2">
         <span>
-          {meta.source === "prefill" ? t("lavoro.reviews.prefilled") : t("lavoro.reviews.answerBy", { name: meta.by ?? "—" })} {ago(meta.at)}
+          {meta.source === "prefill"
+            ? t("lavoro.reviews.prefilled")
+            : meta.source === "ai"
+              ? t(meta.ai?.edited ? "lavoro.reviews.aiEditedBy" : "lavoro.reviews.aiAcceptedBy", { name: meta.by ?? "—" })
+              : t("lavoro.reviews.answerBy", { name: meta.by ?? "—" })}{" "}
+          {ago(meta.at)}
         </span>
         <button type="button" className="underline hover:text-fg" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {open ? t("lavoro.reviews.hideHistory") : t("lavoro.reviews.history")}
@@ -963,7 +1005,8 @@ function QuestionHistory({ reviewKey, q, meta }: { reviewKey: string; q: Questio
           {(hist.data?.items ?? []).map((h) => (
             <li key={h.id}>
               <span className="tabular">{fmtDateTime(h.at, { dateStyle: "short", timeStyle: "short" })}</span> ·{" "}
-              {h.source === "prefill" ? t("lavoro.reviews.prefill") : h.by ?? "—"}: <span className="text-fg">{formatValue(q, h.value)}</span>
+              {h.source === "prefill" ? t("lavoro.reviews.prefill") : h.by ?? "—"}
+              {h.source === "ai" && <> {h.ai_edited ? t("lavoro.reviews.aiHistoryEdited") : t("lavoro.reviews.aiHistory")}</>}: <span className="text-fg">{formatValue(q, h.value)}</span>
             </li>
           ))}
           {hist.isPending && <li>{t("lavoro.reviews.loading")}</li>}

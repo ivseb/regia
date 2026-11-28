@@ -1,4 +1,4 @@
-# AI: fondamenta (ondata 1), server MCP e domande sul grafo (ondata 2), assistente nella scheda (ondata 3), wiki personale (ondata 4), GRC assistito (ondata 5), adattatori nativi (ondata 6)
+# AI: fondamenta (ondata 1), server MCP e domande sul grafo (ondata 2), assistente nella scheda (ondata 3), wiki personale (ondata 4), GRC assistito (ondata 5), adattatori nativi (ondata 6), questionari precompilati
 
 Disegno e decisioni in [replica/ai.md](../../replica/ai.md) (stato nella sezione «Stato»); guida per chi amministra in [ai.md](../ai.md) e, per collegare i client MCP, [ai-mcp.md](../ai-mcp.md). Migrazioni `0083_ai_fondamenta.sql`, `0084_ai_mcp_domande.sql`, `0086_ai_scheda.sql`, `0087_ai_wiki.sql`, `0088_ai_grc.sql` e `0089_ai_fornitori_nativi.sql`; test in `internal/itest/ai_test.go`, `ai_ondata2_test.go`, `ai_scheda_test.go`, `ai_wiki_test.go`, `ai_grc_test.go`, `ai_ondata6_test.go` e `query_relazioni_test.go`, nei package `internal/ai/...` e in `web/e2e/ai.spec.ts`, `ai-ondata2.spec.ts`, `ai-scheda.spec.ts`, `ai-wiki.spec.ts`, `ai-grc.spec.ts` e `ai-ondata6.spec.ts`.
 
@@ -165,6 +165,77 @@ Funzione `grc` (approfondito). Le istruzioni (`grcSystem` più il compito, con i
 ### API del GRC assistito (con i permessi della persona)
 
 `POST /api/v1/ai/grc/map` `{evidence | control}` → `{mode, subject, proposals[{evidence, control, coverage, reason, requirements, can_accept}], missing[{text, requirement, source}], candidates, unverified, status}`; `POST /ai/grc/map/decide` `{evidence, control, coverage, reason, accept}`; `POST /ai/grc/draft` `{source, kind: policy|runbook, hint}` → `{title, text, refs, unverified, tools, source}`; `POST /ai/grc/draft/save` `{source, kind, title, text, space}` → `{key, state, controlled, linked}`; `POST /ai/grc/notice` `{notification}` → `{notification, fields[{num, name, name_en, section, when, hint, narrative, value, status, source, by_assistant}], markdown, missing, written, unverified, sources, versions}`; `POST /ai/grc/notice/save` `{notification, fields[{num, value, status, source}]}` → `{notification, version}`. Senza AI: `GET /api/v1/regulatory-notifications/{id}/drafts` (versioni) e `GET …/drafts/{n}/export?format=md|json` (`incident.manage`). Map, draft e notice non pubblicano l'evento «changed». Errori `ai.grc_map_subject`, `ai.grc_kind_invalid`, `ai.grc_source_invalid`, `validation.grc.evidence_not_linkable`, `validation.risk.notification_not_dora`.
+
+## Questionari precompilati (`internal/ai/questionnaire.go`, `internal/modules/reviews/ai_fonti.go`, `ai_proposte.go`)
+
+Funzione `questionari` (approfondito, senza strumenti). Migrazione `0115_questionari_ai.sql`; test `internal/itest/ai_questionari_test.go`, `TestHighlights` in `reviews`, `TestCapConfidence` in `ai`, `web/e2e/ai-questionari.spec.ts`.
+
+### Fonti
+`reviews.AIContext` è una lettura con i permessi della persona, e serve poter compilare la sezione adesso (`perms.canAnswer`). Raccoglie:
+- **Domande:** quelle visibili e senza risposta completa, tranne quelle di tipo allegato, al massimo 40 (`Remaining` conta le altre). Ognuna porta:
+  - `Highlights`;
+  - `PrefillValue`, cioè il valore del fatto di `prefill`.
+- **Risposte confermate** (`aiPast`):
+  - **Da dove:** `ext_review` con `outcome` e `decided_at` sugli impatti della stessa applicazione. Sono le 40 valutazioni più recenti, ognuna controllata con `CanRead`.
+  - **Come si abbina la domanda:**
+    - stessa chiave e stesso tipo, se il modello ha la stessa chiave in qualsiasi versione;
+    - altrimenti, stesso testo normalizzato e stesso tipo.
+  - **Controllo del valore:** deve passare `NormalizeValue` della domanda di destinazione. Al massimo 3 risposte per domanda.
+- **Applicazioni simili** (`similarApps`): servono solo per le domande che la stessa applicazione lascia scoperte. Sono le applicazioni di `ext_application` con la stessa `data_classification` e la stessa `criticality`, prima quelle con lo stesso hosting, al massimo 8 leggibili.
+- **Fatti** (`aiFacts`):
+  - **Da dove:** dall'impatto (o dalla richiesta), con la richiesta come `richiesta.`, e dall'applicazione (`ElementFacts`).
+  - **Quali:** solo quelli con un nome in `FactsOfType`, senza i fatti di base né i ruoli, al massimo 60. Il catalogo dei nomi è riservato a `process.admin`: si legge con un attore di servizio e se ne usano solo chiave e nome.
+
+`ai.Questionnaire` aggiunge, con i permessi della persona:
+- le pagine Knowledge di `KB.Documents` sull'applicazione e sulla richiesta: al massimo 5, 1500 caratteri del testo ciascuna, lette con `Engine.Get`;
+- il testo di al massimo 3 allegati della richiesta e della valutazione: `attachmentFiles`, la stessa lettura del GRC ma per file.
+
+Ogni fonte ha un alias `fN`.
+
+### Chiamata e controlli
+- **Il messaggio:** `questionnaireSystem` più `questionnaireTask` (marcatori `QuestionnaireSystemMarker` e `QuestionnaireTaskMarker`). Le domande stanno fra `<dati origine="questionario">` e le fonti fra `<dati origine="fonti">`, tutto mascherato.
+- **La risposta:** `{"risposte":[{domanda, valore, fonti, confidenza, motivo}]}`.
+- **Il controllo per domanda:** il valore, smascherato, deve passare `NormalizeValue` e deve citare almeno un alias esistente. Altrimenti `value` è null e `confidence` è `nessuna`.
+- **Il tetto della confidenza** (`capConfidence`):
+  - `alta` solo con una fonte `answer` della stessa domanda e lo stesso valore, o con il fatto di `prefill` che dà lo stesso valore;
+  - altrimenti al massimo `media`.
+
+  Il modello può solo abbassarla.
+
+### Proposte e decisioni
+- **`questionnaire_ai_proposals`** (RLS):
+  - una proposta aperta per persona e domanda (indice unico parziale su `status = 'proposed'`);
+  - `sources` è JSON `{kind, key, title, question, detail}`, con `kind` fra `answer`, `similar`, `page`, `fact` e `attachment`.
+- **`SaveAIProposals`:** sostituisce le proposte aperte della stessa persona. Salta le domande già risposte o non compilabili e ricontrolla il valore.
+- **`DecideAIProposals`:** solo sulle proposte proprie e aperte; altrimenti `validation.reviews.ai_proposal_gone`.
+  - Scartare: `discarded`.
+  - Accettare: `accepted`, oppure `edited` se il valore è cambiato. Ricontrolla permessi e valore, poi scrive con `writeAnswersFrom` e sorgente `ai`.
+- **La sorgente `ai`:** il vincolo di `questionnaire_answers.source` si allarga. Le colonne `ai_proposal_id` e `ai_edited` restano senza chiave esterna, perché la storia è immutabile. La risposta corrente ha `ai: {proposal, edited}`.
+- **Quando una proposta decade:** ogni risposta scritta porta a `superseded` le proposte aperte di tutti sulla stessa domanda. L'attività `answers` porta `ai: true`.
+- **Le evidenze** (`Definition.Highlights`): `score` se `points(nil)` ha un massimo maggiore di 0 con un peso maggiore di 0; `rules` se la chiave compare in `Condition.Keys()` di una derivazione. Sono nella vista come `highlights` anche senza AI.
+- **Nel registro delle chiamate:** la chiamata ha la funzione `questionari`. Le decisioni (`QuestionnaireDecided`) sono righe `regia` con il modello `proposta:risposta_questionario` e l'esito `accepted_by_user` o `rejected_by_user`.
+
+### API dei questionari precompilati
+- `POST /api/v1/reviews/{ref}/ai-proposals` `{section}` → `{view, result: {section, proposed, no_source, remaining, sources, status}}`.
+  - Errori: `ai.disabled` o `ai.not_configured` (409), `ai.questionnaire_nothing` (422), `validation.reviews.section_unknown` e `validation.reviews.section_hidden` (422), 403 se la persona non può compilare la sezione.
+  - Non pubblica eventi in tempo reale, perché le proposte le vede solo chi le chiede.
+- `POST /api/v1/reviews/{ref}/ai-proposals/decide` `{decisions: [{id, accept, value?}]}` → `{view}`.
+  - Accetta da 1 a 200 decisioni.
+  - Funziona anche con l'AI spenta, perché è una decisione della persona. Con l'AI spenta l'interfaccia non mostra le proposte.
+- `GET /api/v1/reviews/{ref}` contiene anche:
+  - `highlights` (domanda → `score`, `rules`);
+  - `ai_proposals`, solo quelle di chi guarda;
+  - `answers[k].source = "ai"` con `ai`;
+  - `history[].ai_edited`.
+
+### Interfaccia
+`web/src/pages/ReviewsAI.tsx` contiene `SectionAI` (in `sectionAside`) e `ProposalBox` (in `questionFooter`). Per la modifica `ProposalBox` riusa `QuestionField` con `idPrefix`. Ogni domanda ha l'ancora `#domanda-<chiave>`, dove portano i link alle risposte confermate. I testi sono in `ai-questionari.ts`, `errors-ai-questionari.ts` e `lavoro/questionari-ai.ts`.
+
+### Fornitore finto
+`internal/devtools/fakeai/questionari.go`:
+- per ogni domanda la risposta confermata della stessa domanda, con confidenza alta;
+- per una scelta singola, il fatto con la stessa chiave, se coincide con un'opzione, con confidenza «alta» che Regia riporta a media;
+- con «inventa» nel testo della domanda, una fonte che non esiste.
 
 ## Server MCP (`internal/ai/mcpserver`)
 

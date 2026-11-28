@@ -1463,7 +1463,12 @@ export type ReviewRequirementProposal = {
   /** Chiave del requisito creato (vuota finché la valutazione non si chiude). */
   requirement: string | null;
 };
-export type ReviewAnswer = { value: unknown; by: string | null; at: string; source: "manual" | "prefill" };
+export type ReviewAnswer = { value: unknown; by: string | null; at: string; source: "manual" | "prefill" | "ai"; ai?: { proposal: string; edited?: boolean } };
+/** Fonte di una proposta dell'AI per una risposta (internal/modules/reviews/ai_proposte.go). */
+export type ReviewAISource = { kind: "answer" | "similar" | "page" | "fact" | "attachment"; key?: string; title?: string; question?: string; detail?: string };
+export type ReviewAIConfidence = "alta" | "media" | "bassa" | "nessuna";
+/** Proposta dell'AI in attesa: la vede solo chi l'ha chiesta. value null = nessuna fonte. */
+export type ReviewAIProposal = { id: string; question: string; value: unknown; sources: ReviewAISource[]; reason: string; confidence: ReviewAIConfidence; created_at: string };
 export type ReviewView = {
   review: {
     id: string;
@@ -1520,8 +1525,11 @@ export type ReviewView = {
     is_owner: boolean;
     read_only_reason?: string;
   };
+  /** Domande da guardare con attenzione: score (cambiano il punteggio), rules (generano prescrizioni o requisiti). */
+  highlights?: Record<string, ("score" | "rules")[]>;
+  ai_proposals?: ReviewAIProposal[];
 };
-export type AnswerHistory = { id: number; question: string; value: unknown; source: string; by: string | null; at: string };
+export type AnswerHistory = { id: number; question: string; value: unknown; source: string; ai_edited?: boolean; by: string | null; at: string };
 export type ReviewTeamInput = Partial<{
   key: string;
   name: string;

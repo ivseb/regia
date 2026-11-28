@@ -1264,20 +1264,39 @@ const (
 // (collab.Attachments con i suoi permessi): testo, Word, OpenDocument e PDF con testo, al
 // massimo tre file. Il testo torna come dato da mettere nella richiesta (poi mascherata).
 func (s *Service) attachmentTexts(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string) (int, string, error) {
+	files, err := s.attachmentFiles(ctx, tx, actor, ref, attachMaxFiles, attachMaxTotal)
+	if err != nil {
+		return 0, "", err
+	}
+	var b strings.Builder
+	for _, f := range files {
+		fmt.Fprintf(&b, "allegato «%s»:\n%s\n", clipRunes(f.Name, 120), f.Text)
+	}
+	return len(files), b.String(), nil
+}
+
+// attachmentFile è il testo di un allegato letto.
+type attachmentFile struct {
+	Name, Text string
+}
+
+// attachmentFiles legge il testo di al massimo maxFiles allegati dell'elemento (maxTotal
+// caratteri in tutto), con i permessi della persona.
+func (s *Service) attachmentFiles(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref string, maxFiles, maxTotal int) ([]attachmentFile, error) {
 	if s.o.Tools == nil || s.o.Tools.Collab == nil || s.o.Tools.Collab.Files == nil {
-		return 0, "", nil
+		return nil, nil
 	}
 	atts, err := s.o.Tools.Collab.Attachments(ctx, tx, actor, ref)
 	if err != nil {
 		if errors.Is(err, engine.ErrNotFound) || errors.Is(err, engine.ErrForbidden) {
-			return 0, "", nil
+			return nil, nil
 		}
-		return 0, "", err
+		return nil, err
 	}
-	var b strings.Builder
-	read, total := 0, 0
+	var out []attachmentFile
+	total := 0
 	for _, a := range atts {
-		if read >= attachMaxFiles || total >= attachMaxTotal {
+		if len(out) >= maxFiles || total >= maxTotal {
 			break
 		}
 		if textextract.Kind(a.Name, a.MimeType) == "" || a.Size > textextract.MaxInput {
@@ -1287,14 +1306,13 @@ func (s *Service) attachmentTexts(ctx context.Context, tx pgx.Tx, actor engine.A
 		if err != nil {
 			continue
 		}
-		txt := textextract.Extract(f, a.Name, a.MimeType, min(attachMaxRunes, attachMaxTotal-total))
+		txt := textextract.Extract(f, a.Name, a.MimeType, min(attachMaxRunes, maxTotal-total))
 		f.Close()
 		if txt == "" {
 			continue
 		}
-		read++
 		total += utf8.RuneCountInString(txt)
-		fmt.Fprintf(&b, "allegato «%s»:\n%s\n", clipRunes(a.Name, 120), txt)
+		out = append(out, attachmentFile{Name: a.Name, Text: txt})
 	}
-	return read, b.String(), nil
+	return out, nil
 }
