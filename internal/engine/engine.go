@@ -135,6 +135,9 @@ func (s *Service) ActionKinds() []string {
 	for k := range s.hooks.Actions {
 		out = append(out, k)
 	}
+	for k := range automationKinds {
+		out = append(out, k)
+	}
 	slices.Sort(out[1:])
 	return out
 }

@@ -67,6 +67,14 @@ type Service struct {
 // di partenza del processo del controllo.
 func Register(eng *engine.Service) *Service {
 	s := &Service{eng: eng, Now: time.Now}
+	// Date per le automazioni a tempo (at:<data>:<giorni>, docs/sviluppo/automazioni.md).
+	eng.DescribeDate(EvidenceType, "evidenza.scadenza", "Scadenza dell'evidenza",
+		`select element_id, valid_until as at from ext_evidence where valid_until is not null`)
+	eng.DescribeDate(ControlType, "evidenze.prossima_scadenza", "Prossima scadenza delle evidenze valide",
+		`select g.control_element_id as element_id, min(ev.valid_until) as at
+		 from grc_evidence_controls g join ext_evidence ev on ev.element_id = g.evidence_element_id
+		 where ev.status = 'valid' and ev.valid_until > now() - interval '30 days'
+		 group by g.control_element_id`)
 	eng.Facts(ControlType, s.controlFacts)
 	eng.Facts(AppType, s.appFacts)
 	eng.DescribeFacts(ControlType,

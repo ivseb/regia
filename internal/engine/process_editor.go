@@ -76,6 +76,7 @@ type editorRegistry struct {
 	modFacts map[string][]FactInfo // per modulo, per i tipi senza fatti propri
 	actions  []ActionSchema
 	starters []Bundle
+	dates    map[string][]DateSource // date dei moduli per gli eventi «at:», per chiave del tipo
 }
 
 // DescribeFacts dà nome, tipo e valori suggeriti ai fatti che un modulo fornisce per un
@@ -136,8 +137,11 @@ func (s *Service) ActionSchemas() []ActionSchema {
 	r := &s.editor
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := []ActionSchema{assignRole}
+	out := append([]ActionSchema{assignRole}, automationSchemas...)
 	described := map[string]bool{assignRole.Kind: true}
+	for _, a := range automationSchemas {
+		described[a.Kind] = true
+	}
 	for _, a := range r.actions {
 		if !described[a.Kind] {
 			described[a.Kind] = true
@@ -150,7 +154,7 @@ func (s *Service) ActionSchemas() []ActionSchema {
 			out = append(out, ActionSchema{Kind: k, Name: k, Fields: []ActionField{}})
 		}
 	}
-	slices.SortStableFunc(out[1:], func(a, b ActionSchema) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortStableFunc(out[1+len(automationSchemas):], func(a, b ActionSchema) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
@@ -194,6 +198,23 @@ type ProcessMeta struct {
 	Facts    []FactInfo     `json:"facts"`
 	Sample   string         `json:"sample,omitempty"` // elemento da cui vengono gli esempi
 	Actions  []ActionSchema `json:"actions"`
+	// Automazioni (automation.go): campi del tipo (eventi «change:», azione set_field), date
+	// (eventi «at:»), tipi e relazioni (create_linked), webhook (per nome), segnaposto dei modelli.
+	Fields    []MetaField  `json:"fields"`
+	Dates     []DateSource `json:"dates"`
+	Types     []NamedKey   `json:"types"`
+	Relations []NamedKey   `json:"relations"`
+	Webhooks  []string     `json:"webhooks"`
+	Spaces    []NamedKey   `json:"spaces"`
+	Templates []string     `json:"templates"`
+}
+
+// MetaField è un campo del tipo per l'editor delle automazioni.
+type MetaField struct {
+	Key   string `json:"key"`
+	Name  string `json:"name"`
+	Kind  string `json:"kind"` // tipo di dato del campo (string, date, enum…)
+	Multi bool   `json:"multi,omitempty"`
 }
 
 var phaseCategoryNames = []NamedKey{{"todo", "da iniziare"}, {"in_progress", "in corso"}, {"done", "conclusa"}, {"cancelled", "annullata"}}
@@ -254,7 +275,44 @@ func (s *Service) ProcessMeta(ctx context.Context, tx pgx.Tx, actor Actor, ref s
 	if m.Facts, m.Sample, err = s.availableFacts(ctx, tx, actor, t, m.Roles); err != nil {
 		return nil, err
 	}
+	if err := s.automationMeta(ctx, tx, typeID, m, collect); err != nil {
+		return nil, err
+	}
 	return m, nil
+}
+
+func (s *Service) automationMeta(ctx context.Context, tx pgx.Tx, typeID string, m *ProcessMeta, collect func(q string, args ...any) ([]NamedKey, error)) error {
+	defs, err := loadTypeFields(ctx, tx, typeID)
+	if err != nil {
+		return err
+	}
+	m.Fields = []MetaField{}
+	for _, d := range defs {
+		if !d.Archived {
+			m.Fields = append(m.Fields, MetaField{Key: d.Key, Name: d.Name, Kind: d.DataType, Multi: d.Multi})
+		}
+	}
+	if m.Dates, err = s.DateSources(ctx, tx, typeID); err != nil {
+		return err
+	}
+	if m.Types, err = collect(`select key, name from element_types where archived_at is null and extension is null order by lower(name)`); err != nil {
+		return err
+	}
+	if m.Relations, err = collect(`select key, outward_name from relation_types order by lower(outward_name)`); err != nil {
+		return err
+	}
+	if m.Spaces, err = collect(`select key, name from spaces where not archived order by lower(name)`); err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `select name from webhooks where name <> '' order by lower(name)`)
+	if err != nil {
+		return err
+	}
+	if m.Webhooks, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
+		return err
+	}
+	m.Templates = TemplateNames
+	return nil
 }
 
 // availableFacts elenca i fatti del tipo: quelli di base, quelli descritti dai moduli,

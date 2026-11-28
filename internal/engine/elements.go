@@ -238,7 +238,7 @@ func (s *Service) Create(ctx context.Context, tx pgx.Tx, actor Actor, in CreateI
 		                      assignee_id, reporter_id, parent_id, fields, created_by, updated_by)
 		values (app_tenant(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $9, $9)`,
 		id, spaceID, t.ID, number, in.Title, in.BodyText, stateID,
-		nullable(in.AssigneeID), actor.MemberID, nullable(in.ParentID), fields)
+		nullable(in.AssigneeID), nullable(actor.MemberID), nullable(in.ParentID), fields)
 	if err != nil {
 		return nil, err
 	}
@@ -251,11 +251,15 @@ func (s *Service) Create(ctx context.Context, tx pgx.Tx, actor Actor, in CreateI
 	if err := audit.Append(ctx, tx, audit.Event{
 		Action: "element.create", EntityType: t.Key, EntityID: id,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
-		Payload: map[string]any{"space": in.SpaceKey, "number": number},
+		Payload: withRuleAudit(ctx, map[string]any{"space": in.SpaceKey, "number": number}),
 	}); err != nil {
 		return nil, err
 	}
-	el, err := s.Get(ctx, tx, Actor{MemberID: actor.MemberID, Permissions: []string{"element.read"}}, id)
+	reader := Actor{MemberID: actor.MemberID, Permissions: []string{"element.read"}}
+	if actor.MemberID == "" {
+		reader = SystemReader // creato da un'automazione a tempo: nessun membro
+	}
+	el, err := s.Get(ctx, tx, reader, id)
 	if err != nil || in.DeferStart {
 		return el, err
 	}
@@ -271,17 +275,35 @@ type UpdateInput struct {
 }
 
 func (s *Service) Update(ctx context.Context, tx pgx.Tx, actor Actor, elementID string, in UpdateInput) (*Element, error) {
-	el, err := s.lockForWrite(ctx, tx, actor, elementID)
-	if err != nil {
-		return nil, err
-	}
-	if ok, err := s.writeBySpace(ctx, tx, actor, el); err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, ErrForbidden
-	}
-	if el.Version != in.Version {
-		return nil, ErrConflict
+	return s.update(ctx, tx, actor, elementID, in, false)
+}
+
+// update è Update; byRule = la modifica la fa un'azione di regola (set_field), con l'autorità
+// del processo pubblicato: senza i controlli di lettura e scrittura di chi ha causato l'evento
+// e senza il controllo della versione (la riga è bloccata qui).
+func (s *Service) update(ctx context.Context, tx pgx.Tx, actor Actor, elementID string, in UpdateInput, byRule bool) (*Element, error) {
+	var el *Element
+	var err error
+	if byRule {
+		el, err = scanElement(tx.QueryRow(ctx, selectElement+` where e.id = $1 and e.deleted_at is null for update of e`, elementID))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if el, err = s.lockForWrite(ctx, tx, actor, elementID); err != nil {
+			return nil, err
+		}
+		if ok, err := s.writeBySpace(ctx, tx, actor, el); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, ErrForbidden
+		}
+		if el.Version != in.Version {
+			return nil, ErrConflict
+		}
 	}
 	changes := map[string]any{}
 	title, body := el.Title, el.BodyText
@@ -321,7 +343,7 @@ func (s *Service) Update(ctx context.Context, tx pgx.Tx, actor Actor, elementID 
 		return el, nil
 	}
 	if _, err := tx.Exec(ctx, `update elements set title = $2, body_text = $3, fields = $4, version = version + 1, updated_by = $5
-		where id = $1`, el.ID, title, body, fields, actor.MemberID); err != nil {
+		where id = $1`, el.ID, title, body, fields, nullable(actor.MemberID)); err != nil {
 		return nil, err
 	}
 	for k := range changes {
@@ -338,10 +360,41 @@ func (s *Service) Update(ctx context.Context, tx pgx.Tx, actor Actor, elementID 
 	}
 	if err := audit.Append(ctx, tx, audit.Event{Action: "element.update", EntityType: el.TypeKey, EntityID: el.ID,
 		ActorAccountID: actor.AccountID, ActorMemberID: actor.MemberID, IP: actor.IP,
-		Payload: map[string]any{"changed": keys(changes)}}); err != nil {
+		Payload: withRuleAudit(ctx, map[string]any{"changed": keys(changes)})}); err != nil {
 		return nil, err
 	}
-	return s.Get(ctx, tx, actor, el.ID)
+	reader := actor
+	if byRule {
+		reader = SystemReader
+	}
+	after, err := s.Get(ctx, tx, reader, el.ID)
+	if err != nil {
+		return nil, err
+	}
+	// Regole «change:<campo>» dei campi che hanno davvero cambiato valore.
+	changed := changedFields(el.Fields, fields, keys(in.Fields))
+	if title != el.Title {
+		changed = append(changed, "titolo")
+	}
+	if err := s.runChangeRules(ctx, tx, actor, el, after, changed); err != nil {
+		return nil, err
+	}
+	if len(changed) == 0 {
+		return after, nil
+	}
+	return s.Get(ctx, tx, reader, el.ID)
+}
+
+// withRuleAudit aggiunge all'audit di una modifica la regola che l'ha fatta, se c'è.
+func withRuleAudit(ctx context.Context, p map[string]any) map[string]any {
+	if run, ok := RunOf(ctx); ok {
+		p["rule"] = run.Rule.Key
+		p["rule_version"] = run.Version
+		if run.ProcessID != "" {
+			p["process_id"] = run.ProcessID
+		}
+	}
+	return p
 }
 
 // checkRequiredKept rifiuta di svuotare un campo obbligatorio nella fase attuale
