@@ -344,6 +344,29 @@ func (s *Service) Update(ctx context.Context, tx pgx.Tx, actor Actor, elementID 
 	return s.Get(ctx, tx, actor, el.ID)
 }
 
+// CheckUpdate controlla una modifica come Update, senza scriverla: permesso di scrittura,
+// campi del tipo e valori, obbligatori della fase. Fa solo letture (va bene in una transazione
+// di sola lettura): la usa chi prepara una proposta da confermare dopo, come l'assistente.
+func (s *Service) CheckUpdate(ctx context.Context, tx pgx.Tx, actor Actor, el *Element, in UpdateInput) error {
+	if ok, err := s.writeBySpace(ctx, tx, actor, el); err != nil {
+		return err
+	} else if !ok {
+		return ErrForbidden
+	}
+	if len(in.Fields) == 0 {
+		return nil
+	}
+	defs, err := loadTypeFields(ctx, tx, el.TypeID)
+	if err != nil {
+		return err
+	}
+	fields, _, err := normalize(ctx, tx, defs, el.Fields, in.Fields, true)
+	if err != nil {
+		return err
+	}
+	return s.checkRequiredKept(ctx, tx, el, defs, in.Fields, fields)
+}
+
 // checkRequiredKept rifiuta di svuotare un campo obbligatorio nella fase attuale
 // (sempre obbligatorio, oppure obbligatorio da una fase già raggiunta, e visibile).
 func (s *Service) checkRequiredKept(ctx context.Context, tx pgx.Tx, el *Element, defs []FieldDef, in, after map[string]any) error {

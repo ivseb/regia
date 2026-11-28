@@ -115,6 +115,12 @@ func cmdServe(ctx context.Context, args []string) error {
 	// DevSecOps, connettore Gitea: stesso schema, stesso Ingestor.
 	gtSvc := devsecopsGitea(rt.db, box, cfg, dsoIngestor, log)
 	go gtSvc.Run(ctx, time.Minute)
+	// DevSecOps, connettore ServiceNow in sola lettura: incidenti e change dei servizi CMDB associati.
+	snSvc, err := devsecopsServiceNow(rt.db, box, cfg, dsoSvc, log)
+	if err != nil {
+		return err
+	}
+	go snSvc.Run(ctx, time.Minute)
 	// Inviti e link della password per email: solo con SMTP (altrimenti link da copiare).
 	var inviteMail notify.Sender
 	if mc := (notify.SMTPConfig{Host: cfg.Collab.SMTPHost, Port: cfg.Collab.SMTPPort, User: cfg.Collab.SMTPUser,
@@ -132,10 +138,11 @@ func cmdServe(ctx context.Context, args []string) error {
 		SecretBox: box, Webhooks: hooks, InviteMail: inviteMail, BaseURL: cfg.Collab.BaseURL,
 		Knowledge: kbSvc,
 		GitHub:    ghSvc, DevSecOpsIngestor: dsoIngestor, ConnectorAllowPrivate: config.ConnectorAllowPrivate(),
-		GitLab: glSvc,
-		Gitea:  gtSvc,
-		Risk:   riskSvc,
-		GRC:    grcSvc,
+		GitLab:     glSvc,
+		Gitea:      gtSvc,
+		ServiceNow: snSvc,
+		Risk:       riskSvc,
+		GRC:        grcSvc,
 		// Import di progetti: connettori verso Jira o YouTrack nella rete interna solo se consentito.
 		ImportAllowPrivate: importer.AllowPrivateFromEnv(),
 	})

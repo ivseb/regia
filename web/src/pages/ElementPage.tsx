@@ -64,6 +64,8 @@ const ProductionPanel = lazy(() => import("./Devsecops").then((m) => ({ default:
 const GatePanel = lazy(() => import("./GatePanel").then((m) => ({ default: m.GatePanel })));
 // Metriche di consegna DORA (fase 5a): riquadro sopra il pannello dell'applicazione e dell'asset.
 const DoraCard = lazy(() => import("./Dora").then((m) => ({ default: m.DoraCard })));
+// ServiceNow (sola lettura): ultimi incidenti e change dell'applicazione, solo se ce ne sono.
+const ServiceNowAppSection = lazy(() => import("./ServiceNowRecords").then((m) => ({ default: m.ServiceNowAppSection })));
 
 // Conformità (piano, passo 20): sezioni del controllo, dell'evidenza, dell'applicazione e del requisito.
 const ControlSection = lazy(() => import("./ComplianceSections").then((m) => ({ default: m.ControlSection })));
@@ -595,6 +597,7 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
         <Suspense fallback={<Loading className="text-muted" />}>
           <DoraCard scope={el.type === "application" ? "application" : "asset"} subject={el.id} />
           <ProductionPanel refKey={key} />
+          {el.type === "application" && <ServiceNowAppSection applicationId={el.id} />}
         </Suspense>
       );
     case "gate":

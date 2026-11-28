@@ -67,6 +67,12 @@ type Member struct {
 	Roles       []RoleGrant `json:"roles"`
 	Groups      []Ref       `json:"groups"`
 	Teams       []Ref       `json:"teams"`
+	// Origin: chi ha creato il membro (admin | oidc | scim).
+	Origin string `json:"origin"`
+	// SuspendedSource: chi ha deciso la sospensione (admin | idp), solo se sospeso.
+	SuspendedSource *string `json:"suspended_source"`
+	// OnlyViewer: l'unico ruolo è «Lettore» assegnato direttamente (il vecchio default degli inviti).
+	OnlyViewer bool `json:"only_viewer"`
 	// InviteExpiresAt: invito ancora valido (solo per i membri "invited").
 	InviteExpiresAt *time.Time `json:"invite_expires_at"`
 	CreatedAt       time.Time  `json:"created_at"`
@@ -95,14 +101,14 @@ const memberSelect = `
 	       coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name) order by lower(t.name))
 	                 from team_members tm join teams t on t.tenant_id = tm.tenant_id and t.id = tm.team_id where tm.member_id = m.id), '[]'),
 	       (select max(i.expires_at) from invitations i where i.member_id = m.id and i.accepted_at is null and i.revoked_at is null and i.expires_at > now()),
-	       m.created_at
+	       m.created_at, m.origin, m.suspended_source
 	from members m left join accounts a on a.id = m.account_id`
 
 func scanMember(row pgx.Row) (Member, error) {
 	var m Member
 	var roles, groups, teams []byte
 	if err := row.Scan(&m.ID, &m.DisplayName, &m.Email, &m.Type, &m.Status, &m.HasAccount, &m.LastLoginAt, &m.HasPassword,
-		&m.SSO, &m.MFA, &roles, &groups, &teams, &m.InviteExpiresAt, &m.CreatedAt); err != nil {
+		&m.SSO, &m.MFA, &roles, &groups, &teams, &m.InviteExpiresAt, &m.CreatedAt, &m.Origin, &m.SuspendedSource); err != nil {
 		return m, err
 	}
 	_ = json.Unmarshal(roles, &m.Roles)
@@ -113,6 +119,7 @@ func scanMember(row pgx.Row) (Member, error) {
 			m.Admin = true
 		}
 	}
+	m.OnlyViewer = len(m.Roles) == 1 && m.Roles[0].ViaGroup == nil && m.Roles[0].Key != nil && *m.Roles[0].Key == "viewer"
 	return m, nil
 }
 
@@ -270,15 +277,25 @@ func (s *Service) AddMember(ctx context.Context, a Actor, in NewMember) (*Create
 		if int(tag.RowsAffected()) < len(groupIDs) {
 			return invalid("group_ids", "gruppo inesistente")
 		}
-		if len(roleIDs) == 0 {
-			// Senza scelta: lettore per i membri, richiedente per il portale.
-			def := "viewer"
-			if in.Type == "requester" {
-				def = "requester"
-			}
-			if err := tx.QueryRow(ctx, "select coalesce(array_agg(id::text), '{}') from roles where key = $1", def).Scan(&roleIDs); err != nil {
+		if len(roleIDs) == 0 && in.Type == "requester" {
+			// Senza scelta il richiedente del portale ha il suo ruolo. Un membro standard non
+			// riceve nulla: vede solo ciò su cui ha un ruolo (esterni sicuri per default).
+			if err := tx.QueryRow(ctx, "select coalesce(array_agg(id::text), '{}') from roles where key = 'requester'").Scan(&roleIDs); err != nil {
 				return err
 			}
+		}
+		perms, err := rolePerms(ctx, tx, roleIDs)
+		if err != nil {
+			return err
+		}
+		if err := a.canGrant(ctx, tx, perms); err != nil {
+			return err
+		}
+		if err := a.canGrantGroups(ctx, tx, groupIDs); err != nil {
+			return err
+		}
+		if err := checkNotIdPManaged(ctx, tx, groupIDs); err != nil {
+			return err
 		}
 		for _, r := range roleIDs {
 			if _, err := tx.Exec(ctx, `insert into role_assignments (tenant_id, id, role_id, member_id) values (app_tenant(), $1, $2, $3)`,
@@ -313,8 +330,8 @@ func (s *Service) AddMember(ctx context.Context, a Actor, in NewMember) (*Create
 }
 
 // UpdateMember cambia nome visualizzato e tipo. Passando a richiedente del portale i ruoli
-// diretti diventano "Richiedente (portale)"; tornando membro pieno quel ruolo diventa
-// "Lettore". I ruoli dati dai gruppi restano.
+// diretti diventano "Richiedente (portale)"; tornando membro pieno quel ruolo si toglie e
+// non se ne aggiunge nessuno (niente "Lettore" per default). I ruoli dati dai gruppi restano.
 func (s *Service) UpdateMember(ctx context.Context, a Actor, id string, name *string, typ *string) error {
 	if !ValidID(id) {
 		return ErrNotFound
@@ -339,10 +356,13 @@ func (s *Service) UpdateMember(ctx context.Context, a Actor, id string, name *st
 			if *typ != "standard" && *typ != "requester" {
 				return invalid("member_type", "tipo di membro non valido: membro o richiedente del portale")
 			}
+			if err := a.canActOn(ctx, tx, id); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, "update members set member_type = $2, updated_at = now() where id = $1", id, *typ); err != nil {
 				return err
 			}
-			from, to := "requester", "viewer"
+			from, to := "requester", ""
 			if *typ == "requester" {
 				// Si tolgono tutti i ruoli diretti: un richiedente usa solo il portale.
 				if _, err := tx.Exec(ctx, "delete from role_assignments where member_id = $1 and space_id is null", id); err != nil {
@@ -353,11 +373,13 @@ func (s *Service) UpdateMember(ctx context.Context, a Actor, id string, name *st
 				where ra.member_id = $1 and ra.space_id is null and r.tenant_id = ra.tenant_id and r.id = ra.role_id and r.key = $2`, id, from); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `insert into role_assignments (tenant_id, id, role_id, member_id)
-				select app_tenant(), $1, r.id, $2 from roles r where r.key = $3
-				  and not exists (select 1 from role_assignments x where x.member_id = $2 and x.role_id = r.id and x.space_id is null)`,
-				db.NewID(), id, to); err != nil {
-				return err
+			if to != "" {
+				if _, err := tx.Exec(ctx, `insert into role_assignments (tenant_id, id, role_id, member_id)
+					select app_tenant(), $1, r.id, $2 from roles r where r.key = $3
+					  and not exists (select 1 from role_assignments x where x.member_id = $2 and x.role_id = r.id and x.space_id is null)`,
+					db.NewID(), id, to); err != nil {
+					return err
+				}
 			}
 			payload["member_type"] = map[string]string{"from": cur, "to": *typ}
 			if err := ensureAdmin(ctx, tx); err != nil {
@@ -389,28 +411,42 @@ func (s *Service) Suspend(ctx context.Context, a Actor, id string) error {
 		if status != "active" && status != "invited" {
 			return conflict("member.not_active", "il membro non è attivo")
 		}
-		if _, err := tx.Exec(ctx, "update members set status = 'suspended', updated_at = now() where id = $1", id); err != nil {
+		if err := a.canActOn(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := ensureAdmin(ctx, tx); err != nil {
-			return err
-		}
-		tokens, err := tx.Exec(ctx, "delete from api_tokens where member_id = $1", id)
+		payload, err := suspendMember(ctx, tx, id, accountID, "admin")
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "update invitations set revoked_at = now() where member_id = $1 and accepted_at is null and revoked_at is null", id); err != nil {
-			return err
-		}
-		var closed int64
-		if accountID != nil {
-			if closed, err = closeSessions(ctx, tx, *accountID, false); err != nil {
-				return err
-			}
-		}
-		return a.audit(ctx, tx, "member.suspend", "member", id, map[string]any{
-			"from": status, "tokens_revoked": tokens.RowsAffected(), "sessions_closed": closed})
+		payload["from"] = status
+		return a.audit(ctx, tx, "member.suspend", "member", id, payload)
 	})
+}
+
+// suspendMember porta il membro nello stato sospeso (unico per interfaccia, OIDC e SCIM;
+// source dice chi l'ha deciso), revoca token API e inviti e chiude le sessioni su questo
+// tenant. Non lascia l'organizzazione senza amministratori.
+func suspendMember(ctx context.Context, tx pgx.Tx, id string, accountID *string, source string) (map[string]any, error) {
+	if _, err := tx.Exec(ctx, "update members set status = 'suspended', suspended_source = $2, updated_at = now() where id = $1", id, source); err != nil {
+		return nil, err
+	}
+	if err := ensureAdmin(ctx, tx); err != nil {
+		return nil, err
+	}
+	tokens, err := tx.Exec(ctx, "delete from api_tokens where member_id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, "update invitations set revoked_at = now() where member_id = $1 and accepted_at is null and revoked_at is null", id); err != nil {
+		return nil, err
+	}
+	var closed int64
+	if accountID != nil {
+		if closed, err = closeSessions(ctx, tx, *accountID, false); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"source": source, "tokens_revoked": tokens.RowsAffected(), "sessions_closed": closed}, nil
 }
 
 // Reactivate riattiva un membro sospeso.
@@ -419,14 +455,20 @@ func (s *Service) Reactivate(ctx context.Context, a Actor, id string) error {
 		return ErrNotFound
 	}
 	return s.tx(ctx, a, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, "update members set status = 'active', updated_at = now() where id = $1 and status = 'suspended'", id)
-		if err != nil {
+		var source *string
+		if err := tx.QueryRow(ctx, "select suspended_source from members where id = $1 and status = 'suspended' for update", id).Scan(&source); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return conflict("member.not_suspended", "il membro non è sospeso")
+			}
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			return conflict("member.not_suspended", "il membro non è sospeso")
+		if err := a.canActOn(ctx, tx, id); err != nil {
+			return err
 		}
-		return a.audit(ctx, tx, "member.reactivate", "member", id, nil)
+		if _, err := tx.Exec(ctx, "update members set status = 'active', suspended_source = null, updated_at = now() where id = $1", id); err != nil {
+			return err
+		}
+		return a.audit(ctx, tx, "member.reactivate", "member", id, map[string]any{"source": source})
 	})
 }
 
@@ -439,6 +481,9 @@ func (s *Service) ResetMFA(ctx context.Context, a Actor, id string) error {
 	return s.tx(ctx, a, func(tx pgx.Tx) error {
 		accountID, err := exclusiveAccount(ctx, tx, id)
 		if err != nil {
+			return err
+		}
+		if err := a.canActOn(ctx, tx, id); err != nil {
 			return err
 		}
 		if err := auth.ClearMFA(ctx, tx, accountID); err != nil {

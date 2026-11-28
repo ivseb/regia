@@ -37,6 +37,7 @@
 | `REGIA_BACKUP_PASSPHRASE_FILE` / `REGIA_BACKUP_PASSPHRASE` | vuote | cifra i backup con age (almeno 12 caratteri) |
 | `REGIA_WEBHOOK_ALLOW_PRIVATE` | `false` | webhook anche verso indirizzi interni e via http: toglie la protezione SSRF (implicita con `--dev`) |
 | `REGIA_CONNECTOR_ALLOW_PRIVATE` | `false` | i connettori DevSecOps (GitHub Enterprise Server) possono attivare «Rete interna»: reti private sì, link-local (metadati del cloud) mai. Con `--dev` la protezione è spenta |
+| `REGIA_CONNECTOR_PROXY` | vuota | proxy HTTP in uscita dei connettori (`http://proxy.azienda.it:3128`, credenziali nell'URL se servono); ogni integrazione sceglie se usarlo. `HTTP_PROXY` e `HTTPS_PROXY` non si usano mai. Oggi lo usa il connettore ServiceNow |
 
 ## Sicurezza dei dati: le regole
 1. Il codice applicativo tocca i dati di un tenant **solo** con `db.InTenant(...)`, che imposta `app.tenant_id` per la transazione.

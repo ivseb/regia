@@ -28,6 +28,7 @@ import (
 	gtconn "regia/internal/modules/devsecops/connectors/gitea"
 	ghconn "regia/internal/modules/devsecops/connectors/github"
 	glconn "regia/internal/modules/devsecops/connectors/gitlab"
+	snconn "regia/internal/modules/devsecops/connectors/servicenow"
 	"regia/internal/modules/devsecops/contract"
 	"regia/internal/modules/finance"
 	"regia/internal/modules/governance"
@@ -96,6 +97,8 @@ type Server struct {
 	gl *glconn.Service
 	// DevSecOps: connettore Gitea (devsecops_gitea.go).
 	gt *gtconn.Service
+	// DevSecOps: connettore ServiceNow in sola lettura (devsecops_servicenow.go).
+	sn *snconn.Service
 	// DevSecOps: API di push, pannello dell'asset, configurazione (piano, passo 21; devsecops.go).
 	dso *devsecops.Service
 	// Knowledge: spazi di documentazione e pagine (piano, passo 19; knowledge.go).
@@ -173,6 +176,9 @@ type Options struct {
 	// DevSecOps, connettore Gitea (devsecops_gitea.go). Gitea nil = servizio creato qui,
 	// senza job periodico.
 	Gitea *gtconn.Service
+	// DevSecOps, connettore ServiceNow in sola lettura (devsecops_servicenow.go).
+	// ServiceNow nil = servizio creato qui, senza job periodico.
+	ServiceNow *snconn.Service
 	// Devsecops è il modulo DevSecOps (piano, passo 21); nil = il server lo registra sul
 	// motore, con la verifica automatica dei requisiti.
 	Devsecops *devsecops.Service
@@ -255,6 +261,8 @@ func New(o Options) *Server {
 	s.gitlabInit(o)
 	// DevSecOps: connettore Gitea (devsecops_gitea.go).
 	s.giteaInit(o)
+	// DevSecOps: connettore ServiceNow in sola lettura (devsecops_servicenow.go).
+	s.servicenowInit(o)
 	// Rischi, fornitori ICT e incidenti (piano, passo 20): fatti, azioni e accettazione.
 	s.risk = o.Risk
 	if s.risk == nil && o.Engine != nil {
@@ -488,6 +496,8 @@ func (s *Server) Handler() http.Handler {
 	s.gitlabRoutes(mux)
 	// DevSecOps: integrazioni Gitea, repository, sincronizzazioni e webhook in ingresso (devsecops_gitea.go).
 	s.giteaRoutes(mux)
+	// DevSecOps: ServiceNow in sola lettura, incidenti, change, proposte e webhook (devsecops_servicenow.go).
+	s.servicenowRoutes(mux)
 	// DevSecOps: push delle pipeline, pannello, panoramica e configurazione (devsecops.go).
 	s.devsecopsRoutes(mux)
 	s.gateRoutes(mux)
@@ -513,7 +523,16 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.Handle("/", s.spa())
 
-	return s.base(s.withPrincipal(s.withModules(s.notify(mux))))
+	app := s.base(s.withPrincipal(s.withModules(s.notify(mux))))
+	// SCIM (scim.go): token dell'organizzazione, niente sessione né withPrincipal.
+	scim := s.base(s.scimHandler())
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == scimPrefix || strings.HasPrefix(r.URL.Path, scimPrefix+"/") {
+			scim.ServeHTTP(w, r)
+			return
+		}
+		app.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {

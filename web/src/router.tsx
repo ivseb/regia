@@ -533,8 +533,8 @@ const AuditLog = lazyRouteComponent(() => import("./pages/AuditLog"), "AuditLog"
 const WebhooksPage = lazyRouteComponent(() => import("./pages/Webhooks"), "Webhooks");
 const InvitePage = lazyRouteComponent(() => import("./pages/PublicLinks"), "InvitePage");
 const PasswordPage = lazyRouteComponent(() => import("./pages/PublicLinks"), "PasswordPage");
-type AdminTabKey = "membri" | "ruoli" | "gruppi" | "oggetti" | "sicurezza";
-const ADMIN_TAB_KEYS: AdminTabKey[] = ["membri", "ruoli", "gruppi", "oggetti", "sicurezza"];
+type AdminTabKey = "membri" | "ruoli" | "gruppi" | "oggetti" | "identita" | "sicurezza";
+const ADMIN_TAB_KEYS: AdminTabKey[] = ["membri", "ruoli", "gruppi", "oggetti", "identita", "sicurezza"];
 export const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/configurazione/persone",
@@ -800,6 +800,24 @@ export const giteaRoute = createRoute({
   },
 }); // i18n-ok: codice TypeScript letto come testo
 
+// DevSecOps: connettore ServiceNow in sola lettura (Configurazione → Integrazioni → ServiceNow).
+const ServiceNowPage = lazyRouteComponent(() => import("./pages/ServiceNow"), "ServiceNowPage");
+type ServiceNowTabKey = "integrazioni" | "servizi" | "incidenti" | "sincronizzazioni";
+const SERVICENOW_TAB_KEYS: ServiceNowTabKey[] = ["integrazioni", "servizi", "incidenti", "sincronizzazioni"];
+export const servicenowRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/configurazione/integrazioni/servicenow",
+  validateSearch: (s: Record<string, unknown>): { tab?: ServiceNowTabKey; sel?: string; integrazione?: string } => ({
+    tab: SERVICENOW_TAB_KEYS.includes(s.tab as ServiceNowTabKey) ? (s.tab as ServiceNowTabKey) : undefined,
+    sel: typeof s.sel === "string" && s.sel ? s.sel : undefined,
+    integrazione: typeof s.integrazione === "string" && s.integrazione ? s.integrazione : undefined,
+  }),
+  component: function ServiceNowRoute() {
+    const { tab, sel, integrazione } = servicenowRoute.useSearch();
+    return <ServiceNowPage tab={tab ?? "integrazioni"} sel={sel} integration={integrazione} />;
+  },
+}); // i18n-ok: codice TypeScript letto come testo
+
 // Conformità (piano, passo 20): Governance → Conformità, caricata alla prima visita. Scheda,
 // normativa, requisito aperto, perimetro e stato delle evidenze stanno nella query.
 const CompliancePage = lazy(() => import("./pages/Compliance").then((m) => ({ default: m.Compliance }))); // i18n-ok: codice TypeScript letto come testo
@@ -933,6 +951,7 @@ export const router = createRouter({
     githubRoute,
     gitlabRoute,
     giteaRoute,
+    servicenowRoute,
     ...devsecopsRoutes,
     ...vulnerabilityRoutes,
     ...pipelineRoutes,

@@ -40,6 +40,8 @@ type Service struct {
 	// limita i codici sbagliati per account (mfa.go).
 	box        *secretbox.Box
 	mfaLimiter *limiter
+	// oidcHook collega il login OIDC alle organizzazioni (SetOIDCHook, oidc.go).
+	oidcHook OIDCHook
 }
 
 // DisablePasswordLogin attiva la modalità "solo SSO": il login con password è rifiutato,

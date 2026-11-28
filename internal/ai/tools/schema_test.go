@@ -22,3 +22,17 @@ func TestSchemiValidi(t *testing.T) {
 		}
 	}
 }
+
+// «campi» si accetta come oggetto o come testo JSON; altro è un errore leggibile.
+func TestCampiComeTesto(t *testing.T) {
+	for in, want := range map[string]int{`{"campi":{"a":1}}`: 1, `{"campi":"{\"a\":1,\"b\":2}"}`: 2, `{"campi":""}`: 0, `{}`: 0} {
+		var x updateIn
+		if err := decode([]byte(in), &x); err != nil || len(x.Fields) != want {
+			t.Errorf("%s: %v %v", in, x.Fields, err)
+		}
+	}
+	var x updateIn
+	if err := decode([]byte(`{"campi":"priorità alta"}`), &x); err == nil || !strings.Contains(err.Error(), "oggetto") {
+		t.Errorf("testo non JSON: %v", err)
+	}
+}

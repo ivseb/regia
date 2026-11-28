@@ -17,13 +17,18 @@ import (
 //
 //	regia dev fake-github   un finto GitHub con dati di esempio, per provare il
 //	                          connettore DevSecOps senza un GitHub vero
+//	regia dev fake-servicenow un finto ServiceNow (incidenti, change, CMDB) con dati inventati
 func cmdDev(ctx context.Context, args []string) error {
 	if len(args) > 0 && args[0] == "fake-gitlab" { // un finto GitLab: dev_gitlab.go
 		return cmdDevGitLab(ctx, args[1:])
 	}
+	if len(args) > 0 && args[0] == "fake-servicenow" { // un finto ServiceNow: dev_servicenow.go
+		return cmdDevServiceNow(ctx, args[1:])
+	}
 	if len(args) == 0 || args[0] != "fake-github" {
 		return errors.New("uso: regia dev fake-github [--addr 127.0.0.1:8122] [--enterprise] [--write] [--key chiave.pem]\n" +
-			"     regia dev fake-gitlab [--addr 127.0.0.1:8174] [--token glpat-…]")
+			"     regia dev fake-gitlab [--addr 127.0.0.1:8174] [--token glpat-…]\n" +
+			"     regia dev fake-servicenow [--addr 127.0.0.1:8190] [--user …] [--password …]")
 	}
 	fs := flag.NewFlagSet("dev fake-github", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:8122", "indirizzo di ascolto")
