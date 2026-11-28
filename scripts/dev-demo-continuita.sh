@@ -12,7 +12,8 @@ login admin
 DEMO=$(py 'next(t["tenant_id"] for t in d["tenants"] if t["slug"]=="demo")' < $T/admin.me)
 call admin POST /api/v1/me/tenant "{\"tenant_id\":\"$DEMO\"}" > /dev/null
 
-call admin POST /api/v1/continuity/setup > /dev/null
+# Il modulo parte spento: accenderlo lo prepara (tipi, processi, configurazione).
+call admin PUT /api/v1/tenant/modules '{"modules":{"continuity":true}}' > /dev/null
 
 # RTO e RPO dichiarati (minuti): l'area riservata promette 1 ora ma chiama API più lente.
 call admin GET /api/v1/architecture/applications > $T/apps.json

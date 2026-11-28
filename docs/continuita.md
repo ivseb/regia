@@ -9,8 +9,8 @@ Il valore sta nelle **incoerenze**, che uno strumento isolato non vede. Un esemp
 Serve a chi gestisce la continuità (BCM, risk manager), al CISO, agli owner delle applicazioni e all'auditor. I riferimenti normativi (DORA, capo II art. 11-12 e capo IV art. 24-25; ISO 22301) stanno nei cataloghi della conformità e restano **da verificare**, come gli altri contenuti di partenza.
 
 ## Prima volta
-1. **Configurazione → Moduli:** il modulo «Continuità operativa» è acceso come gli altri.
-2. **Architettura → Continuità:** se il modulo non è ancora preparato, chi amministra lo prepara con «Prepara la continuità». Il pulsante crea:
+1. **Configurazione → Moduli:** il modulo «Continuità operativa» parte spento, per non cambiare menu e «cosa manca» a chi non l'ha chiesto. Si accende lì; il modello di avvio banca/assicurazione lo accende già.
+2. **Preparazione:** accendere il modulo lo prepara. Se un'organizzazione l'aveva acceso prima di un aggiornamento, chi amministra trova in Architettura → Continuità il pulsante «Prepara la continuità». La preparazione crea:
    - i tipi «Analisi d'impatto (BIA)» e «Test di resilienza» con i loro processi;
    - il ruolo «Responsabile della continuità»;
    - la configurazione di partenza.

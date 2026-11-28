@@ -52,7 +52,7 @@ type avvioModel struct {
 var avvioCatalogo = []avvioModel{
 	{
 		Key: "banca_assicurazione", Available: true,
-		ModulesOn: []string{"demand", "work", "knowledge", "devsecops", "grc", "architecture"},
+		ModulesOn: []string{"demand", "work", "knowledge", "devsecops", "grc", "architecture", "continuity"},
 		Catalogs:  []string{"dora", "nis2"},
 		Bodies: []avvioBody{
 			{"rischi_ict", "other", "Comitato rischi ICT", "ICT risk committee"},
@@ -141,8 +141,8 @@ func takeSnap(ctx context.Context, tx pgx.Tx) (*avvioSnap, error) {
 	for k := range fw {
 		sn.fws[k] = true
 	}
-	off := map[string]string{}
-	if err := pairs(`select module, module from tenant_modules where not enabled`, off); err != nil {
+	off, err := offModules(ctx, tx)
+	if err != nil {
 		return nil, err
 	}
 	for k := range off {

@@ -9,7 +9,7 @@ test.describe.configure({ mode: "serial" });
 test("un modulo spento sparisce da menu, ⌘K e pagine, e le sue API rispondono 404", async ({ page }) => {
   await login(page, "admin", "altro");
   const modules = (await call(page.request, "GET", "/api/v1/tenant/modules")).items;
-  expect(modules.map((m: { key: string }) => m.key)).toEqual(["demand", "projects", "work", "knowledge", "devsecops", "grc", "architecture"]);
+  expect(modules.map((m: { key: string }) => m.key)).toEqual(["demand", "projects", "work", "knowledge", "devsecops", "grc", "architecture", "continuity"]);
   try {
     await page.goto("/configurazione/moduli");
     await expect(page.getByRole("heading", { name: "Moduli", level: 1 })).toBeVisible();

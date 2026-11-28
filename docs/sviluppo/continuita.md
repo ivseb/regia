@@ -37,8 +37,10 @@ Codice:
     - tipi di test: tabletop, failover, ripristino da backup, scenario;
     - `test_max_age_days` 365, `bia_review_months` 12, `critical_mtpd_minutes` 4320.
 - **Permessi:** `continuity.write` (BIA, test, piani), `continuity.approve` (approva la BIA), `continuity.admin` (configurazione e preparazione del modulo). Il ruolo di sistema è `continuity_manager` (Responsabile della continuità).
-- **Modulo `continuity`** in Configurazione → Moduli, prefisso API `continuity`. Con il modulo spento le API rispondono 404.
-- **Tenant esistenti:** `POST /continuity/setup` (oppure `regia tenant provision`) crea tipi, processi, relazione, ruolo e configurazione.
+- **Modulo `continuity`:** prefisso API `continuity`, con il modulo spento le API rispondono 404.
+  - È il primo modulo **spento di default** (`defaultOff` in `internal/api/modules.go`): senza una riga in `tenant_modules` è spento, sia per le organizzazioni esistenti sia per le nuove.
+  - Si accende in Configurazione → Moduli. Il modello di avvio banca/assicurazione lo accende già.
+- **Preparazione:** accendere il modulo (`PUT /tenant/modules`) lo prepara anche: tipi, processi, relazione, ruolo e configurazione. `POST /continuity/setup` e `regia tenant provision` fanno lo stesso e servono come riserva.
 
 ## Incoerenze (calcolate a ogni lettura)
 Codici (`Issue.code`):

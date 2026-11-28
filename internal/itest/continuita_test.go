@@ -62,16 +62,19 @@ func TestContinuita(t *testing.T) {
 	view := login(t, srv.URL, "view@"+slug+".test", testPassword)
 	const base = "/api/v1/continuity"
 
-	// --- Preparazione: il tenant esistente non ha ancora la continuità --------------
-	if o := view.do("GET", base+"/overview", nil, http.StatusOK); o["ready"] != false {
-		t.Fatalf("modulo non preparato: %v", o)
+	// --- Preparazione: il modulo parte spento; acceso senza essere preparato chiede il setup;
+	// accenderlo da Configurazione → Moduli lo prepara.
+	view.do("GET", base+"/overview", nil, http.StatusNotFound)
+	bcm.do("POST", base+"/bia", map[string]any{"capability": "x"}, http.StatusNotFound)
+	view.do("PUT", "/api/v1/tenant/modules", map[string]any{"modules": map[string]any{"continuity": true}}, http.StatusForbidden)
+	admin.do("PUT", "/api/v1/tenant/modules", map[string]any{"modules": map[string]any{"continuity": true}}, http.StatusOK)
+	if o := view.do("GET", base+"/overview", nil, http.StatusOK); o["ready"] != true {
+		t.Fatalf("accenderlo lo prepara: %v", o)
 	}
 	view.do("POST", base+"/setup", nil, http.StatusForbidden)
-	bcm.do("POST", base+"/bia", map[string]any{"capability": "x"}, http.StatusUnprocessableEntity) // non pronto
-	if r := admin.do("POST", base+"/setup", nil, http.StatusOK); r["ready"] != true {
+	if r := admin.do("POST", base+"/setup", nil, http.StatusOK); r["ready"] != true { // idempotente
 		t.Fatalf("setup: %v", r)
 	}
-	admin.do("POST", base+"/setup", nil, http.StatusOK) // idempotente
 	st := bcm.do("GET", base+"/settings", nil, http.StatusOK)
 	cfg := cObj(st["config"])
 	if st["ready"] != true || st["version"].(float64) != 1 || len(cList(cfg["categories"])) != 4 || len(cList(cfg["horizons"])) != 5 || len(cList(cfg["test_types"])) != 4 {
