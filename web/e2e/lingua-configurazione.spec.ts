@@ -34,9 +34,10 @@ test("processi: elenco ed editor in inglese", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Create and open the editor" })).toBeVisible();
   await senzaItaliano(page);
 
-  // L'editor visuale di un processo esistente.
+  // L'editor visuale di un processo esistente: uno preciso del nucleo (il ciclo di vita dell'applicazione),
+  // non il primo dell'elenco, che cambia con i moduli e porta nomi di fasi e passaggi che sono dati.
   const list = await call(page.request, "GET", "/api/v1/processes");
-  const key = list.items[0].key as string;
+  const key = (list.items.find((p: { key: string }) => p.key === "application_standard") ?? list.items[0]).key as string;
   await page.goto(`/processi/${key}`);
   await expect(page.getByRole("button", { name: "+ Stage" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Properties of the selected item" })).toBeVisible();
