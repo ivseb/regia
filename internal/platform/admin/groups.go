@@ -42,14 +42,16 @@ func (u GroupUsage) blocking() []string {
 
 // Group è un gruppo con membri, ruoli e utilizzi.
 type Group struct {
-	ID       string     `json:"id"`
-	Name     string     `json:"name"`
-	ParentID *string    `json:"parent_id"`
-	System   bool       `json:"system"`
-	Members  []Holder   `json:"members"`
-	Roles    []Holder   `json:"roles"`
-	Usage    GroupUsage `json:"usage"`
-	Created  time.Time  `json:"created_at"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	ParentID *string `json:"parent_id"`
+	System   bool    `json:"system"`
+	// IdPManaged: destinazione di una mappatura dell'IdP, appartenenza in sola lettura.
+	IdPManaged bool       `json:"idp_managed"`
+	Members    []Holder   `json:"members"`
+	Roles      []Holder   `json:"roles"`
+	Usage      GroupUsage `json:"usage"`
+	Created    time.Time  `json:"created_at"`
 }
 
 // usageSQL calcola gli utilizzi del gruppo g. Le regole si cercano nelle versioni
@@ -88,6 +90,7 @@ func (s *Service) ListGroups(ctx context.Context, tenantID string) ([]Group, err
 	err := s.read(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			select g.id, g.name, g.parent_id, g.system_kind is not null, g.created_at,
+			  exists (select 1 from idp_group_mappings mp where mp.group_id = g.id),
 			  coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.display_name, 'status', m.status, 'assignment_id', '') order by lower(m.display_name))
 			            from group_members gm join members m on m.tenant_id = gm.tenant_id and m.id = gm.member_id
 			            where gm.group_id = g.id and m.status <> 'anonymized'), '[]'),
@@ -104,7 +107,7 @@ func (s *Service) ListGroups(ctx context.Context, tenantID string) ([]Group, err
 		for rows.Next() {
 			var g Group
 			var members, roles, procs, teams, bodies []byte
-			if err := rows.Scan(&g.ID, &g.Name, &g.ParentID, &g.System, &g.Created, &members, &roles,
+			if err := rows.Scan(&g.ID, &g.Name, &g.ParentID, &g.System, &g.Created, &g.IdPManaged, &members, &roles,
 				&procs, &teams, &bodies, &g.Usage.Elements, &g.Usage.Approvals); err != nil {
 				return err
 			}
@@ -225,6 +228,23 @@ func (s *Service) UpdateGroup(ctx context.Context, a Actor, id string, in GroupI
 		if parent != nil && *parent == "" {
 			parent = nil
 		}
+		// Con l'ereditarietà il padre (vecchio e nuovo) porta i suoi ruoli ai membri del gruppo.
+		var oldParent *string
+		var inherit bool
+		if err := tx.QueryRow(ctx, "select parent_id, group_inheritance_on() from groups where id = $1", id).Scan(&oldParent, &inherit); err != nil {
+			return notFound(err)
+		}
+		if inherit && !samePtr(oldParent, parent) {
+			var chain []string
+			for _, p := range []*string{oldParent, parent} {
+				if p != nil {
+					chain = append(chain, *p)
+				}
+			}
+			if err := a.canGrantGroups(ctx, tx, chain); err != nil {
+				return err
+			}
+		}
 		tag, err := tx.Exec(ctx, "update groups set parent_id = $2 where id = $1 and parent_id is distinct from $2::uuid", id, parent)
 		if err != nil {
 			return err
@@ -262,6 +282,9 @@ func (s *Service) DeleteGroup(ctx context.Context, a Actor, id string) error {
 		if len(why) > 0 {
 			return conflict("group.in_use", "il gruppo è in uso ("+strings.Join(why, "; ")+"): toglilo prima da lì")
 		}
+		if err := a.canGrantGroups(ctx, tx, []string{id}); err != nil {
+			return err
+		}
 		var members int
 		if err := tx.QueryRow(ctx, "select count(*) from group_members where group_id = $1", id).Scan(&members); err != nil {
 			return err
@@ -288,6 +311,12 @@ func (s *Service) AddGroupMember(ctx context.Context, a Actor, groupID, memberID
 		}
 		if system {
 			return conflict("group.system", "«Tutti i membri» comprende già ogni membro")
+		}
+		if err := checkNotIdPManaged(ctx, tx, []string{groupID}); err != nil {
+			return err
+		}
+		if err := a.canGrantGroups(ctx, tx, []string{groupID}); err != nil {
+			return err
 		}
 		tag, err := tx.Exec(ctx, `insert into group_members (tenant_id, group_id, member_id)
 			select app_tenant(), $1, m.id from members m where m.id = $2 and m.status <> 'anonymized'
@@ -320,6 +349,12 @@ func (s *Service) RemoveGroupMember(ctx context.Context, a Actor, groupID, membe
 		if system {
 			return conflict("group.system", "da «Tutti i membri» non si toglie nessuno: si sospende il membro")
 		}
+		if err := checkNotIdPManaged(ctx, tx, []string{groupID}); err != nil {
+			return err
+		}
+		if err := a.canGrantGroups(ctx, tx, []string{groupID}); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, "delete from group_members where group_id = $1 and member_id = $2", groupID, memberID)
 		if err != nil {
 			return err
@@ -332,4 +367,30 @@ func (s *Service) RemoveGroupMember(ctx context.Context, a Actor, groupID, membe
 		}
 		return a.audit(ctx, tx, "group.member_remove", "group", groupID, map[string]any{"member": memberID})
 	})
+}
+
+func samePtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// ErrIdPManaged: l'appartenenza a un gruppo governato dall'IdP la decide solo l'IdP.
+var ErrIdPManaged = &Error{Status: 409, Code: "group.idp_managed",
+	Msg: "il gruppo è governato dall'IdP aziendale: l'appartenenza si cambia nell'IdP, non in Regia"}
+
+// checkNotIdPManaged rifiuta i gruppi che sono destinazione di una mappatura dell'IdP.
+func checkNotIdPManaged(ctx context.Context, tx pgx.Tx, groupIDs []string) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+	var managed bool
+	if err := tx.QueryRow(ctx, "select exists (select 1 from idp_group_mappings where group_id = any($1::uuid[]))", groupIDs).Scan(&managed); err != nil {
+		return err
+	}
+	if managed {
+		return ErrIdPManaged
+	}
+	return nil
 }

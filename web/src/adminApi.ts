@@ -27,6 +27,12 @@ export type AdminMember = {
   sessions: number;
   tokens: number;
   other_tenants: boolean;
+  /** Chi ha creato il membro: amministratore, primo accesso OIDC o SCIM. */
+  origin: "admin" | "oidc" | "scim";
+  /** Chi ha deciso la sospensione (solo se sospeso). */
+  suspended_source: "admin" | "idp" | null;
+  /** L'unico ruolo è «Lettore» diretto (il vecchio default degli inviti). */
+  only_viewer: boolean;
 };
 export type MemberList = { items: AdminMember[]; me: string; sso_only: boolean; email_available: boolean };
 export type OneTimeLink = { kind: "invite" | "password"; path: string; url?: string; expires_at: string };
@@ -52,6 +58,8 @@ export type AdminGroup = {
   name: string;
   parent_id: string | null;
   system: boolean;
+  /** Destinazione di una mappatura dell'IdP: l'appartenenza la decide l'IdP. */
+  idp_managed: boolean;
   members: Holder[];
   roles: Holder[];
   usage: GroupUsage;
@@ -227,3 +235,41 @@ export const webhookApi = {
 export function absoluteLink(l: OneTimeLink): string {
   return l.url ?? window.location.origin + l.path;
 }
+
+// ---------------------------------------------------------------------------
+// Identità aziendale: creazione al primo accesso, gruppi dell'IdP, SCIM (internal/api/idp.go)
+// ---------------------------------------------------------------------------
+
+export type IdPSettings = { provisioning: boolean; allowed_domains: string[]; groups_claim: string; updated_at?: string | null };
+export type IdPMapping = { id: string; group_id: string; group_name: string };
+export type IdPGroup = {
+  id: string;
+  external_id: string;
+  display_name: string;
+  source: "scim" | "oidc" | "manual";
+  members: number;
+  mappings: IdPMapping[];
+  updated_at: string;
+};
+export type SCIMToken = { id: string; name: string; hint: string; created_at: string; last_used_at: string | null };
+export type IdPOverview = {
+  settings: IdPSettings;
+  groups: IdPGroup[];
+  scim_tokens: SCIMToken[];
+  scim_active: boolean;
+  scim_base_url: string;
+  oidc: { enabled: boolean; name: string };
+  all_members_roles: string[];
+  only_viewer: number;
+};
+
+export const idpApi = {
+  overview: () => call<IdPOverview>("GET", "/admin/idp"),
+  setSettings: (s: IdPSettings) => call<void>("PUT", "/admin/idp/settings", s),
+  createGroup: (external_id: string, display_name: string) => call<{ id: string }>("POST", "/admin/idp/groups", { external_id, display_name }),
+  deleteGroup: (id: string) => call<void>("DELETE", `/admin/idp/groups/${q(id)}`),
+  map: (idp_group_id: string, group_id: string) => call<{ id: string }>("POST", "/admin/idp/mappings", { idp_group_id, group_id }),
+  unmap: (id: string) => call<void>("DELETE", `/admin/idp/mappings/${q(id)}`),
+  createToken: (name: string) => call<{ token: string; item: SCIMToken }>("POST", "/admin/idp/scim-tokens", { name }),
+  revokeToken: (id: string) => call<void>("DELETE", `/admin/idp/scim-tokens/${q(id)}`),
+};
