@@ -136,3 +136,41 @@ Guida per chi configura in [devsecops-servicenow.md](../devsecops-servicenow.md)
 - **Finto ServiceNow:** `regia dev fake-servicenow [--addr 127.0.0.1:8190] [--user …] [--password …] [--client-id …] [--client-secret …]`, da usare con `--dev`.
   - Implementa la Table API in lettura con un sottoinsieme delle encoded query (`=`, `!=`, `IN`, `>=`, `>`, `<=`, `<`, `^`, `^OR`, `ORDERBY`, `ORDERBYDESC`), Basic, OAuth e le ACL negate.
   - Gli stessi dati (`fakeservicenow.Demo`) e lo stesso server servono ai test.
+
+## DevSecOps, connettore ALM/Quality Center in sola lettura
+
+Guida per chi configura in [devsecops-alm.md](../devsecops-alm.md). È il primo passo per sostituire ALM per gradi: lettura, poi test management nativo, poi migrazione dello storico. **Non scrive mai** su ALM.
+- **Migrazione:** `0120_connettore_alm.sql` (riservate 0120-0124).
+  - Ammette il kind `alm`.
+  - Crea le tabelle **generiche** dei test, tutte con `origin` (`alm`, `native`, `import`) e `source_key` stabile, con RLS:
+    - `test_sets`: `change_number` in maiuscolo, ciclo, release, cartella, unità e applicazione;
+    - `test_set_items`: stato attuale di ogni test pianificato (`passed`, `failed`, `blocked`, `not_completed`, `no_run`, `na`);
+    - `test_runs`: storico delle esecuzioni. `tester` resta nullo se l'integrazione non ha `keep_tester`;
+    - `test_defects`: `open` dagli stati chiusi configurati, `severity` normalizzata, `test_set_ids` dai link, `change_numbers` calcolati.
+  - Il test management nativo e l'import dello storico scriveranno nelle stesse tabelle con la loro origine. La certificazione e il gate le leggono senza filtrare l'origine.
+  - Per le unità (progetto, cartella o valore del campo) riusa `connector_repositories`: `external_id` `p:`/`f:`/`v:`, `description` = tipo, `service_name` con prefisso `alm:`.
+  - I cursori stanno in `connector_sync_state.cursors`, per `dominio/progetto` e collezione.
+- **Test:** `go test ./internal/itest -run Alm` e i package `connectors/alm/...`.
+- **Codice:**
+  - `connectors/alm/almapi`: client REST con la sola libreria standard.
+    - Accesso: `alm-authenticate` (utente, o API key da 15.00), con ripiego su `rest/oauth2/login` per l'API key da 12.60 a 14.x.
+    - Sessione: `rest/site-session`; cookie in un `cookiejar` per client; `X-XSRF-TOKEN` sulle chiamate non GET; `Logout` alla fine.
+    - Lettura: collezioni JSON con `query`, `fields`, `order-by`, `page-size`, `start-index`. Un 401 a sessione aperta fa rientrare una volta.
+    - Date nell'ora del server (`Options.Location`).
+  - `connectors/alm`, un file per parte:
+    - `service.go`: configurazione, segreti, prova progetto per progetto;
+    - `units.go`: unità, proposta con `ghconn.Suggest`, conferma;
+    - `sync.go`: lease, per progetto release e cicli, cartelle, poi test set, istanze, esecuzioni e difetti dal cursore, test set citati per id, link dei difetti, `linkDefects` alla fine;
+    - `records.go`: test set letti con i numeri per stato.
+- **Effetti sul modulo devsecops** (SQL diretto sulle tabelle generiche, nessuna dipendenza dal connettore):
+  - `certification_tests.go`: `certTests` aggiunge a `CertData.Tests` una riga per test set del change (`TestRun` con `planned`, `blocked`, `not_run`, `detail`); `certDefects` riempie `CertData.Defects`; `TestTotals` ha `planned`, `blocked`, `not_run`; evidenza GRC sulla sorgente `tests` (collettore `devsecops.tests`) alla generazione.
+  - `gate_tests.go`: regola `tests` (`testsParams` in `gate_policy.go`) sui test set del change dell'applicazione, o senza applicazione. `changeNumbers` (`gate_eval.go`) è in comune con la regola ServiceNow.
+- **Collegamento:** `serve.go` crea il servizio con `devsecopsALM` e avvia `almSvc.Run(ctx, time.Minute)`; in `api.New` senza `Options.ALM` il servizio si crea senza job.
+- **API** (`internal/api/devsecops_alm.go`):
+  - `/api/v1/devsecops/alm/integrations[/{id}]` con `test`, `units`, `units/{id}` (PUT `{"status","application_id"}`), `units/accept`, `discover`, `sync[?full=true]` e `runs`: richiede `tenant.admin`, e le modifiche della configurazione solo una sessione;
+  - `GET /api/v1/devsecops/alm/test-sets?integration=&change=&limit=` con `element.read`.
+- **Interfaccia:** `/configurazione/integrazioni/alm`, sezione Test della certificazione del rilascio, regola «Test del change» e sorgente di evidenza in Gate di rilascio.
+- **Finto ALM:** `regia dev fake-alm [--addr 127.0.0.1:8191] [--legacy] [--xsrf] [--client-id …] [--client-secret …] [--user …] [--password …]`, da usare con `--dev`.
+  - Implementa accesso, sessione, domini e lettura delle collezioni, con un sottoinsieme della sintassi delle query (`campo[valore]`, `>=`, `<=`, `>`, `<`, `<>`, ` or `, condizioni unite da `;`).
+  - Un campo sconosciuto risponde 400; le collezioni negate 403.
+  - Gli stessi dati (`fakealm.Demo`) e lo stesso server servono ai test.

@@ -290,6 +290,8 @@ func RuleLabel(kind string) string {
 		return "Finestra di rilascio"
 	case RuleChecks:
 		return "Controlli della pipeline"
+	case RuleTests:
+		return "Test del change"
 	case RuleCondition:
 		return "Condizione"
 	}
@@ -351,6 +353,8 @@ func (s *Service) evaluate(ctx context.Context, tx pgx.Tx, actor engine.Actor, g
 			rs, err = s.ruleWindow(g, r)
 		case RuleChecks:
 			rs, err = s.ruleChecks(ctx, tx, g, r)
+		case RuleTests:
+			rs, err = s.ruleTests(ctx, tx, g, r)
 		case RuleCondition:
 			rs, err = s.ruleCondition(ctx, tx, g, r)
 		}
@@ -638,9 +642,9 @@ func (sn *snChange) link() string {
 	return sn.url
 }
 
-// serviceNowChange trova la change di ServiceNow del gate: il numero indicato (con gli
-// alias del change di Regia) oppure i change della richiesta. La più aggiornata vince.
-func serviceNowChange(ctx context.Context, tx pgx.Tx, g *gateCtx) (*snChange, error) {
+// changeNumbers sono i numeri di change del gate: quello indicato, con gli alias del change di
+// Regia, e i change della richiesta.
+func changeNumbers(ctx context.Context, tx pgx.Tx, g *gateCtx) ([]string, error) {
 	var numbers []string
 	if n := normChange(g.in.Change); n != "" {
 		numbers = append(numbers, n)
@@ -653,14 +657,27 @@ func serviceNowChange(ctx context.Context, tx pgx.Tx, g *gateCtx) (*snChange, er
 	var num string
 	var als []string
 	if _, err := pgx.ForEachRow(rows, []any{&num, &als}, func() error {
-		numbers = append(numbers, num)
-		numbers = append(numbers, als...)
+		if !slices.Contains(numbers, num) {
+			numbers = append(numbers, num)
+		}
+		for _, a := range als {
+			if !slices.Contains(numbers, a) {
+				numbers = append(numbers, a)
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	if len(numbers) == 0 {
-		return nil, nil
+	return numbers, nil
+}
+
+// serviceNowChange trova la change di ServiceNow del gate: il numero indicato (con gli
+// alias del change di Regia) oppure i change della richiesta. La più aggiornata vince.
+func serviceNowChange(ctx context.Context, tx pgx.Tx, g *gateCtx) (*snChange, error) {
+	numbers, err := changeNumbers(ctx, tx, g)
+	if err != nil || len(numbers) == 0 {
+		return nil, err
 	}
 	var sn snChange
 	err = tx.QueryRow(ctx, `select x.number, x.state, x.approval, x.url from servicenow_changes x

@@ -64,9 +64,11 @@ type Ref struct {
 	State string `json:"state"`
 }
 
-// TestRun è un esito di test di una versione rilasciata. Origin dice da dove viene: oggi
-// «pipeline» (i controlli del rilascio); poi un connettore ALM in lettura e il test
-// management nativo. I numeri mancano se la fonte non li dà.
+// TestRun è un esito di test. Origin dice da dove viene: «pipeline» (i controlli del
+// rilascio, una riga per controllo), «alm» (il connettore ALM in lettura, una riga per test
+// set del change), poi «native» (test management di Regia) e «import» (storico migrato). I
+// numeri mancano se la fonte non li dà. Per i test set: Planned = test pianificati, Executed =
+// superati + falliti + non completati, Skipped = non applicabili, NotRun = non eseguiti.
 type TestRun struct {
 	Origin   string `json:"origin"`
 	Service  string `json:"service"`
@@ -79,14 +81,21 @@ type TestRun struct {
 	Passed   *int   `json:"passed"`
 	Failed   *int   `json:"failed"`
 	Skipped  *int   `json:"skipped"`
+	Planned  *int   `json:"planned,omitempty"`
+	Blocked  *int   `json:"blocked,omitempty"`
+	NotRun   *int   `json:"not_run,omitempty"`
+	Detail   string `json:"detail,omitempty"` // progetto · release · ciclo · cartella
 }
 
 // TestTotals somma i numeri delle esecuzioni che li hanno.
 type TestTotals struct {
+	Planned  int  `json:"planned"`
 	Executed int  `json:"executed"`
 	Passed   int  `json:"passed"`
 	Failed   int  `json:"failed"`
 	Skipped  int  `json:"skipped"`
+	Blocked  int  `json:"blocked"`
+	NotRun   int  `json:"not_run"`
 	Counted  bool `json:"counted"` // almeno una fonte ha dato i numeri
 }
 
@@ -137,6 +146,7 @@ type CertData struct {
 	Hidden     int            `json:"hidden"`
 	Tests      []TestRun      `json:"tests"`
 	TestTotals TestTotals     `json:"test_totals"`
+	Defects    *CertDefects   `json:"defects,omitempty"` // difetti aperti dei test del change
 	Sonar      []CertCheck    `json:"sonar"`
 	Security   []CertSecurity `json:"security"`
 	Gate       []CertGate     `json:"gate"`
@@ -274,11 +284,28 @@ func (s *Service) certData(ctx context.Context, tx pgx.Tx, actor engine.Actor, c
 		d.Approvals = append(d.Approvals, CertApproval{Service: r.Service, Version: r.Version, Environment: r.Environment,
 			RequestedBy: r.RequestedBy, ApprovedBy: r.ApprovedBy, ApprovedAt: r.ApprovedAt})
 	}
+	// Test del change dagli strumenti di test (oggi ALM in lettura) e difetti aperti.
+	numbers := append([]string{ch.Number}, ch.Aliases...)
+	ext, err := certTests(ctx, tx, numbers)
+	if err != nil {
+		return nil, err
+	}
+	d.Tests = append(d.Tests, ext...)
+	if d.Defects, err = certDefects(ctx, tx, numbers); err != nil {
+		return nil, err
+	}
 	for _, t := range d.Tests {
 		if t.Executed == nil && t.Passed == nil && t.Failed == nil && t.Skipped == nil {
 			continue
 		}
 		d.TestTotals.Counted = true
+		if t.Planned != nil {
+			d.TestTotals.Planned += *t.Planned
+		} else {
+			d.TestTotals.Planned += intOr(t.Executed)
+		}
+		d.TestTotals.Blocked += intOr(t.Blocked)
+		d.TestTotals.NotRun += intOr(t.NotRun)
 		d.TestTotals.Executed += intOr(t.Executed)
 		d.TestTotals.Passed += intOr(t.Passed)
 		d.TestTotals.Failed += intOr(t.Failed)
@@ -435,7 +462,7 @@ func (s *Service) certMapped(ctx context.Context, tx pgx.Tx) (bool, error) {
 		return false, nil
 	}
 	var ok bool
-	err := tx.QueryRow(ctx, `select exists (select 1 from gate_evidence_map where source = $1)`, sourceCertification).Scan(&ok)
+	err := tx.QueryRow(ctx, `select exists (select 1 from gate_evidence_map where source = any($1))`, []string{sourceCertification, sourceTests}).Scan(&ok)
 	return ok, err
 }
 
@@ -475,6 +502,9 @@ func (s *Service) GenerateCertification(ctx context.Context, tx pgx.Tx, actor en
 		return nil, err
 	}
 	if err := s.certEvidence(ctx, tx, actor, ch, d, id, version, hash); err != nil {
+		return nil, err
+	}
+	if err := s.certTestsEvidence(ctx, tx, actor, ch, d, version); err != nil {
 		return nil, err
 	}
 	if err := auditEvent(ctx, tx, actor, "devsecops.certification", "release_certification", id, map[string]any{

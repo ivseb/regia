@@ -99,15 +99,21 @@ File: `certification.go`, `web/src/pages/Certificazione.tsx`. Il PDF è la stamp
   elementi (dai rilasci di produzione, o da tutti se non ce ne sono, senza doppioni); test; Sonar; CVE al
   rilascio; decisione del gate (ultima per servizio, ambiente e versione, in sola lettura) e approvazioni
   dichiarate.
-- Test: `TestRun` con `origin`. Oggi «pipeline», cioè i controlli del rilascio con nome da test (`test`,
-  `unit`, `e2e`, `*tests`…); i numeri si leggono dalla sintesi («120 passed, 2 skipped»). Pronta per altre
-  origini (connettore ALM, test management nativo). Sonar: controlli con «sonar» o «quality gate» nel nome.
+- Test: `TestRun` con `origin`.
+  - «pipeline»: i controlli del rilascio con nome da test (`test`, `unit`, `e2e`, `*tests`…); i numeri si
+    leggono dalla sintesi («120 passed, 2 skipped»).
+  - «alm» (e domani «native», «import»): una riga per test set del numero di change, dalle tabelle generiche
+    dei test (`certification_tests.go`, migrazione 0120), con pianificati, bloccati e non eseguiti; sotto, i
+    difetti aperti per gravità (`defects`). Vedi [devsecops-alm.md](../devsecops-alm.md).
+  - Sonar: controlli con «sonar» o «quality gate» nel nome.
 - «Genera» (`canCertify`: configurazione DevSecOps o `devsecops.write`, quindi anche la pipeline) congela i
   dati dal vivo in `release_certifications` (versione crescente, JSON, SHA-256, autore); le versioni
   precedenti restano e si aprono con `?versione=N`. Un change senza rilasci non si certifica.
 - Evidenza GRC: alla generazione, se in Configurazione → Gate di rilascio c'è un controllo mappato sulla
   sorgente `certification`, nasce un'evidenza automatica (collettore `devsecops.certification`,
   idempotente per change e versione). Senza mappatura non nasce nulla e la pagina lo dice.
+  Con un controllo mappato sulla sorgente `tests` nasce anche l'evidenza dell'esito dei test del change
+  (collettore `devsecops.tests`).
 - Stato e approvazione della change da ServiceNow: si aggiungono quando la sessione ServiceNow avrà
   fissato i campi di `changes`.
 

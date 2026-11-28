@@ -31,13 +31,14 @@ const (
 	RuleWindow          = "window"          // finestra di rilascio e blocchi
 	RuleCondition       = "condition"       // condizione libera sui fatti
 	RuleChecks          = "checks"          // controlli della pipeline superati
+	RuleTests           = "tests"           // test del change (ALM in lettura, poi test management)
 	gateWildcard        = "*"               // ambiente: tutti gli altri
 	gateOverrideStage   = "@gate_override"  // approval_policies.stage
 	gateOverrideSubject = "gate_override"   // approval_requests.subject
 	maxGateRules        = 30
 )
 
-var ruleKinds = []string{RuleRequirements, RuleVulnerabilities, RuleChangeApproved, RuleWindow, RuleChecks, RuleCondition}
+var ruleKinds = []string{RuleRequirements, RuleVulnerabilities, RuleChangeApproved, RuleWindow, RuleChecks, RuleTests, RuleCondition}
 
 // GateRule è una regola di un ambiente.
 type GateRule struct {
@@ -93,6 +94,17 @@ type conditionParams struct {
 
 type checksParams struct {
 	Names []string `json:"names"`
+}
+
+// testsParams sono le soglie della regola sui test del change. Si contano i test pianificati
+// nei test set del numero di change (stato attuale di ciascuno) e i difetti aperti collegati.
+type testsParams struct {
+	MaxFailed       int    `json:"max_failed"`       // falliti tollerati
+	MaxBlocked      *int   `json:"max_blocked"`      // bloccati tollerati; nil = non contano
+	MinExecutedPct  int    `json:"min_executed_pct"` // eseguiti sul totale (senza i non applicabili), 0-100
+	DefectsSeverity string `json:"defects_severity"` // critical | high | medium | low; "" = i difetti non contano
+	MaxOpenDefects  int    `json:"max_open_defects"` // difetti aperti tollerati dalla gravità indicata in su
+	RequireResults  bool   `json:"require_results"`  // senza test del change il gate fallisce
 }
 
 // GatePolicy sono le regole di un ambiente.
@@ -255,6 +267,26 @@ func normRule(r GateRule, i int, now time.Time) (GateRule, error) {
 			return r, bad("scegli almeno un controllo della pipeline")
 		}
 		p.Names = names
+		out = p
+	case RuleTests:
+		var p testsParams
+		if err := strictDecode(r.Params, &p); err != nil {
+			return r, bad("parametri non validi")
+		}
+		if p.MaxFailed < 0 || p.MaxFailed > 100000 || p.MaxOpenDefects < 0 || p.MaxOpenDefects > 100000 {
+			return r, bad("i numeri tollerati vanno da 0 a 100000")
+		}
+		if p.MaxBlocked != nil && (*p.MaxBlocked < 0 || *p.MaxBlocked > 100000) {
+			return r, bad("i bloccati tollerati vanno da 0 a 100000")
+		}
+		if p.MinExecutedPct < 0 || p.MinExecutedPct > 100 {
+			return r, bad("la percentuale minima di eseguiti va da 0 a 100")
+		}
+		switch p.DefectsSeverity {
+		case "", "critical", "high", "medium", "low":
+		default:
+			return r, bad("la gravità dei difetti è critical, high, medium, low o vuota (non contano)")
+		}
 		out = p
 	case RuleCondition:
 		var p conditionParams

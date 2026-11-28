@@ -33,7 +33,7 @@ var checkNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._ -]{0,58}$`)
 // EvidenceMapItem è una riga della mappatura: una sorgente (un controllo della pipeline o la
 // decisione di gate superata) e il controllo GRC che ne riceve l'evidenza.
 type EvidenceMapItem struct {
-	Source         string `json:"source"` // "check:<nome>" | "gate" | "certification"
+	Source         string `json:"source"` // "check:<nome>" | "gate" | "certification" | "tests"
 	Control        string `json:"control"`
 	ControlTitle   string `json:"control_title,omitempty"`
 	ValidDays      *int   `json:"valid_days"`
@@ -284,8 +284,8 @@ func (s *Service) SaveEvidenceMap(ctx context.Context, tx pgx.Tx, actor engine.A
 				return nil, engine.InvalidValue("items", "riga %d: nome del controllo non valido", i+1)
 			}
 			src = "check:" + name
-		} else if src != sourceGate && src != sourceCertification {
-			return nil, engine.InvalidParams("validation.devsecops.evidence_source", "items", map[string]any{"row": i + 1}, "riga %d: la sorgente è un controllo della pipeline o la decisione di gate", i+1)
+		} else if src != sourceGate && src != sourceCertification && src != sourceTests {
+			return nil, engine.InvalidParams("validation.devsecops.evidence_source", "items", map[string]any{"row": i + 1}, "riga %d: la sorgente è un controllo della pipeline, la decisione di gate, la certificazione o i test", i+1)
 		}
 		if it.ValidDays != nil && (*it.ValidDays < 1 || *it.ValidDays > 3650) {
 			return nil, engine.InvalidParams("validation.devsecops.evidence_validity", "items", map[string]any{"row": i + 1}, "riga %d: la validità va da 1 a 3650 giorni", i+1)

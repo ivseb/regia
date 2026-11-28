@@ -121,6 +121,12 @@ func cmdServe(ctx context.Context, args []string) error {
 		return err
 	}
 	go snSvc.Run(ctx, time.Minute)
+	// DevSecOps, connettore ALM/Quality Center in sola lettura: test set, esecuzioni e difetti.
+	almSvc, err := devsecopsALM(rt.db, box, cfg, log)
+	if err != nil {
+		return err
+	}
+	go almSvc.Run(ctx, time.Minute)
 	// Inviti e link della password per email: solo con SMTP (altrimenti link da copiare).
 	var inviteMail notify.Sender
 	if mc := (notify.SMTPConfig{Host: cfg.Collab.SMTPHost, Port: cfg.Collab.SMTPPort, User: cfg.Collab.SMTPUser,
@@ -141,6 +147,7 @@ func cmdServe(ctx context.Context, args []string) error {
 		GitLab:     glSvc,
 		Gitea:      gtSvc,
 		ServiceNow: snSvc,
+		ALM:        almSvc,
 		Risk:       riskSvc,
 		GRC:        grcSvc,
 		// Import di progetti: connettori verso Jira o YouTrack nella rete interna solo se consentito.
