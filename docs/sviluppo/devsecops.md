@@ -93,3 +93,46 @@ Guida per chi configura in [devsecops-gitlab.md](../devsecops-gitlab.md); stato 
 - **API:** `/api/v1/devsecops/gitlab/integrations[/{id}]` con `test`, `webhook-secret`, `projects`, `discover`, `projects/{project}` (PUT), `projects/accept`, `sync[?full=true]`, `runs`, `preview`; `presets`; webhook `POST /api/v1/devsecops/gitlab/webhook/{id}` senza sessione, con `X-Gitlab-Token`.
 - **Interfaccia:** `/configurazione/integrazioni/gitlab` (schede Integrazioni, Progetti, Profili di pipeline, Sincronizzazioni), con il percorso guidato in cinque passi.
 - **Finto GitLab:** `regia dev fake-gitlab [--addr 127.0.0.1:8174] [--token …]` con un gruppo `esempio` inventato; con `--dev`. Gli stessi dati (`fakegitlab.Demo`) servono ai test.
+
+## DevSecOps, connettore ServiceNow in sola lettura
+
+Guida per chi configura in [devsecops-servicenow.md](../devsecops-servicenow.md). Il connettore integra ServiceNow e non lo sostituisce: legge incidenti, change request e servizi CMDB e **non scrive mai** su ServiceNow.
+- **Migrazione:** `0095_connettore_servicenow.sql`.
+  - Ammette il kind `servicenow`.
+  - Crea `servicenow_incidents` e `servicenow_changes`, con RLS e soli campi minimi. Le tabelle non hanno chiamante, assegnatario, commenti o note.
+  - Per i servizi CMDB riusa `connector_repositories`: `external_id` = sys_id, `description` = classe, `cursors` = codice e cursori; `service_name` ha il prefisso `servicenow:` e non si scontra con i repository.
+  - Riusa anche `connector_sync_state`, `connector_sync_runs` e `inbound_deliveries`.
+- **Test:** `go test ./internal/itest -run ServiceNow` e i package `connectors/servicenow/...` e `connectors/outbound`.
+- **Codice:**
+  - `connectors/servicenow/snapi`: client della Table API con la sola libreria standard.
+    - Autenticazione Basic oppure OAuth client credentials (`/oauth_token.do`, token in memoria fino a poco prima della scadenza).
+    - `sysparm_fields`, `sysparm_display_value=false` (date UTC `2006-01-02 15:04:05`), `sysparm_exclude_reference_link=true`, paginazione `sysparm_offset`/`sysparm_limit`.
+    - 429 e 5xx ritentati; errori 401, 403 (ACL) e 404 spiegati.
+  - `connectors/servicenow`, un file per parte:
+    - `service.go`: configurazione, segreti, prova tabella per tabella;
+    - `services.go`: scoperta della classe CMDB e proposta con `ghconn.Suggest` su nome e codice;
+    - `sync.go`: lease, cursori per servizio su `sys_updated_on`, change già note per numero;
+    - `records.go`: viste, decisione DORA, proposta e collegamento all'incidente di Regia; lavora nella transazione dell'API;
+    - `webhook.go`: HMAC-SHA256 in esadecimale o base64, deduplica.
+  - Riusa, senza modificarli, `ghapi.Policy` e `ghapi.NewHTTPClient`.
+  - `connectors/outbound` aggiunge al client di base il proxy in uscita esplicito (`REGIA_CONNECTOR_PROXY`, mai `HTTP_PROXY`).
+    - Con il proxy il controllo SSRF passa dal dialer a prima della richiesta: si risolve l'host e si verifica ogni indirizzo; un nome che non si risolve localmente passa al proxy.
+    - È generico: per ora lo usa solo ServiceNow, gli altri connettori possono adottarlo nel loro `httpClient`.
+- **Effetti sul modulo devsecops:**
+  - `loadDora` (`dora_calc.go`) aggiunge gli incidenti ServiceNow che contano (`IncidentRow.Source = "servicenow"`, `URL`):
+    - quelli confermati (`dora_status = 'counted'`), oppure in attesa quando l'integrazione ha `dora_mode = auto`;
+    - mai gli annullati, gli esclusi o quelli già collegati a un incidente di Regia, che contano tramite quello.
+  - La regola `change_approved` (`gate_policy.go`, `gate_eval.go`) ha il parametro `servicenow`: `""`, `accept` o `require`. Legge `servicenow_changes` con SQL diretto, per evitare dipendenze circolari tra pacchetti.
+- **Collegamento:**
+  - `serve.go` crea il servizio con `devsecopsServiceNow`, dove si legge il proxy, e avvia `snSvc.Run(ctx, time.Minute)`;
+  - `Options.Dora` è il modulo devsecops, per il primo ricalcolo delle metriche;
+  - in `api.New` senza `Options.ServiceNow` il servizio si crea senza job.
+- **API** (`internal/api/devsecops_servicenow.go`):
+  - `/api/v1/devsecops/servicenow/integrations[/{id}]` con `test`, `webhook-secret`, `services`, `services/{id}` (PUT `{"status","application_id"}`), `services/accept`, `discover`, `sync[?full=true]` e `runs`; richiede `tenant.admin`, e le modifiche della configurazione solo una sessione;
+  - `GET /incidents?application=&integration=&proposals=true` e `GET /changes?application=` con `element.read`; le proposte richiedono anche il permesso di segnalare un incidente;
+  - `GET /incidents/{id}/proposal`, `POST /incidents/{id}/promote` (`risk.CreateIncident` e collegamento nella stessa transazione), `POST /incidents/{id}/link`, `POST /incidents/{id}/decision` (`counted`, `excluded`, `pending`), con `element.write` o `incident.manage`;
+  - webhook `POST /api/v1/devsecops/servicenow/webhook/{id}`, senza sessione, con `X-Regia-Signature`.
+- **Interfaccia:** `/configurazione/integrazioni/servicenow`, sezione ServiceNow nella scheda dell'applicazione, proposte nella scheda Incidenti di Rischi e incidenti, link esterni nel dettaglio DORA, opzione nella regola del gate.
+- **Finto ServiceNow:** `regia dev fake-servicenow [--addr 127.0.0.1:8190] [--user …] [--password …] [--client-id …] [--client-secret …]`, da usare con `--dev`.
+  - Implementa la Table API in lettura con un sottoinsieme delle encoded query (`=`, `!=`, `IN`, `>=`, `>`, `<=`, `<`, `^`, `^OR`, `ORDERBY`, `ORDERBYDESC`), Basic, OAuth e le ACL negate.
+  - Gli stessi dati (`fakeservicenow.Demo`) e lo stesso server servono ai test.

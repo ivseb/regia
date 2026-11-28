@@ -88,6 +88,9 @@ export type DrillIncident = {
   resolved_at: string | null;
   hours: number | null;
   applications: string[];
+  /** "servicenow": letto dal connettore in sola lettura; key è il numero, url il record. */
+  source?: "servicenow";
+  url?: string;
 };
 export type Drill = {
   subject: SubjectRef;

@@ -39,6 +39,8 @@ export default {
   "errors.validation.projects.reason_required": "Write the reason: the supplier will read it.",
   "errors.validation.projects.cr_status": "The change request is no longer waiting to be sent.",
   "errors.validation.projects.cr_withdraw": "Only a change request waiting to be sent or awaiting approval can be withdrawn.",
+  "errors.validation.projects.manager_type": "Only projects and programmes have a manager to change.",
+  "errors.validation.projects.manager_required": "The manager is required: choose a person.",
   "errors.validation.work.epic_agile_only": "Only agile work packages get an epic.",
   "errors.validation.work.wp_no_team": "The work package has no responsible team.",
 } satisfies Translation<typeof it>;

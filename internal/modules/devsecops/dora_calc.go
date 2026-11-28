@@ -128,8 +128,12 @@ type IncidentRow struct {
 	ResolvedAt *time.Time `json:"resolved_at"`
 	Hours      *float64   `json:"hours"`
 	Apps       []string   `json:"applications"`
-	apps       []string   // id delle applicazioni toccate (dirette e degli asset)
-	assets     []string   // id degli asset toccati (diretti e di cui fanno parte le applicazioni)
+	// Source e URL: un incidente letto da un sistema esterno (servicenow) ha il link al
+	// record; quelli di Regia hanno la scheda (/e/{key}).
+	Source string   `json:"source,omitempty"`
+	URL    string   `json:"url,omitempty"`
+	apps   []string // id delle applicazioni toccate (dirette e degli asset)
+	assets []string // id degli asset toccati (diretti e di cui fanno parte le applicazioni)
 }
 
 type appInfo struct {
@@ -300,7 +304,59 @@ func loadDora(ctx context.Context, tx pgx.Tx, from, to time.Time, appID string) 
 	}); err != nil {
 		return nil, err
 	}
+	if err := d.loadExternalIncidents(ctx, tx, from.Add(-90*24*time.Hour), to, appID); err != nil {
+		return nil, err
+	}
+	slices.SortStableFunc(d.incidents, func(a, b *IncidentRow) int { return a.DetectedAt.Compare(b.DetectedAt) })
 	return d, nil
+}
+
+// loadExternalIncidents aggiunge gli incidenti letti da ServiceNow (connettore in sola
+// lettura) delle applicazioni associate. Contano se una persona li ha confermati o se
+// l'integrazione dice «contano da soli»; mai quelli annullati, esclusi o già diventati un
+// incidente di Regia (conta quello, una volta sola).
+func (d *doraData) loadExternalIncidents(ctx context.Context, tx pgx.Tx, from, to time.Time, appID string) error {
+	q := `select x.id::text, x.number, x.short_description, x.opened_at, x.resolved_at, x.application_element_id::text, x.url
+		from servicenow_incidents x
+		join integrations i on i.tenant_id = x.tenant_id and i.id = x.integration_id
+		where x.application_element_id is not null and x.regia_incident_element_id is null and x.state <> '8'
+		  and (x.dora_status = 'counted' or (x.dora_status = 'pending' and coalesce(i.config->>'dora_mode', 'confirm') = 'auto'))
+		  and x.opened_at >= $1 and x.opened_at < $2`
+	args := []any{from, to}
+	if appID != "" {
+		q += " and x.application_element_id = $3"
+		args = append(args, appID)
+	}
+	rows, err := tx.Query(ctx, q+" order by x.opened_at", args...)
+	if err != nil {
+		return err
+	}
+	var j IncidentRow
+	var app string
+	_, err = pgx.ForEachRow(rows, []any{&j.ID, &j.Key, &j.Title, &j.DetectedAt, &j.ResolvedAt, &app, &j.URL}, func() error {
+		in := j
+		in.Source = "servicenow"
+		in.DetectedAt = in.DetectedAt.UTC()
+		in.apps = []string{app}
+		if info := d.apps[app]; info != nil {
+			in.assets = slices.Clone(info.assets)
+		}
+		in.Apps = []string{}
+		if n := d.appNames[app]; n != "" {
+			in.Apps = append(in.Apps, n)
+		}
+		if in.ResolvedAt != nil {
+			t := in.ResolvedAt.UTC()
+			in.ResolvedAt = &t
+			if h := t.Sub(in.DetectedAt).Hours(); h >= 0 {
+				in.Hours = &h
+			}
+		}
+		d.incidents = append(d.incidents, &in)
+		j = IncidentRow{}
+		return nil
+	})
+	return err
 }
 
 func dedupeDeploys(in []*DeployRow) []*DeployRow {
