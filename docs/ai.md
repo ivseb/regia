@@ -125,7 +125,8 @@ In **Funzioni** puoi spostare una funzione sull'altro livello o su **un modello 
 | Classificazione e duplicati | rapido | nuova richiesta: «Cerca duplicati e proponi i campi» |
 | Wiki personale | rapido | profilo → «La mia wiki»: aggiornamento in background |
 | GRC assistito | approfondito | schede di evidenze, controlli e rischi; requisito normativo; notifica DORA dell'incidente (sezione 10) |
- Domande sul grafo, funzioni della scheda, collegamenti del GRC e notifica DORA non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare. La **wiki personale** invece li usa (legge con cerca, query e leggi e scrive le pagine con uno strumento suo): con un modello segnato «senza strumenti» l'aggiornamento non parte, e la wiki resta da scrivere a mano. Le **bozze di policy e runbook** usano gli strumenti di lettura se il modello li sa usare (per cercare gli elementi da citare); senza, si scrivono con i dati che Regia passa.
+| Questionari precompilati | approfondito | valutazione: «Proponi le risposte» in testa a ogni sezione (sezione 11) |
+ Domande sul grafo, funzioni della scheda, collegamenti del GRC, notifica DORA e questionari non chiamano strumenti (Regia passa al modello ciò che la persona può leggere): vanno bene anche con un modello che non li sa usare. La **wiki personale** invece li usa (legge con cerca, query e leggi e scrive le pagine con uno strumento suo): con un modello segnato «senza strumenti» l'aggiornamento non parte, e la wiki resta da scrivere a mano. Le **bozze di policy e runbook** usano gli strumenti di lettura se il modello li sa usare (per cercare gli elementi da citare); senza, si scrivono con i dati che Regia passa.
 
 **Quanto è veloce l'assistente.** Il tempo di una risposta dipende da quanti giri fa con gli strumenti e da quanto dura ogni giro: ogni giro è una chiamata al modello, e quasi sempre sceglie solo uno strumento, con poche decine di token di uscita. Conta quindi la latenza del modello più della sua capacità: per questo l'assistente sta di default sul livello **rapido** (con un modello grande ogni giro può durare 8-10 secondi anche con una risposta di due righe). L'assistente riceve con le istruzioni il **catalogo** dei tipi di elemento e delle loro fasi (da fare, in corso, chiuse), e scrive la query giusta al primo colpo invece di provare; chiama insieme gli strumenti indipendenti e risponde appena ha i dati. Se il modello rapido non sa usare gli strumenti e quello approfondito sì, l'assistente usa l'approfondito. Per risposte più ragionate spostalo sull'approfondito in **Funzioni**: lì in automatico ragiona a medio.
 
@@ -236,6 +237,42 @@ La persona completa e corregge i campi e preme **Salva come bozza nell'incidente
 
 Ogni proposta, bozza e notifica preparata è nel registro delle chiamate con la funzione «grc»; le decisioni della persona (collegamento accettato o scartato, bozza salvata) vi compaiono come «proposta confermata» o «rifiutata». Budget, mascheramento dei dati personali, contenuto come dato e contesto dalla wiki della persona valgono come per le altre funzioni.
 
+## 11. Questionari precompilati
+
+Serve il modello della funzione **Questionari precompilati** (livello approfondito). Con l'AI spenta la pagina della valutazione è identica a prima. L'unica differenza visibile anche senza AI sono le **domande da guardare con attenzione**, con la dicitura:
+- «Cambia il punteggio», se la risposta conta nel punteggio;
+- «Genera prescrizioni o requisiti», se una regola del modello la usa.
+
+**Proporre.** In testa a ogni sezione che la persona può compilare c'è **Proponi le risposte**. L'AI propone una risposta per le domande visibili e ancora vuote, al massimo 40 per volta. Non propone per le domande di tipo allegato. Legge solo ciò che la persona può vedere:
+- le **risposte confermate** delle valutazioni concluse con un esito sulla **stessa applicazione**: la stessa domanda dello stesso modello, in qualsiasi versione, o una domanda con lo stesso testo in un altro modello;
+- in subordine, per le domande che lì non hanno risposta, quelle delle **applicazioni simili**: stessa classificazione dei dati e stessa criticità, prima quelle con lo stesso hosting;
+- i **fatti del grafo** dell'oggetto valutato e dell'applicazione: criticità, classificazione dei dati, hosting, funzione critica, dipendenze, servizi fuori pipeline, CVE critiche e alte in produzione e gli altri fatti con un nome;
+- le **pagine Knowledge** che documentano l'applicazione o la richiesta, al massimo 5;
+- il testo di al massimo 3 **allegati** della richiesta e della valutazione.
+
+**Fonte e confidenza.** Sotto la domanda la proposta mostra:
+- il valore;
+- il motivo;
+- la **fonte**, con il link alla valutazione (alla domanda), alla pagina o all'elemento del fatto;
+- la **confidenza**: alta, media o bassa.
+
+Regia controlla ogni proposta. Un valore che la domanda non accetta, o una risposta senza una fonte che esista davvero, diventa **«Nessuna fonte: da compilare a mano»**. Regia non inventa mai un valore. Anche la confidenza la limita Regia:
+- «alta» solo se una risposta confermata della stessa applicazione per la stessa domanda dice proprio quel valore, o se lo dice il fatto da cui la domanda si precompila;
+- altrimenti al massimo «media», anche se il modello dice «alta».
+
+**Decidere.**
+- **Accetta**: la proposta diventa la risposta.
+- **Modifica**: la persona cambia il valore e lo accetta.
+- **Scarta**: la proposta sparisce.
+
+**Accetta le proposte della sezione** accetta tutte quelle con una fonte. Se fra queste ci sono domande da guardare con attenzione, prima le elenca e chiede conferma.
+
+Accettare è rispondere: valgono i permessi sulla sezione, e punteggio, prescrizioni e requisiti si aggiornano come per ogni risposta. Nella storia della domanda resta **«Proposta AI accettata da …»**, oppure «modificata e accettata». Una risposta data a mano fa decadere la proposta della stessa domanda.
+
+**Chi le vede.** Le proposte restano finché la persona non decide, così riaprendo la pagina non si rifà la chiamata. Le vede solo chi le ha chieste, perché vengono da fonti lette con i suoi permessi.
+
+**Registro.** Ogni chiamata è nel registro con la funzione «questionari». Le decisioni vi compaiono come «proposta confermata» o «rifiutata». Budget, mascheramento dei dati personali e contenuto come dato valgono come per le altre funzioni.
+
 ## Sicurezza in breve
 
 - L'assistente usa gli stessi permessi della persona: passa dagli stessi servizi dell'interfaccia, con l'isolamento tra organizzazioni e la visibilità degli spazi.
@@ -244,5 +281,6 @@ Ogni proposta, bozza e notifica preparata è nel registro delle chiamate con la 
 - Il server MCP accetta solo token API: non la sessione del browser. Un token di sola lettura vede solo gli strumenti di lettura.
 - La wiki personale è separata per persona anche nel database (Row Level Security sul membro); l'assistente la aggiorna con i permessi della persona e ogni sua modifica si annulla.
 - Nel GRC l'assistente non collega, non approva e non invia niente: i collegamenti si accettano uno per uno con i permessi della persona (`grc.evidence.link` nel registro di audit), le policy nascono come documenti controllati in bozza (`ai.grc.draft.save`), la notifica DORA si salva come versione (`regulatory_notification.draft_version`) e si invia fuori da Regia.
+- Nei questionari l'assistente non risponde da sé: ogni proposta si accetta, si cambia o si scarta con i permessi della persona, e la risposta accettata porta nella storia la sorgente «proposta AI» con chi l'ha accettata.
 - Chiavi e credenziali dei fornitori sono dell'organizzazione: Regia non usa mai quelle del server (variabili d'ambiente di Anthropic, AWS o Google, profili, ruolo dell'istanza, chiavi di Ollama sul disco), così un'organizzazione non usa le credenziali di un'altra né quelle di chi gestisce l'installazione.
 - Ogni modifica della configurazione è nel registro di audit (`ai.settings.update`, `ai.provider.*` compresa la prova di connessione `ai.provider.test`, `ai.proposal.apply`; `wiki.promote` per le pagine della wiki promosse a Knowledge).
