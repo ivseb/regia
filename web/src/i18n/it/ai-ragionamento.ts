@@ -4,7 +4,7 @@ import type { Source } from "../types";
 
 export default {
   "ai.cfg.reasoning": "Ragionamento",
-  "ai.cfg.reasoningHelp": "Quanto il modello ragiona prima di rispondere: di più vuol dire risposte più accurate, ma più lente e più costose. In automatico il livello rapido ragiona poco e l'approfondito molto (l'assistente medio, perché fa più giri con gli strumenti); le richieste brevi (domande sul grafo, riassunti, classificazione) ragionano sempre poco, salvo un valore scelto per la funzione. Ollama e i servizi compatibili decidono da sé.",
+  "ai.cfg.reasoningHelp": "Quanto il modello ragiona prima di rispondere: di più vuol dire risposte più accurate, ma più lente e più costose. In automatico il livello rapido ragiona poco e l'approfondito molto (l'assistente, spostato sull'approfondito, medio, perché fa più giri con gli strumenti); le richieste brevi (domande sul grafo, riassunti, classificazione) ragionano sempre poco, salvo un valore scelto per la funzione. Ollama e i servizi compatibili decidono da sé.",
   "ai.cfg.reasoning.auto": "Automatico",
   "ai.cfg.reasoning.low": "Basso",
   "ai.cfg.reasoning.medium": "Medio",

@@ -121,7 +121,7 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, feature string) (*Targ
 	t := &Target{Feature: feature, Tier: f.Tier}
 	r := st.Routes[feature]
 	t.RouteEffort = r.Reasoning
-	var choice TierChoice
+	var choice, other TierChoice
 	switch {
 	case r.ProviderID != "":
 		choice, t.Tier = TierChoice{ProviderID: r.ProviderID, Model: r.Model}, ""
@@ -129,16 +129,12 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, feature string) (*Targ
 		if r.Tier != "" {
 			t.Tier = r.Tier
 		}
-		choice = st.Deep
+		choice, other = st.Deep, st.Fast
 		if t.Tier == TierFast {
-			choice = st.Fast
+			choice, other = st.Fast, st.Deep
 		}
 		if choice.ProviderID == "" {
-			if t.Tier == TierFast {
-				choice = st.Deep
-			} else {
-				choice = st.Fast
-			}
+			choice, other = other, TierChoice{}
 		}
 	}
 	if choice.ProviderID == "" || choice.Model == "" {
@@ -147,6 +143,19 @@ func (s *Service) Resolve(ctx context.Context, tx pgx.Tx, feature string) (*Targ
 	p, err := s.provider(ctx, tx, choice.ProviderID)
 	if err != nil {
 		return nil, st, ErrNotConfigured
+	}
+	// Una funzione che lavora con gli strumenti (l'assistente, la wiki) e che non è stata
+	// spostata a mano: se il modello del suo livello non li sa usare e quello dell'altro sì,
+	// usa l'altro livello invece di perdere gli strumenti.
+	if f.NeedsTools && r.Tier == "" && !toolsFor(p, choice.Model) && other.ProviderID != "" && other.Model != "" {
+		if op, err := s.provider(ctx, tx, other.ProviderID); err == nil && toolsFor(op, other.Model) {
+			p, choice = op, other
+			if t.Tier == TierFast {
+				t.Tier = TierDeep
+			} else {
+				t.Tier = TierFast
+			}
+		}
 	}
 	t.Provider, t.Model, t.TierEffort = p, choice.Model, choice.Reasoning
 	t.Kind = s.kinds[p.Kind]

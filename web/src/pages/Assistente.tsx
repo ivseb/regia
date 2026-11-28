@@ -83,16 +83,20 @@ function ProposalCard({ p, onDecided }: { p: Proposal; onDecided: (p: Proposal) 
   );
 }
 
+/** La domanda della persona: salvata, oppure appena inviata (pending) e in attesa della risposta. */
+function Question({ text, pending }: { text: string; pending?: boolean }) {
+  const t = useT();
+  return (
+    <div className="ml-8 flex flex-col gap-1 self-end border border-hair bg-side px-3 py-2" data-testid="domanda" data-pending={pending ? "true" : undefined}>
+      <span className="sr-only">{t("ai.panel.you")}</span>
+      <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</p>
+    </div>
+  );
+}
+
 function Message({ m, onProposal }: { m: ChatMessage; onProposal: (p: Proposal) => void }) {
   const t = useT();
-  if (m.role === "user") {
-    return (
-      <div className="ml-8 flex flex-col gap-1 self-end border border-hair bg-side px-3 py-2" data-testid="domanda">
-        <span className="sr-only">{t("ai.panel.you")}</span>
-        <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</p>
-      </div>
-    );
-  }
+  if (m.role === "user") return <Question text={m.text} />;
   const tools = m.tools.map((n) => lookup(`ai.tool.${n}`) ?? n);
   return (
     <div className="mr-4 flex flex-col gap-2" data-testid="risposta">
@@ -214,7 +218,45 @@ function GraphAnswer({ r }: { r: GraphResult }) {
   );
 }
 
-type Draft = { text: string; tools: string[] };
+/** La domanda in corso: compare subito nella conversazione, la risposta cresce sotto.
+ * phase: «think» prima degli strumenti, «tools» mentre li usa, «read» quando ha i risultati. */
+type Draft = { question: string; text: string; tools: string[]; phase: "think" | "tools" | "read"; started: number };
+
+/** Secondi da started, aggiornati ogni secondo finché il componente resta montato. */
+function useElapsed(started: number | undefined): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (started === undefined) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [started]);
+  return started === undefined ? 0 : Math.max(0, Math.floor((now - started) / 1000));
+}
+
+function toolNames(tools: string[]): string {
+  return tools.map((n) => lookup(`ai.tool.${n}`) ?? n).join(", ");
+}
+
+/** Avanzamento della risposta: che cosa sta facendo l'assistente e da quanto. Il contatore dei
+ * secondi non entra nella regione annunciata, per non ripetere un annuncio ogni secondo. */
+function Progress({ d }: { d: Draft }) {
+  const t = useT();
+  const seconds = useElapsed(d.started);
+  const text = d.text
+    ? t("ai.panel.step.write")
+    : d.phase === "tools"
+      ? t("ai.panel.usingTools", { tools: toolNames(d.tools) })
+      : d.phase === "read"
+        ? t("ai.panel.step.read", { tools: toolNames(d.tools) })
+        : t("ai.panel.step.think");
+  return (
+    <p className="m-0 flex flex-wrap items-baseline gap-x-2 text-[12.5px] text-muted" data-testid="avanzamento">
+      <span role="status">{text}</span>
+      {seconds > 0 && <span aria-hidden="true" className="font-mono tabular-nums">{t("ai.panel.elapsed", { seconds })}</span>}
+    </p>
+  );
+}
 
 export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -227,7 +269,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"chat" | "graph">("chat");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [graph, setGraph] = useState<{ question: string; result: GraphResult }[]>([]);
+  const [graphPending, setGraphPending] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+  const log = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -241,40 +285,60 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
   const onEvent = (e: AskEvent) =>
     setDraft((d) => {
-      const cur = d ?? { text: "", tools: [] };
+      if (!d) return d;
       switch (e.type) {
         case "text":
-          return { ...cur, text: cur.text + e.text };
+          return { ...d, text: d.text + e.text };
         case "tool":
-          return { text: "", tools: cur.tools.includes(e.tool) ? cur.tools : [...cur.tools, e.tool] };
+          // Il testo arrivato prima degli strumenti era un passaggio intermedio.
+          return { ...d, text: "", phase: "tools", tools: d.tools.includes(e.tool) ? d.tools : [...d.tools, e.tool] };
         case "step":
-          return { ...cur, text: "" };
+          return { ...d, text: "", phase: "read" };
       }
-      return cur;
+      return d;
     });
+  // L'invio è ottimistico: la domanda entra subito nella conversazione e la casella si svuota;
+  // se la domanda non arriva a una risposta torna nella casella (se nel frattempo è vuota).
+  const restore = (q: string) => {
+    setQuestion((cur) => (cur.trim() ? cur : q));
+    input.current?.focus();
+  };
   const ask = useMutation({
-    mutationFn: (q: string) => {
-      setDraft({ text: "", tools: [] });
-      return askStream(q, convId || undefined, onEvent);
+    mutationFn: ({ q, conv }: { q: string; conv: string }) => askStream(q, conv || undefined, onEvent),
+    onMutate: ({ q }) => {
+      setDraft({ question: q, text: "", tools: [], phase: "think", started: Date.now() });
+      setQuestion("");
     },
-    onSettled: () => setDraft(null),
-    onSuccess: (res: AskResult) => {
+    onError: (_e, { q }) => {
+      setDraft(null);
+      restore(q);
+    },
+    onSuccess: (res: AskResult, { conv }) => {
+      // Prima i messaggi salvati, poi via la bozza: nello stesso render, senza salti né doppioni.
       qc.setQueryData(["ai-status"], res.status);
       qc.setQueryData(["ai-conversation", res.conversation.id], (old: { messages: ChatMessage[] } | undefined) => ({
         conversation: res.conversation,
-        messages: [...(convId === res.conversation.id ? (old?.messages ?? []) : []), ...res.messages],
+        messages: [...(conv === res.conversation.id ? (old?.messages ?? []) : []), ...res.messages],
       }));
       setConvId(res.conversation.id);
-      setQuestion("");
+      setDraft(null);
       qc.invalidateQueries({ queryKey: ["ai-conversations"] });
     },
   });
   const askGraph = useMutation({
     mutationFn: (q: string) => aiApi.graph(q),
+    onMutate: (q) => {
+      setGraphPending(q);
+      setQuestion("");
+    },
+    onError: (_e, q) => {
+      setGraphPending("");
+      restore(q);
+    },
     onSuccess: (res, q) => {
       qc.setQueryData(["ai-status"], res.status);
       setGraph((g) => [...g, { question: q, result: res }]);
-      setQuestion("");
+      setGraphPending("");
     },
   });
   const remove = useMutation({
@@ -288,7 +352,12 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     // Graffe: in Chrome recenti scrollIntoView restituisce una Promise, che React prenderebbe per la pulizia.
     end.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, graph.length, mode]);
+  }, [messages.length, graph.length, mode, draft?.question, graphPending]);
+  useEffect(() => {
+    // Mentre la risposta cresce si resta in fondo, ma solo se la persona non è risalita a leggere.
+    const el = log.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) end.current?.scrollIntoView({ block: "end" });
+  }, [draft?.text, draft?.phase]);
 
   const onProposal = (p: Proposal) => {
     qc.setQueryData(["ai-conversation", convId], (old: { conversation: unknown; messages: ChatMessage[] } | undefined) =>
@@ -301,9 +370,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const pending = ask.isPending || askGraph.isPending;
   const submit = () => {
     const q = question.trim();
-    if (!q || pending) return;
+    if (!q || pending || blocked) return;
     if (mode === "graph") askGraph.mutate(q);
-    else ask.mutate(q);
+    else ask.mutate({ q, conv: convId });
   };
 
   return (
@@ -342,6 +411,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             aria-label={t("ai.panel.conversations")}
             className="field min-w-0 flex-1 py-1"
             value={convId}
+            disabled={ask.isPending}
             onChange={(e) => setConvId(e.target.value)}
           >
             <option value="">{t("ai.panel.newConversation")}</option>
@@ -350,7 +420,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             ))}
           </Select>
           {convId && (
-            <button className="btn py-1" disabled={remove.isPending} onClick={() => remove.mutate()}>
+            <button className="btn py-1" disabled={remove.isPending || ask.isPending} onClick={() => remove.mutate()}>
               {t("ai.panel.delete")}
             </button>
           )}
@@ -366,7 +436,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         {st?.budget.state === "warn" && <span className="text-fg" role="note">{t("ai.panel.budgetWarn", { percent: fmtNumber(Math.floor(st.budget.percent)) })}</span>}
         {blocked && <span className="font-semibold text-danger" role="note">{t("ai.panel.budgetBlocked")}</span>}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label={t("ai.panel.log")}>
+      <div ref={log} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label={t("ai.panel.log")}>
         {mode === "chat" && (
           <>
             {convId && conv.isPending && <Loading rows={2} />}
@@ -375,32 +445,33 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             {messages.map((m) => (
               <Message key={m.id} m={m} onProposal={onProposal} />
             ))}
-            {ask.isPending && draft?.text && (
-              <div className="mr-4 flex flex-col gap-2" data-testid="risposta-in-arrivo" aria-busy="true">
-                <span className="label">{t("ai.panel.assistant")}</span>
-                <AnswerText text={draft.text} refs={[]} />
-              </div>
-            )}
-            {ask.isPending && !draft?.text && (
-              <p className="m-0 text-muted" role="status">
-                {draft?.tools.length ? t("ai.panel.usingTools", { tools: draft.tools.map((n) => lookup(`ai.tool.${n}`) ?? n).join(", ") }) : t("ai.panel.thinking")}
-              </p>
+            {draft && (
+              <>
+                <Question text={draft.question} pending />
+                <div className="mr-4 flex flex-col gap-2" data-testid="risposta-in-arrivo" aria-busy="true">
+                  <span className="label">{t("ai.panel.assistant")}</span>
+                  {draft.text && <AnswerText text={draft.text} refs={[]} />}
+                  <Progress d={draft} />
+                </div>
+              </>
             )}
           </>
         )}
         {mode === "graph" && (
           <>
-            {graph.length === 0 && <p className="m-0 text-muted">{t("ai.graph.empty")}</p>}
+            {graph.length === 0 && !graphPending && <p className="m-0 text-muted">{t("ai.graph.empty")}</p>}
             {graph.map((g, i) => (
               <div key={i} className="flex flex-col gap-3">
-                <div className="ml-8 flex flex-col gap-1 self-end border border-hair bg-side px-3 py-2" data-testid="domanda">
-                  <span className="sr-only">{t("ai.panel.you")}</span>
-                  <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{g.question}</p>
-                </div>
+                <Question text={g.question} />
                 <GraphAnswer r={g.result} />
               </div>
             ))}
-            {askGraph.isPending && <p className="m-0 text-muted" role="status">{t("ai.graph.thinking")}</p>}
+            {graphPending && (
+              <div className="flex flex-col gap-3">
+                <Question text={graphPending} pending />
+                <p className="m-0 text-muted" role="status">{t("ai.graph.thinking")}</p>
+              </div>
+            )}
           </>
         )}
         <div ref={end} />
@@ -413,6 +484,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         }}
       >
         <ErrorNote error={mode === "graph" ? askGraph.error : ask.error} />
+        {(mode === "graph" ? askGraph.isError : ask.isError) && <p className="m-0 text-[12.5px] text-muted">{t("ai.panel.restored")}</p>}
         <label className="flex flex-col gap-1">
           <span className="label">{t(mode === "graph" ? "ai.graph.question" : "ai.panel.question")}</span>
           <textarea

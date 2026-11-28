@@ -210,11 +210,12 @@ func TestAIOndata6(t *testing.T) {
 	}
 
 	// --- Livelli su OpenAI: l'assistente chiama lo strumento e risponde; registro con la cache.
-	// In automatico l'assistente sull'approfondito ragiona a medio.
+	// In automatico l'assistente spostato sull'approfondito ragiona a medio.
 	dem := admin.do("POST", "/api/v1/demand/requests", map[string]any{"title": "Magazzino sigma da rifare", "description": "Testo."}, http.StatusCreated)
 	demKey := dem["key"].(string)
 	admin.do("PUT", "/api/v1/ai/settings", map[string]any{"enabled": true,
-		"deep": map[string]any{"provider_id": opID, "model": "gpt-6.2-astra"}, "fast": map[string]any{"provider_id": olID, "model": "piccolo:3b"}}, http.StatusOK)
+		"deep": map[string]any{"provider_id": opID, "model": "gpt-6.2-astra"}, "fast": map[string]any{"provider_id": olID, "model": "piccolo:3b"},
+		"routes": map[string]any{"assistente": map[string]any{"tier": "approfondito"}}}, http.StatusOK)
 	res := e.ed.do("POST", "/api/v1/ai/ask", map[string]any{"question": "dov'è il magazzino sigma?"}, http.StatusOK)
 	msgs := e.list(res["messages"])
 	if txt := e.obj(msgs[len(msgs)-1])["text"].(string); !strings.Contains(txt, demKey) {

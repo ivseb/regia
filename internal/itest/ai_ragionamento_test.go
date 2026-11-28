@@ -61,12 +61,14 @@ func TestAIRagionamentoERiassunto(t *testing.T) {
 
 	// --- Salvati e riletti: il livello, e una funzione con il solo ragionamento (senza cambiare livello).
 	saved := obj(admin.do("PUT", "/api/v1/ai/settings", map[string]any{"enabled": true, "deep": deep, "fast": fast,
-		"routes": map[string]any{"bozze": map[string]any{"reasoning": "high"}, "mancanze": map[string]any{}}}, http.StatusOK)["settings"])
+		"routes": map[string]any{"bozze": map[string]any{"reasoning": "high"}, "mancanze": map[string]any{},
+			// L'assistente è sul rapido di default: qui lo si sposta sull'approfondito.
+			"assistente": map[string]any{"tier": "approfondito"}}}, http.StatusOK)["settings"])
 	if obj(saved["deep"])["reasoning"] != "medium" || obj(saved["fast"])["reasoning"] != nil {
 		t.Fatalf("ragionamento dei livelli: %v", saved)
 	}
 	routes := obj(saved["routes"])
-	if len(routes) != 1 || obj(routes["bozze"])["reasoning"] != "high" || obj(routes["bozze"])["tier"] != nil {
+	if len(routes) != 2 || obj(routes["bozze"])["reasoning"] != "high" || obj(routes["bozze"])["tier"] != nil || obj(routes["assistente"])["tier"] != "approfondito" {
 		t.Fatalf("ragionamento delle funzioni: %v", routes)
 	}
 

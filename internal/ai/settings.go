@@ -38,9 +38,11 @@ type Feature struct {
 
 // Features sono le funzioni dell'AI (replica/ai.md §2 e §4).
 var Features = []Feature{
-	// L'assistente fa più giri con gli strumenti: in automatico ragiona a medio, perché ogni
-	// giro ad alto fa aspettare la persona molti secondi in più.
-	{Key: "assistente", Tier: TierDeep, NeedsTools: true, Active: true, DeepEffort: EffortMedium},
+	// L'assistente fa più giri con gli strumenti e quasi ogni giro sceglie solo uno strumento:
+	// conta la latenza di ogni chiamata, quindi di default usa il livello rapido (con Gemini 4
+	// carbon ogni giro durava 8-9 secondi anche con 60 token di uscita). Spostato
+	// sull'approfondito, in automatico ragiona a medio: ad alto ogni giro durerebbe molto di più.
+	{Key: "assistente", Tier: TierFast, NeedsTools: true, Active: true, DeepEffort: EffortMedium},
 	// Domande sul grafo (ondata 2): il modello scrive una query, Regia la prova; non chiama
 	// strumenti. Tradurre in una query è un compito breve: di default il livello rapido.
 	{Key: "domande_grafo", Tier: TierFast, Active: true},
