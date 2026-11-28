@@ -80,7 +80,7 @@ Migrazione 0088 (GRC assistito): `grc_evidence_controls` ha `coverage` (`full`/`
 
 ## Strumenti (`internal/ai/tools`)
 
-`Services{DB, Engine, Collab, Work, Arch}` e `Env{TenantID, Actor}`. Ogni strumento apre una transazione del tenant con l'attore della persona e passa dai servizi: `Engine.Search` (RLS e `CanRead`), `Engine.Get`, `ElementLinks`, `Collab.Comments`; per le scritture `Work.CreateItem`, `Engine.Update` (con la versione letta alla proposta), `Arch.CreateRelation`, `Collab.AddComment`, `Work.LogTime` (con il costo in una transazione finanza separata, come l'API).
+`Services{DB, Engine, Collab, Work, Arch, Projects}` e `Env{TenantID, Actor}` (`Projects` nil se il modulo dei progetti non c'è). Ogni strumento apre una transazione del tenant con l'attore della persona e passa dai servizi: `Engine.Search` (RLS e `CanRead`), `Engine.Get`, `ElementLinks`, `Collab.Comments`; per le scritture `Work.CreateItem`, `Engine.Update` (con la versione letta alla proposta), `Arch.CreateRelation`, `Collab.AddComment`, `Work.LogTime` (con il costo in una transazione finanza separata, come l'API).
 
 | Nome | Tipo | Input |
 |---|---|---|
@@ -88,12 +88,23 @@ Migrazione 0088 (GRC assistito): `grc_evidence_controls` ha `coverage` (`full`/`
 | `query` | lettura | `query` nel linguaggio di Regia, `limite` |
 | `leggi` | lettura | `elemento` (chiave o codice) |
 | `crea` | proposta | `spazio`, `tipo`, `titolo`, `testo`, `genitore` |
-| `aggiorna` | proposta | `elemento`, `titolo`, `testo` |
+| `aggiorna` | proposta | `elemento`, `titolo`, `testo`, `assegnatario`, `responsabile`, `campi` (oggetto chiave o nome → valore), `fase`, `commento` |
 | `collega` | proposta | `tipo`, `origine`, `destinazione` |
 | `commenta` | proposta | `elemento`, `testo` |
 | `registra_ore` | proposta | `elemento`, `durata`, `data`, `nota` |
 
 `Prepare` esegue le letture e, per le scritture, controlla e descrive la proposta senza scrivere; `Apply` esegue la scrittura confermata (di nuovo con i permessi di chi conferma). Un input sbagliato è un `InputError`, che il modello legge per correggersi. Il server MCP dell'ondata 2 userà `List`, `Prepare` e `Apply` così come sono.
+
+**`aggiorna`** (`internal/ai/tools/update.go`). `Prepare` risolve e normalizza l'input, e la proposta salvata ha solo valori risolti (id dei membri, chiavi dei campi, fase di arrivo, `versione` letta):
+
+- **Persone** (`resolveMember`): id, nome o email esatti fra i membri attivi, poi un pezzo del nome o dell'email; «me»/«io» è l'attore. Zero o più di una: `InputError` con i nomi (e le email) da scegliere. L'assistente smaschera l'input prima di `Prepare`, quindi `[persona-1]` arriva come nome.
+- **Assegnatario**: voce di piano (`Projects.IsPlanItem`) → `Projects.UpdateItem` con `CanAssignItem` (chi pianifica); lavoro dei team e richieste (`Work.Assignable`) → `Work.SetAssignee`, con il permesso di scrittura del motore (`Engine.CheckUpdate`). Altri tipi: errore che suggerisce i campi persona del tipo.
+- **Responsabile**: su progetto e programma il ruolo `project_manager`/`program_manager` (`projects.ManagerRole`), sostituito con `Projects.SetManager` (`CanSetManager`: chi pianifica il progetto o modifica il programma; `engine.SetStakeholder` con `replace`, audit `projects.manager`); dove l'assegnatario c'è, il responsabile è l'assegnatario.
+- **Campi** (`resolveFields`): chiave o nome del campo fra quelli non archiviati del tipo (`engine.TypeFieldDefs`), altrimenti errore con l'elenco; elenchi e versioni per nome dell'opzione (errore con le opzioni), persone con `resolveMember`, sì/no per i booleani, vuoto = svuota. Poi `Engine.CheckUpdate` fa senza scrivere gli stessi controlli di `Update` (permesso, `normalize`, obbligatori della fase), in sola lettura.
+- **Fase** (`checkPhase`): fra `Engine.Available` per l'attore (passaggi di sistema e forzature esclusi), per nome della fase o etichetta del passaggio; un gate non superato blocca, tranne i campi obbligatori della fase se la proposta imposta dei campi; `commento` se il passaggio lo chiede.
+- **Riepilogo**: «Aggiornare WEB-1: assegnatario: Mario Rossi (prima: nessuno); Priorità: Alta; fase: Da fare → In corso».
+
+`Apply`, in una transazione con l'attore di chi conferma: versione uguale a quella della proposta (altrimenti `ErrConflict`, «l'elemento è cambiato dopo la proposta»), poi `Engine.Update` (titolo, testo, campi), assegnatario, responsabile e per ultimo `Engine.Transition`, che vede i campi appena scritti. `leggi` mostra anche assegnatario e responsabile attuali. Test: `internal/itest/ai_aggiorna_test.go` (`TestAIAggiorna`, assistente con il fornitore finto e server MCP).
 
 ## Cache del prompt e streaming
 

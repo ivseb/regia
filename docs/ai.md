@@ -13,6 +13,18 @@ Nella **scheda di ogni elemento** (richiesta, progetto, applicazione, attività�
 
 Con il **server MCP** (sezione 7) Claude Desktop, Claude Code o un IDE lavorano su Regia con i permessi della persona, con il suo modello.
 
+### Le proposte dell'assistente
+
+L'assistente (e un client MCP) non scrive mai da solo: prepara una **proposta** che dice in chiaro che cosa cambia, e la persona la **conferma** o la **rifiuta**. Può proporre di:
+
+- **creare** un task, una story, un bug o un epic in uno spazio di lavoro;
+- **modificare** un elemento: titolo, testo, **assegnatario** (lavoro dei team, richieste, voci del piano di un progetto), **responsabile** (il project manager di un progetto o il program manager di un programma; sul lavoro dei team e sulle richieste il responsabile è l'assegnatario), i **valori dei campi** del tipo (per esempio «Priorità: Alta») e il **passaggio di fase**, anche tutto insieme. Il riepilogo è del tipo «Aggiornare PRJ-1: responsabile: Mario Rossi (prima: Luca Verdi)»;
+- **collegare** due elementi dell'architettura, **commentare**, **registrare ore**.
+
+Le persone si indicano per nome o email («me» è chi scrive). Se il nome corrisponde a più persone, o a nessuna, l'assistente lo dice e chiede quale; lo stesso per un campo che il tipo non ha, un'opzione che l'elenco non prevede o una fase che da lì non si raggiunge (l'assistente riceve le alternative possibili). La fase si propone solo fra i passaggi che la persona può avviare e che non sono bloccati; i campi obbligatori della fase di arrivo possono arrivare nella stessa proposta.
+
+Alla conferma i **permessi si controllano di nuovo** con la persona che conferma, e la proposta si applica solo se l'elemento **non è cambiato** da quando è stata preparata: altrimenti non si applica niente e la proposta resta «non riuscita», con il motivo.
+
 Nel **profilo** ogni persona ha la sua **wiki personale** (sezione 9): appunti in Markdown che l'assistente, se la persona lo vuole, tiene aggiornati e usa come contesto. Senza AI si scrive a mano.
 
 Nella **conformità** (sezione 10) l'assistente propone i collegamenti fra evidenze e controlli, scrive bozze di policy e runbook e prepara la bozza della notifica DORA di un incidente grave.

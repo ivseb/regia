@@ -111,6 +111,11 @@ func (s *Service) workItem(ctx context.Context, tx pgx.Tx, actor engine.Actor, r
 // («Prendi in carico», ondata 2).
 var assignable = []string{anyWork, RequestType}
 
+// Assignable dice se all'elemento si dà un assegnatario con SetAssignee (lavoro dei team e richieste).
+func (s *Service) Assignable(ctx context.Context, tx pgx.Tx, el *engine.Element) (bool, error) {
+	return matchesTypes(ctx, tx, el.TypeID, el.TypeKey, assignable)
+}
+
 // SetAssignee cambia l'assegnatario (vuoto = nessuno). Version 0 = nessun controllo.
 func (s *Service) SetAssignee(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref, memberID string, version int) (*engine.Element, error) {
 	el, err := s.workItem(ctx, tx, actor, ref, assignable...)

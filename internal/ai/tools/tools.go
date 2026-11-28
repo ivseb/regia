@@ -29,6 +29,7 @@ import (
 	"regia/internal/modules/architecture"
 	"regia/internal/modules/collab"
 	"regia/internal/modules/finance"
+	"regia/internal/modules/projects"
 	"regia/internal/modules/work"
 	"regia/internal/platform/db"
 )
@@ -40,6 +41,8 @@ type Services struct {
 	Collab *collab.Service
 	Work   *work.Service
 	Arch   *architecture.Service
+	// Projects: responsabile di progetti e programmi, assegnatario delle voci di piano (nil = modulo spento).
+	Projects *projects.Service
 }
 
 // Env è chi usa lo strumento: il tenant e l'attore della persona.
@@ -259,6 +262,14 @@ func prepareRead(ctx context.Context, s *Services, tx pgx.Tx, env Env, in json.R
 	res := &Result{Refs: []Ref{r}}
 	var b strings.Builder
 	fmt.Fprintf(&b, "chiave: %s\ntipo: %s\nstato: %s\ntitolo: %s\n", r.Key, el.TypeName, el.State, el.Title)
+	if n := memberName(ctx, tx, deref(el.AssigneeID)); n != "" {
+		fmt.Fprintf(&b, "assegnatario: %s\n", n)
+	}
+	if role := managerRole(s, el); role != "" {
+		if n := currentManager(ctx, tx, el.ID, role); n != "" {
+			fmt.Fprintf(&b, "responsabile: %s\n", n)
+		}
+	}
 	if el.DueAt != nil {
 		fmt.Fprintf(&b, "scadenza: %s\n", el.DueAt.Format("2006-01-02"))
 	}
@@ -383,62 +394,6 @@ func applyCreate(ctx context.Context, s *Services, env Env, in json.RawMessage) 
 	}
 	r := ref(el)
 	return &Result{Refs: []Ref{r}, Data: r, Summary: "Creato " + r.Key}, nil
-}
-
-type updateIn struct {
-	Element string  `json:"elemento"`
-	Title   *string `json:"titolo"`
-	Body    *string `json:"testo"`
-	Version int     `json:"versione,omitempty"`
-}
-
-func prepareUpdate(ctx context.Context, s *Services, tx pgx.Tx, env Env, in json.RawMessage) (*Result, error) {
-	var x updateIn
-	if err := decode(in, &x); err != nil {
-		return nil, err
-	}
-	el, err := readable(ctx, s, tx, env, x.Element)
-	if err != nil {
-		return nil, err
-	}
-	if x.Title == nil && x.Body == nil {
-		return nil, bad("indica il nuovo titolo o il nuovo testo")
-	}
-	if x.Title != nil && (strings.TrimSpace(*x.Title) == "" || utf8.RuneCountInString(*x.Title) > 500) {
-		return nil, bad("titolo vuoto o troppo lungo")
-	}
-	if x.Body != nil && utf8.RuneCountInString(*x.Body) > 20000 {
-		return nil, bad("testo troppo lungo")
-	}
-	// La versione letta adesso: se l'elemento cambia prima della conferma, la proposta non si applica.
-	x.Element, x.Version = el.ID, el.Version
-	var what []string
-	if x.Title != nil {
-		what = append(what, fmt.Sprintf("titolo «%s»", clip(*x.Title, 120)))
-	}
-	if x.Body != nil {
-		what = append(what, "nuovo testo")
-	}
-	return &Result{Refs: []Ref{ref(el)}, Input: normalized(x),
-		Summary: fmt.Sprintf("Aggiornare %s: %s", ref(el).Key, strings.Join(what, ", "))}, nil
-}
-
-func applyUpdate(ctx context.Context, s *Services, env Env, in json.RawMessage) (*Result, error) {
-	var x updateIn
-	if err := decode(in, &x); err != nil {
-		return nil, err
-	}
-	var el *engine.Element
-	err := s.DB.InTenant(ctx, env.TenantID, db.TenantOpts{Member: env.Actor.MemberID}, func(tx pgx.Tx) error {
-		var err error
-		el, err = s.Engine.Update(ctx, tx, env.Actor, x.Element, engine.UpdateInput{Version: x.Version, Title: x.Title, BodyText: x.Body})
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	r := ref(el)
-	return &Result{Refs: []Ref{r}, Data: r, Summary: "Aggiornato " + r.Key}, nil
 }
 
 type linkIn struct {
@@ -626,8 +581,21 @@ var all = []Tool{
 		Schema: obj(map[string]any{"spazio": str("chiave dello spazio di lavoro"), "tipo": str("task, story, bug o epic"), "titolo": str("titolo"),
 			"testo": str("descrizione"), "genitore": str("chiave dell'elemento genitore, facoltativa")}, "spazio", "titolo"),
 		prepare: prepareCreate, apply: applyCreate},
-	{Name: "aggiorna", Write: true, Description: "Propone di cambiare titolo o testo di un elemento. La persona conferma prima che sia applicato.",
-		Schema:  obj(map[string]any{"elemento": str("chiave dell'elemento"), "titolo": str("nuovo titolo"), "testo": str("nuovo testo")}, "elemento"),
+	{Name: "aggiorna", Write: true, Description: "Propone di modificare un elemento: titolo, testo, assegnatario, responsabile, valori dei campi del tipo, passaggio di fase. " +
+		"Indica solo ciò che cambia; le persone per nome o email («me» = la persona che ti scrive), i campi per chiave o nome. " +
+		"Il responsabile è il project manager su progetti e programmi, l'assegnatario sul lavoro dei team e sulle richieste. " +
+		"Se qualcosa non va (persona ambigua, campo o opzione inesistente, fase non raggiungibile) l'errore dice le alternative. La persona conferma prima che sia applicato.",
+		Schema: obj(map[string]any{
+			"elemento":     str("chiave dell'elemento"),
+			"titolo":       str("nuovo titolo"),
+			"testo":        str("nuovo testo"),
+			"assegnatario": str("persona a cui assegnarlo (nome o email); vuoto = nessuno"),
+			"responsabile": str("persona responsabile (nome o email), per esempio il project manager di un progetto"),
+			"campi": map[string]any{"type": "object", "description": "valori dei campi del tipo per chiave o nome, per esempio {\"priorita\": \"Alta\"}; " +
+				"elenchi con il nome dell'opzione, persone per nome, date AAAA-MM-GG, vuoto = svuota"},
+			"fase":     str("fase di arrivo del passaggio, se la persona chiede di spostarlo"),
+			"commento": str("commento del passaggio di fase, quando serve"),
+		}, "elemento"),
 		prepare: prepareUpdate, apply: applyUpdate},
 	{Name: "collega", Write: true, Description: "Propone una relazione tra due elementi dell'architettura (per esempio dipendenza tra applicazioni). La persona conferma.",
 		Schema:  obj(map[string]any{"tipo": str("chiave del tipo di relazione"), "origine": str("chiave o codice dell'origine"), "destinazione": str("chiave o codice della destinazione")}, "tipo", "origine", "destinazione"),
