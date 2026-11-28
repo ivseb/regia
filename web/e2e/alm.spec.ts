@@ -6,7 +6,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createConnection } from "node:net";
 import { resolve } from "node:path";
-import { expectNoHorizontalScroll, login, uniq } from "./fixtures";
+import { call, expectNoHorizontalScroll, login, uniq } from "./fixtures";
 
 const root = resolve(import.meta.dirname, "..", "..");
 // Una porta per ogni server di prova (E2E_PORT 8140-8149 → 8200-8209), o E2E_ALM_PORT.
@@ -130,4 +130,45 @@ test("a 375 px non scorre in orizzontale", async ({ page }) => {
   await expect(page.getByRole("list", { name: /Collezioni lette di QUALITA\/Ordini_online/ })).toBeVisible();
   await expect(page.getByRole("table")).toBeHidden();
   await expectNoHorizontalScroll(page);
+});
+
+test("certificazione del rilascio: test set di ALM e difetti aperti, anche a 375 px", async ({ page }) => {
+  test.skip(!integration, "serve la sincronizzazione del test precedente");
+  await login(page, "admin");
+  // Il change nasce dal rilascio della pipeline con quel numero.
+  const tok = await call(page.request, "POST", "/api/v1/me/tokens", { name: uniq("CI"), expires_in_days: 1, scopes: ["devsecops.write"] });
+  const r = await page.request.fetch("/api/v1/devsecops/releases", {
+    method: "POST", headers: { Authorization: `Bearer ${tok.token}` },
+    data: { format: "regia.devsecops/v1", service: { name: uniq("ordini-api").toLowerCase().replace(/[^a-z0-9-]/g, "-") }, environment: "prod",
+      version: "2.5.0", change_number: "CHG0045120", at: new Date(Date.now() - 3600e3).toISOString() },
+  });
+  expect(r.ok(), await r.text()).toBeTruthy();
+  await page.goto("/change/CHG0045120/certificazione");
+  // La pagina ha anche la copia per la stampa: si guarda la sezione Test a schermo.
+  const sez = page.getByRole("region", { name: "Test", exact: true });
+  await expect(sez.getByText("Sistema - ordini", { exact: true })).toBeVisible();
+  await expect(sez.getByText("Sistema - pagamenti", { exact: true })).toBeVisible();
+  await expect(sez.getByText(/Eseguiti 10 · superati 9 · falliti 1 · bloccati 1 · non eseguiti 1/)).toBeVisible();
+  await expect(sez.getByText("Il reso non calcola lo sconto")).toBeVisible();
+  await expect(sez.getByRole("link", { name: /apri in ALM/i }).first()).toHaveAttribute("href", /^td:\/\//);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.reload();
+  await expect(sez.getByText("Sistema - ordini", { exact: true })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});
+
+test("gate di rilascio: la regola «Test del change» si aggiunge con le soglie predefinite", async ({ page }) => {
+  await login(page, "admin");
+  await page.goto("/configurazione/gate");
+  const bozza = page.getByRole("region", { name: "Bozza e pubblicazione" });
+  await expect(bozza).toBeVisible();
+  const add = page.getByRole("button", { name: "Test del change", exact: true });
+  if ((await add.count()) === 0) test.skip(true, "la regola c'è già nell'ambiente mostrato");
+  await add.click();
+  await expect(page.getByLabel("Test eseguiti, almeno (%)")).toHaveValue("100");
+  await expect(page.getByLabel("Test falliti ammessi")).toHaveValue("0");
+  await expect(page.getByLabel("Senza esiti di test il gate non passa")).toBeChecked();
+  await expect(bozza).toContainText(/modific[ah]e? non salvat[ae]/);
+  await bozza.getByRole("button", { name: "Scarta le modifiche" }).click();
+  await expect(bozza).toContainText("Nessuna modifica");
 });
