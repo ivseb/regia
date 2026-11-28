@@ -17,6 +17,8 @@ import { crumbs } from "../crumbs";
 import { EmptyState } from "../emptyState";
 import { GrcTabs } from "./portafoglio-ui";
 import { CreateAssistant } from "./CreateAssistant";
+import { ServiceNowProposals } from "./ServiceNowRecords";
+import { servicenowApi, type SNProposal } from "../servicenowApi";
 
 const RiskConfig = lazy(() => import("./RiskConfig"));
 
@@ -800,6 +802,12 @@ function IncidentsTab({ canReport }: { canReport: boolean }) {
   const list = useQuery({ queryKey: ["risk", "incidents", open, major, search], queryFn: () => riskApi.incidents({ aperti: open, gravi: major, q: search }) });
   const notices = useQuery({ queryKey: ["risk", "dashboard"], queryFn: riskApi.dashboard });
   const [creating, setCreating] = useState(false);
+  // Una proposta da ServiceNow apre il modulo già compilato; la conferma passa da promote.
+  const [proposal, setProposal] = useState<SNProposal | null>(null);
+  const close = () => {
+    setCreating(false);
+    setProposal(null);
+  };
   return (
     <>
       <p className="m-0 max-w-3xl text-muted">
@@ -816,28 +824,52 @@ function IncidentsTab({ canReport }: { canReport: boolean }) {
         <label className="flex items-center gap-2 pb-2 text-[13px]">
           <input type="checkbox" checked={major} onChange={(e) => setMajor(e.target.checked)} />{tr("governance.risks.solo_gravi_o_significativi")}</label>
         {canReport && (
-          <button className="btn btn-primary ml-auto" onClick={() => setCreating((v) => !v)}>{tr("governance.risks.segnala_un_incidente")}</button>
+          <button
+            className="btn btn-primary ml-auto"
+            onClick={() => {
+              setProposal(null);
+              setCreating((v) => !v);
+            }}
+          >
+            {tr("governance.risks.segnala_un_incidente")}
+          </button>
         )}
       </div>
-      {creating && <NewIncident onDone={() => setCreating(false)} />}
+      {(creating || proposal) && <NewIncident key={proposal?.source.id ?? "nuovo"} proposal={proposal} onDone={close} />}
+      {canReport && (
+        <ServiceNowProposals
+          onCreate={(p) => {
+            setCreating(false);
+            setProposal(p);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      )}
       <ErrorNote error={list.error} />
       {list.data && <IncidentRows items={list.data.items} empty={tr("governance.risks.nessun_incidente")} />}
     </>
   );
 }
 
-function NewIncident({ onDone }: { onDone: () => void }) {
+function NewIncident({ onDone, proposal }: { onDone: () => void; proposal?: SNProposal | null }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const apps = useQuery({ queryKey: ["applications"], queryFn: () => api.applications() });
-  const [title, setTitle] = useState("");
-  const [desc, setDesc] = useState("");
-  const [detected, setDetected] = useState(() => toLocalInput(new Date().toISOString()));
-  const [picked, setPicked] = useState<string[]>([]);
+  const [title, setTitle] = useState(proposal?.title ?? "");
+  const [desc, setDesc] = useState(proposal?.description ?? "");
+  const [detected, setDetected] = useState(() => toLocalInput(proposal?.detected_at ?? new Date().toISOString()));
+  const [picked, setPicked] = useState<string[]>(proposal?.impacted ?? []);
   const create = useMutation({
-    mutationFn: () => riskApi.createIncident({ title, description: desc, detected_at: fromLocalInput(detected), impacted: picked }),
+    mutationFn: () => {
+      const body = { title, description: desc, detected_at: fromLocalInput(detected), impacted: picked };
+      // Da una proposta di ServiceNow: crea l'incidente di Regia e lo collega al record.
+      return proposal
+        ? servicenowApi.promote(proposal.source.id, proposal.resolved_at ? { ...body, resolved_at: proposal.resolved_at } : body)
+        : riskApi.createIncident(body);
+    },
     onSuccess: (x) => {
       qc.invalidateQueries({ queryKey: ["risk"] });
+      if (proposal) qc.invalidateQueries({ queryKey: ["sn-incidents"] });
       onDone();
       navigate({ to: "/e/$key", params: { key: x.key } });
     },
@@ -850,6 +882,23 @@ function NewIncident({ onDone }: { onDone: () => void }) {
         create.mutate();
       }}
     >
+      {proposal && (
+        <div className="flex flex-col gap-1 text-[13px]">
+          <span>
+            <Trans
+              k="altro.servicenow.prop.fromSN"
+              slots={{
+                number: proposal.source.url ? (
+                  <a className="font-mono" href={proposal.source.url} target="_blank" rel="noreferrer">{proposal.source.number}</a>
+                ) : (
+                  <span className="font-mono">{proposal.source.number}</span>
+                ),
+              }}
+            />
+          </span>
+          <span className="text-muted">{tr("altro.servicenow.prop.classifyAfter")}</span>
+        </div>
+      )}
       <div className="flex flex-wrap gap-3">
         <label className="flex min-w-0 flex-[2_1_320px] flex-col gap-1">
           <span className="label">{tr("governance.risks.cosa_succede")}</span>
@@ -881,7 +930,9 @@ function NewIncident({ onDone }: { onDone: () => void }) {
         </div>
       </fieldset>
       <div className="flex gap-2">
-        <button className="btn btn-primary" disabled={create.isPending}>{tr("governance.risks.registra_l_incidente")}</button>
+        <button className="btn btn-primary" disabled={create.isPending}>
+          {proposal ? tr("altro.servicenow.prop.promote") : tr("governance.risks.registra_l_incidente")}
+        </button>
         <button type="button" className="btn" onClick={onDone}>{tr("governance.compliance.annulla")}</button>
       </div>
       <ErrorNote error={create.error} />

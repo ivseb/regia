@@ -55,6 +55,7 @@ const DEFS: Def[] = [
   { id: "github", goal: "integrations", to: "/configurazione/integrazioni/github", perms: ["tenant.admin"] },
   { id: "gitlab", goal: "integrations", to: "/configurazione/integrazioni/gitlab", perms: ["tenant.admin"] },
   { id: "gitea", goal: "integrations", to: "/configurazione/integrazioni/gitea", perms: ["tenant.admin"] },
+  { id: "servicenow", goal: "integrations", to: "/configurazione/integrazioni/servicenow", perms: ["tenant.admin"] },
   { id: "import", goal: "integrations", to: "/configurazione/import", perms: ["tenant.admin"] },
   { id: "ai", goal: "integrations", to: "/configurazione/ai", perms: ["tenant.admin"] },
   { id: "aiUsage", goal: "integrations", to: "/configurazione/ai/consumo", perms: ["tenant.admin"] },

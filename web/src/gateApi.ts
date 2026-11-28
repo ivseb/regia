@@ -18,6 +18,14 @@ export type GateRule = {
   params?: Record<string, unknown>;
 };
 
+/**
+ * Parametro servicenow della regola change_approved (connettore ServiceNow in sola lettura):
+ * "" non conta; "accept" basta l'approvazione in ServiceNow e un rifiuto blocca; "require"
+ * serve sempre, insieme alla fase se indicata. Con "" serve almeno una fase.
+ */
+export type ChangeServiceNow = "" | "accept" | "require";
+export type ChangeApprovedParams = { phases?: string[]; require_change?: boolean; servicenow?: ChangeServiceNow };
+
 export type GatePolicy = {
   id?: string;
   environment: string;

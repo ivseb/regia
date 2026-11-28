@@ -67,8 +67,8 @@ func invalid(field, msg string) error {
 
 var (
 	ErrNotFound        = &Error{Status: 404, Code: "integration.not_found", Msg: "integrazione inesistente"}
-	ErrServiceNotFound = &Error{Status: 404, Code: "service.not_found", Msg: "servizio CMDB inesistente"}
-	ErrRecordNotFound  = &Error{Status: 404, Code: "record.not_found", Msg: "incidente o change di ServiceNow inesistente"}
+	ErrServiceNotFound = &Error{Status: 404, Code: "servicenow.service_not_found", Msg: "servizio CMDB inesistente"}
+	ErrRecordNotFound  = &Error{Status: 404, Code: "servicenow.record_not_found", Msg: "incidente o change di ServiceNow inesistente"}
 	ErrBusy            = &Error{Status: 409, Code: "sync.running", Msg: "una sincronizzazione di questa integrazione è già in corso"}
 )
 

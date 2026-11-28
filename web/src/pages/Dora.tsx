@@ -21,6 +21,7 @@ import {
   type Scope,
 } from "../doraApi";
 import { PageHeader } from "../shell";
+import { Tag } from "./adminUi";
 import { ErrorNote, SectionTitle, Loading } from "../ui";
 import { useNarrow } from "./timeline";
 import { tr } from "../i18n/core";
@@ -426,7 +427,18 @@ function DrillPanel({ drill, period, metric, narrow }: { drill: Drill; period: P
           <ul className="m-0 flex list-none flex-col p-0">
             {drill.incidents.map((i) => (
               <li key={i.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-hair py-2">
-                <Link to="/e/$key" params={{ key: i.key }} className="font-mono text-[12px]">{i.key}</Link>
+                {i.source === "servicenow" ? (
+                  <>
+                    {i.url ? (
+                      <a href={i.url} target="_blank" rel="noreferrer" className="font-mono text-[12px]">{i.key}</a>
+                    ) : (
+                      <span className="font-mono text-[12px]">{i.key}</span>
+                    )}
+                    <Tag>{tr("altro.servicenow.doraSource")}</Tag>
+                  </>
+                ) : (
+                  <Link to="/e/$key" params={{ key: i.key }} className="font-mono text-[12px]">{i.key}</Link>
+                )}
                 <span className="font-medium">{i.title}</span>
                 <span className="text-[12px] text-muted">{i.applications.join(", ")}</span>
                 <span className="ml-auto text-[12px] tabular">

@@ -138,13 +138,14 @@ function allSections(me: Me, c: NavCounts, names: NavNames): NavSection[] {
         ]
       : []),
     ...(has("tenant.admin", "audit.read") ? [{ to: "/configurazione/audit", label: tr("shell.nav.audit") }] : []),
-    // Import di progetti da Jira, YouTrack e CSV, connettori GitHub, GitLab e Gitea (tenant.admin).
+    // Import di progetti da Jira, YouTrack e CSV, connettori GitHub, GitLab, Gitea e ServiceNow (tenant.admin).
     ...(isAdmin
       ? [
           { to: "/configurazione/import", label: tr("shell.nav.import") },
           { to: "/configurazione/integrazioni/github", label: tr("shell.nav.github") },
           { to: "/configurazione/integrazioni/gitlab", label: tr("shell.nav.gitlab") },
           { to: "/configurazione/integrazioni/gitea", label: tr("shell.nav.gitea") },
+          { to: "/configurazione/integrazioni/servicenow", label: tr("shell.nav.servicenow") },
           { to: "/configurazione/ai", label: tr("ai.nav.settings") },
           { to: "/configurazione/ai/consumo", label: tr("ai.nav.usage") },
         ]

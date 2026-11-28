@@ -11,6 +11,7 @@ import {
   RULE_NAMES,
   checkLabel,
   gateApi,
+  type ChangeServiceNow,
   type EvidenceMapItem,
   type GateApprover,
   type GateConfig,
@@ -407,6 +408,7 @@ function RuleEditor({ rule, cfg, disabled, onChange, onRemove }: { rule: GateRul
                 <input type="checkbox" disabled={disabled} checked={p.require_change === true} onChange={(e) => set({ require_change: e.target.checked })} />
                 {t("configurazione.gate.senzaUnaRichiestaCollegata")}
               </label>
+              <ServiceNowApproval value={asStr(p.servicenow, "") as ChangeServiceNow} phases={asList<string>(p.phases).length} disabled={disabled} onChange={(v) => set({ servicenow: v || undefined })} />
             </>
           )}
           {rule.kind === "checks" && <ChecksField names={asList<string>(p.names)} known={cfg.evidence.check_names} disabled={disabled} onChange={(names) => set({ names })} />}
@@ -437,6 +439,25 @@ function RuleEditor({ rule, cfg, disabled, onChange, onRemove }: { rule: GateRul
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Come conta l'approvazione della change request letta da ServiceNow (sola lettura).
+function ServiceNowApproval({ value, phases, disabled, onChange }: { value: ChangeServiceNow; phases: number; disabled: boolean; onChange: (v: ChangeServiceNow) => void }) {
+  const t = useT();
+  const help = value === "accept" ? t("altro.servicenow.gate.helpAccept") : value === "require" ? t("altro.servicenow.gate.helpRequire") : t("altro.servicenow.gate.helpNone");
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <label className="flex flex-wrap items-center gap-2 text-[13px]">
+        {t("altro.servicenow.gate.label")}
+        <Select className="field w-auto max-w-full py-1" disabled={disabled} value={value} onChange={(e) => onChange(e.target.value as ChangeServiceNow)}>
+          <option value="">{t("altro.servicenow.gate.none")}</option>
+          <option value="accept">{t("altro.servicenow.gate.accept")}</option>
+          <option value="require">{t("altro.servicenow.gate.require")}</option>
+        </Select>
+      </label>
+      <p className={`m-0 text-[12.5px] ${value === "" && phases === 0 ? "text-flag" : "text-muted"}`}>{help}</p>
     </div>
   );
 }
