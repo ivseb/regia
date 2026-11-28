@@ -25,15 +25,15 @@ import (
 // chiave o nome; Prepare li risolve, e l'input normalizzato che arriva ad Apply ha gli id dei
 // membri, le chiavi vere dei campi, la fase di arrivo e la versione letta.
 type updateIn struct {
-	Element  string         `json:"elemento"`
-	Title    *string        `json:"titolo,omitempty"`
-	Body     *string        `json:"testo,omitempty"`
-	Assignee *string        `json:"assegnatario,omitempty"`
-	Manager  *string        `json:"responsabile,omitempty"`
-	Fields   fieldsIn       `json:"campi,omitempty"`
-	Phase    string         `json:"fase,omitempty"`
-	Comment  string         `json:"commento,omitempty"`
-	Version  int            `json:"versione,omitempty"`
+	Element  string   `json:"elemento"`
+	Title    *string  `json:"titolo,omitempty"`
+	Body     *string  `json:"testo,omitempty"`
+	Assignee *string  `json:"assegnatario,omitempty"`
+	Manager  *string  `json:"responsabile,omitempty"`
+	Fields   fieldsIn `json:"campi,omitempty"`
+	Phase    string   `json:"fase,omitempty"`
+	Comment  string   `json:"commento,omitempty"`
+	Version  int      `json:"versione,omitempty"`
 }
 
 // fieldsIn sono i valori dei campi: un oggetto, accettato anche come testo JSON (alcuni modelli
