@@ -196,15 +196,15 @@ func findChange(ctx context.Context, tx pgx.Tx, number string) (*CertChange, err
 	if reqKey != nil {
 		c.Request = &Ref{Key: *reqKey, Title: deref(reqTitle), State: deref(reqState)}
 	}
-	if c.ServiceNow, err = serviceNowChange(ctx, tx, c); err != nil {
+	if c.ServiceNow, err = certServiceNow(ctx, tx, c); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-// serviceNowChange legge la change dal connettore ServiceNow, se il modulo c'è (la tabella
+// certServiceNow legge la change dal connettore ServiceNow, se il modulo c'è (la tabella
 // servicenow_changes nasce con la sua migrazione): il collegamento è sul numero o su un alias.
-func serviceNowChange(ctx context.Context, tx pgx.Tx, c *CertChange) (*CertSnChange, error) {
+func certServiceNow(ctx context.Context, tx pgx.Tx, c *CertChange) (*CertSnChange, error) {
 	var exists bool
 	if err := tx.QueryRow(ctx, `select to_regclass('servicenow_changes') is not null`).Scan(&exists); err != nil || !exists {
 		return nil, err

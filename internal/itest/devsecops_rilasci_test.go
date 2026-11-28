@@ -303,6 +303,22 @@ func TestRilasciElementi(t *testing.T) {
 	if s := list(cert["security"]); len(s) != 1 || obj(obj(s[0])["cves"])["high"] != float64(1) {
 		t.Fatalf("sicurezza: %v", cert["security"])
 	}
+	// La change letta dal connettore ServiceNow, collegata sul numero.
+	if err := d.InTenant(ctx, ten.TenantID, db.TenantOpts{}, func(tx pgx.Tx) error {
+		var integ string
+		if err := tx.QueryRow(ctx, `insert into integrations (tenant_id, kind, name) values (app_tenant(), 'generic', 'ServiceNow') returning id::text`).Scan(&integ); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `insert into servicenow_changes (tenant_id, id, integration_id, sys_id, number, state, approval, type, planned_start, url, sys_updated_on)
+			values (app_tenant(), gen_random_uuid(), $1, 'abc', 'chg0002', '-2', 'approved', 'normal', now(), 'https://sn.example.test/chg', now())`, integ)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sn := obj(obj(admin.do("GET", "/api/v1/devsecops/changes/CHG0002/certification", nil, http.StatusOK)["change"])["servicenow"])
+	if sn["approval"] != "approved" || sn["state"] != "-2" || sn["url"] != "https://sn.example.test/chg" || sn["planned_start"] == nil {
+		t.Fatalf("change di ServiceNow: %v", sn)
+	}
 	g1 := admin.do("POST", "/api/v1/devsecops/changes/CHG0002/certification", nil, http.StatusCreated)
 	v1 := obj(g1["version"])
 	if v1["version"] != float64(1) || len(v1["sha256"].(string)) != 64 || len(list(g1["generated"])) != 1 {
