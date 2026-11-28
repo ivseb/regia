@@ -399,7 +399,7 @@ func (s *Service) StatusFor(ctx context.Context, tx pgx.Tx) (Status, error) {
 	}
 	out.Features = map[string]bool{}
 	if st.Enabled {
-		for _, f := range append(CardFeatures[:len(CardFeatures):len(CardFeatures)], FeatureWiki, FeatureGRC) {
+		for _, f := range append(CardFeatures[:len(CardFeatures):len(CardFeatures)], FeatureWiki, FeatureGRC, FeatureQuestionnaire) {
 			if ft, _, ferr := s.Resolve(ctx, tx, f); ferr == nil && ft != nil && (f != FeatureWiki || ft.Tools) {
 				out.Features[f] = true
 			} else if ferr != nil && !errors.As(ferr, &ae) {

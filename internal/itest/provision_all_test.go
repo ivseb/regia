@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"regia/internal/modules/architecture"
+	"regia/internal/modules/continuity"
 	"regia/internal/modules/demand"
 	"regia/internal/modules/finance"
 	"regia/internal/modules/grc"
@@ -30,6 +31,8 @@ func TestProvisionAllModules(t *testing.T) {
 		reviews.Provision, work.Provision, requirements.Provision, risk.Provision, grc.Provision}
 	// Knowledge (piano, passo 19): tipo pagina, documento controllato, template.
 	all = append(all, knowledge.Provision)
+	// Continuità operativa: dopo architettura e Knowledge (tipi della relazione dei piani).
+	all = append(all, continuity.Provision)
 	slug := strings.ReplaceAll("tutti-"+time.Now().Format("150405.000"), ".", "")
 	if _, err := tenant.Create(ctx, d, tenant.CreateInput{Slug: slug, Name: "Tutti i moduli",
 		AdminEmail: "admin@" + slug + ".test", AdminPassword: testPassword, Provision: all}); err != nil {

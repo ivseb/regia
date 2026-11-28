@@ -11,6 +11,7 @@ import { CRITICALITY, Criticality, ErrorNote, SectionTitle } from "../../ui";
 import { TIME, canWriteEA, eaApi, type Capability } from "../../eaApi";
 import { ImportBlock } from "./ImportBlock";
 import { EaPage } from "./tabs";
+import { ContinuityBlock } from "../continuita/ContinuityBlock";
 import { useT } from "../../i18n/react";
 import { tr } from "../../i18n/core";
 
@@ -442,6 +443,7 @@ function CapDetail({
         </form>
       )}
       <ErrorNote error={add.error ?? remove.error} />
+      <ContinuityBlock kind="capability" refKey={cap.key} />
       {canWrite ? (
         <form
           className="flex flex-col gap-2"

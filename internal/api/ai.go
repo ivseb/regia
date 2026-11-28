@@ -83,6 +83,8 @@ func (s *Server) aiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+b+"/card/insert", inTenant(s.aiCardInsert))
 	mux.HandleFunc("POST "+b+"/card/triage", inTenant(s.aiCardTriage))
 	mux.HandleFunc("POST "+b+"/card/links", inTenant(s.aiCardLinks))
+	// Questionari precompilati.
+	s.reviewsAIRoutes(mux)
 	// GRC assistito (ondata 5).
 	mux.HandleFunc("POST "+b+"/grc/map", inTenant(s.aiGRCMap))
 	mux.HandleFunc("POST "+b+"/grc/map/decide", inTenant(s.aiGRCDecide))

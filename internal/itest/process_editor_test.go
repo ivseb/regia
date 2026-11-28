@@ -107,7 +107,8 @@ func TestProcessEditorMeta(t *testing.T) {
 		}
 		return s
 	}(), ",")
-	if checks != "estimate,requisiti_rilascio,sponsor" { // requisiti_rilascio: gate di rilascio dei requisiti (passo 6)
+	// requisiti_rilascio: gate di rilascio dei requisiti (passo 6); bia_completa ed esito_test: continuità operativa.
+	if checks != "bia_completa,esito_test,estimate,requisiti_rilascio,sponsor" {
 		t.Fatalf("controlli: %s", checks)
 	}
 	var policy map[string]any

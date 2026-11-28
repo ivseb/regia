@@ -143,6 +143,9 @@ export type Contract = {
   exit_tested_on: string | null;
   governing_law: string | null;
   auto_renewal: boolean;
+  /** Impegno contrattuale di ripristino (continuità operativa), in minuti. */
+  rto_minutes: number | null;
+  rpo_minutes: number | null;
   applications: Ref[];
   days_to_end: number | null;
   expiring: boolean;

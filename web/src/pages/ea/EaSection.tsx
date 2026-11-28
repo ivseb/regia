@@ -10,6 +10,7 @@ import { TIME, canWriteEA, eaApi, type C4Level, type Profile, type Relation } fr
 import { NewDependency, attrLabel } from "./DependenciesPage";
 import { useT } from "../../i18n/react";
 import { Trans } from "../../i18n/Trans";
+import { ContinuityBlock } from "../continuita/ContinuityBlock";
 
 export function EaSection({ refKey }: { refKey: string }) {
   const p = useQuery({ queryKey: ["ea", "profile", refKey], queryFn: () => eaApi.profile(refKey) });
@@ -126,6 +127,7 @@ function ProfileView({ profile }: { profile: Profile }) {
       {canWrite && isApp && adding && (
         <NewDependency types={profile.relation_types.filter((t) => t.category === "dependency")} from={n.id} onDone={() => setAdding(false)} />
       )}
+      {(isApp || n.type === "capability") && <ContinuityBlock kind={isApp ? "application" : "capability"} refKey={n.key} />}
     </section>
   );
 }

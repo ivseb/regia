@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"regia/internal/modules/continuity"
 	"regia/internal/platform/audit"
 	"regia/internal/platform/auth"
 	"regia/internal/platform/db"
@@ -20,7 +21,8 @@ import (
 //
 // Un modulo spento sparisce da barra laterale, ⌘K e cruscotto e le sue API rispondono 404
 // (codice module.disabled); i dati restano. Un modulo senza riga in tenant_modules è acceso:
-// i tenant esistenti e quelli nuovi partono con tutto acceso.
+// i tenant esistenti e quelli nuovi partono con tutto acceso, tranne i moduli «defaultOff»
+// (la continuità operativa), che si accendono da Configurazione → Moduli o con il modello di avvio.
 
 // Module è un modulo del prodotto che il tenant può accendere o spegnere.
 type Module struct {
@@ -31,6 +33,9 @@ type Module struct {
 	Effect string `json:"effect"`
 	// prefissi di /api/v1/ che appartengono al modulo
 	prefixes []string
+	// defaultOff: senza riga in tenant_modules il modulo è spento («partire piccoli»): si accende
+	// da Configurazione → Moduli o con un modello di avvio che lo prevede.
+	defaultOff bool
 }
 
 // Le chiavi devono coincidere con web/src/modules.ts.
@@ -76,6 +81,13 @@ var moduleDefs = []Module{
 		Description: "Mappa delle applicazioni, capability, dipendenze, razionalizzazione e diagrammi.",
 		Effect:      "Spariscono mappa, capability e diagrammi; le loro API rispondono 404. Il catalogo delle applicazioni e degli asset resta in lettura, perché lo usano le altre aree.",
 		prefixes:    []string{"architecture"},
+	},
+	{
+		Key: "continuity", Name: "Continuità operativa",
+		Description: "BIA delle capability, RTO e RPO richiesti contro dichiarati, incoerenze lungo le dipendenze, piani di continuità e test di resilienza.",
+		Effect:      "Spariscono la scheda Continuità, il livello sulla mappa e i blocchi nelle applicazioni; le API della continuità rispondono 404. BIA e test restano come elementi.",
+		prefixes:    []string{"continuity"},
+		defaultOff:  true,
 	},
 }
 
@@ -157,22 +169,43 @@ func (s *Server) modulesOff(ctx context.Context, tenantID string) (map[string]bo
 	if off, ok := s.mods.get(tenantID); ok {
 		return off, nil
 	}
-	off := map[string]bool{}
+	var off map[string]bool
 	err := s.db.InTenant(ctx, tenantID, db.TenantOpts{ReadOnly: true}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, "select module from tenant_modules where not enabled")
-		if err != nil {
-			return err
-		}
-		keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
-		for _, k := range keys {
-			off[k] = true
-		}
+		var err error
+		off, err = offModules(ctx, tx)
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 	s.mods.put(tenantID, off)
+	return off, nil
+}
+
+// offModules legge i moduli spenti: quelli con la riga «enabled = false» e quelli spenti di default
+// (defaultOff) che non hanno ancora una riga.
+func offModules(ctx context.Context, tx pgx.Tx) (map[string]bool, error) {
+	rows, err := tx.Query(ctx, "select module, enabled from tenant_modules")
+	if err != nil {
+		return nil, err
+	}
+	stored := map[string]bool{}
+	var k string
+	var on bool
+	if _, err := pgx.ForEachRow(rows, []any{&k, &on}, func() error { stored[k] = on; return nil }); err != nil {
+		return nil, err
+	}
+	off := map[string]bool{}
+	for k, on := range stored {
+		if !on {
+			off[k] = true
+		}
+	}
+	for _, m := range moduleDefs {
+		if _, ok := stored[m.Key]; !ok && m.defaultOff {
+			off[m.Key] = true
+		}
+	}
 	return off, nil
 }
 
@@ -284,7 +317,7 @@ func readModules(ctx context.Context, tx pgx.Tx) ([]moduleState, error) {
 	}
 	out := make([]moduleState, 0, len(moduleDefs))
 	for _, m := range moduleDefs {
-		st := moduleState{Module: m, Enabled: true}
+		st := moduleState{Module: m, Enabled: !m.defaultOff}
 		if v, ok := stored[m.Key]; ok {
 			at := v.at
 			st.Enabled, st.UpdatedAt, st.UpdatedBy = v.enabled, &at, v.by
@@ -327,6 +360,12 @@ func (s *Server) setModules(w http.ResponseWriter, r *http.Request, p *auth.Prin
 				values (app_tenant(), $1, $2, $3)
 				on conflict (tenant_id, module) do update set enabled = excluded.enabled,
 				  updated_by = excluded.updated_by, updated_at = now()`, k, in.Modules[k], p.MemberID); err != nil {
+				return nil, err
+			}
+		}
+		// Accendere la continuità la prepara anche (tipi, processi, configurazione): un passo solo.
+		if in.Modules["continuity"] {
+			if err := continuity.Provision(ctx, tx, p.MemberID); err != nil {
 				return nil, err
 			}
 		}

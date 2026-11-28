@@ -35,7 +35,7 @@ export type CrisisView = {
   stale_hours: number;
 };
 
-export type ProblemKind = "finding" | "gate_decision" | "requirement" | "adherence";
+export type ProblemKind = "finding" | "gate_decision" | "requirement" | "adherence" | "continuity";
 export type ProblemLink = {
   id: string;
   action: "work_item" | "exception" | "override" | "adoption_pr";

@@ -52,6 +52,9 @@ const RequirementDetail = lazy(() => import("./Requirements").then((m) => ({ def
 const ExceptionDetail = lazy(() => import("./Requirements").then((m) => ({ default: m.ExceptionDetail })));
 // Architettura enterprise (piano, passo 20): capability, dipendenze, TIME e tecnologie.
 const EaSection = lazy(() => import("./ea/EaSection").then((m) => ({ default: m.EaSection })));
+// Continuità operativa: «Impatto nel tempo» della BIA ed «Esito» del test di resilienza.
+const BiaSection = lazy(() => import("./continuita/BiaSection").then((m) => ({ default: m.BiaSection })));
+const TestSection = lazy(() => import("./continuita/TestSection").then((m) => ({ default: m.TestSection })));
 // Rischi, incidenti e fornitori ICT (piano, passo 20).
 const GrcDetail = lazy(() => import("./RiskDetail"));
 const GRC_TYPES = ["risk", "incident", "ict_provider"];
@@ -111,6 +114,8 @@ function tabsFor(t: T, d: ElementDetail, tn: ReturnType<typeof useTypeNames>, pr
   if (GRC_TYPES.includes(ty) && !tabs.some((x) => x.key === "dettagli")) tabs.push({ key: "dettagli", label: t("lavoro.elementpage.tabDetails") });
   // Conformità (piano, passo 20): controlli ed evidenze hanno la loro scheda di dettaglio.
   if (ty === "control" || ty === "evidence") tabs.push({ key: "dettagli", label: ty === "control" ? t("lavoro.elementpage.tabCompliance") : t("lavoro.elementpage.tabEvidence") });
+  if (ty === "bia") tabs.push({ key: "dettagli", label: t("continuita.biaSection.title") });
+  if (ty === "resilience_test") tabs.push({ key: "dettagli", label: t("continuita.test.title") });
   if (ty === "business_request") tabs.push({ key: "analisi", label: t("lavoro.elementpage.tabAnalysis") });
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "valutazioni", label: t("lavoro.elementpage.tabReviews") });
   if (ty === "business_request" || ty === "impact") tabs.push({ key: "requisiti", label: t("lavoro.elementpage.tabRequirements") });
@@ -138,7 +143,7 @@ function defaultTab(d: ElementDetail, tabs: Tab[], memberId?: string): TabKey {
   const has = (k: TabKey) => tabs.some((t) => t.key === k);
   if (window.location.hash === "#commenti") return "attivita";
   if (awaitsMyDecision(d) && has("approvazioni")) return "approvazioni";
-  if ((d.element.type === "incident" || d.element.type === "control") && has("dettagli")) return "dettagli";
+  if ((d.element.type === "incident" || d.element.type === "control" || d.element.type === "bia" || d.element.type === "resilience_test") && has("dettagli")) return "dettagli";
   const mine = new Set(d.stakeholders.filter((s) => memberId && s.member_id === memberId).map((s) => s.role));
   if (d.element.type === "business_request" && mine.size > 0 && [...mine].every((r) => r === "requester" || r === "business_owner") && has("stato")) return "stato";
   if (mine.has("compliance") && has("gate")) return "gate";
@@ -524,6 +529,11 @@ function TabBody({ detail, tab, onTab }: { detail: ElementDetail; tab: TabKey; o
           {(el.type === "application" || el.type === "logical_asset" || el.type === "capability") && (
             <Suspense fallback={<Loading className="text-muted" />}>
               <EaSection refKey={key} />
+            </Suspense>
+          )}
+          {(el.type === "bia" || el.type === "resilience_test") && (
+            <Suspense fallback={<Loading className="text-muted" />}>
+              {el.type === "bia" ? <BiaSection refKey={key} /> : <TestSection refKey={key} />}
             </Suspense>
           )}
           {el.type === "review" && (

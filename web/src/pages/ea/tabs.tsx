@@ -5,15 +5,18 @@ import { PageHeader } from "../../shell";
 import { useT } from "../../i18n/react";
 import type { Key } from "../../i18n/core";
 import { crumbs } from "../../crumbs";
+import { useMe } from "../../shell";
+import { moduleOn, type ModuleKey } from "../../modules";
 
-export type EaTab = "mappa" | "capability" | "dipendenze" | "razionalizzazione" | "diagrammi";
+export type EaTab = "mappa" | "capability" | "dipendenze" | "razionalizzazione" | "diagrammi" | "continuita";
 
-export const EA_TABS: { id: EaTab; label: Key; to: string }[] = [
+export const EA_TABS: { id: EaTab; label: Key; to: string; module?: ModuleKey }[] = [
   { id: "mappa", label: "altro.ea.tabs.map", to: "/architettura/mappa" },
   { id: "capability", label: "altro.ea.tabs.capability", to: "/architettura/capability" },
   { id: "dipendenze", label: "altro.ea.tabs.dependencies", to: "/architettura/dipendenze" },
   { id: "razionalizzazione", label: "altro.ea.tabs.rationalization", to: "/architettura/razionalizzazione" },
   { id: "diagrammi", label: "altro.ea.tabs.diagrams", to: "/architettura/diagrammi" },
+  { id: "continuita", label: "continuita.tab", to: "/architettura/continuita", module: "continuity" },
 ];
 
 const tabClass = (on: boolean) => `shrink-0 pb-2.5 whitespace-nowrap no-underline ${on ? "border-b-2 border-fg font-semibold text-fg" : "text-muted hover:text-fg"}`;
@@ -21,9 +24,10 @@ const tabClass = (on: boolean) => `shrink-0 pb-2.5 whitespace-nowrap no-underlin
 /** Le schede EA, da mettere nella barra delle schede del catalogo. */
 export function EaTabLinks({ active }: { active?: EaTab }) {
   const t = useT();
+  const me = useMe().data;
   return (
     <>
-      {EA_TABS.map((tab) => (
+      {EA_TABS.filter((tab) => !tab.module || moduleOn(me, tab.module)).map((tab) => (
         <Link key={tab.id} role="tab" aria-selected={active === tab.id} to={tab.to} className={tabClass(active === tab.id)}>
           {t(tab.label)}
         </Link>

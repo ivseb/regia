@@ -27,15 +27,16 @@ func TestTenantModules(t *testing.T) {
 	admin := login(t, e.srv.URL, "admin@"+e.slug+".test", testPassword)
 	utente := e.member("utente", tenant.MemberInput{Roles: []string{"viewer"}})
 
-	// Di partenza: sette moduli, tutti accesi, anche in /me.
+	// Di partenza: otto moduli, tutti accesi anche in /me, tranne la continuità operativa, che parte
+	// spenta («partire piccoli») e si accende da Configurazione → Moduli o con il modello di avvio.
 	got := admin.do("GET", "/api/v1/tenant/modules", nil, http.StatusOK)
 	items, _ := got["items"].([]any)
-	if len(items) != 7 {
+	if len(items) != 8 {
 		t.Fatalf("moduli: %v", got)
 	}
 	for _, it := range items {
 		m := it.(map[string]any)
-		if m["enabled"] != true || m["name"] == "" || m["effect"] == "" {
+		if m["enabled"] != (m["key"] != "continuity") || m["name"] == "" || m["effect"] == "" {
 			t.Fatalf("modulo di partenza: %v", m)
 		}
 	}
@@ -45,8 +46,12 @@ func TestTenantModules(t *testing.T) {
 			t.Fatalf("/me: il modulo %s dovrebbe essere acceso: %v", k, on)
 		}
 	}
+	if on["continuity"] {
+		t.Fatalf("/me: la continuità parte spenta: %v", on)
+	}
 	utente.do("GET", "/api/v1/kb/spaces", nil, http.StatusOK)
 	utente.do("GET", "/api/v1/architecture/capabilities", nil, http.StatusOK)
+	utente.do("GET", "/api/v1/continuity/overview", nil, http.StatusNotFound)
 
 	// Solo l'amministratore del tenant li cambia; un modulo sconosciuto si rifiuta.
 	utente.do("PUT", "/api/v1/tenant/modules", map[string]any{"modules": map[string]bool{"knowledge": false}}, http.StatusForbidden)
@@ -57,11 +62,11 @@ func TestTenantModules(t *testing.T) {
 	after := admin.do("PUT", "/api/v1/tenant/modules", map[string]any{"modules": map[string]bool{"knowledge": false, "architecture": false}}, http.StatusOK)
 	for _, it := range after["items"].([]any) {
 		m := it.(map[string]any)
-		want := m["key"] != "knowledge" && m["key"] != "architecture"
+		want := m["key"] != "knowledge" && m["key"] != "architecture" && m["key"] != "continuity"
 		if m["enabled"] != want {
 			t.Fatalf("dopo lo spegnimento: %v", m)
 		}
-		if !want && (m["updated_at"] == nil || m["updated_by"] == nil) {
+		if !want && m["key"] != "continuity" && (m["updated_at"] == nil || m["updated_by"] == nil) {
 			t.Fatalf("manca chi ha cambiato: %v", m)
 		}
 	}

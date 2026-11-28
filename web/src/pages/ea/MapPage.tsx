@@ -6,6 +6,9 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "reac
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMe } from "../../shell";
+import { moduleOn } from "../../modules";
+import { continuityApi } from "../../continuityApi";
+import { ContinuityLayer } from "../continuita/MapOverlay";
 import { CatalogId } from "../../catalogId";
 import { CRITICALITY, ErrorNote, SectionTitle } from "../../ui";
 import { TIME, canWriteEA, eaApi, type EdgeType, type Graph, type GraphEdge, type GraphNode } from "../../eaApi";
@@ -33,9 +36,14 @@ export function MapPage({ focus }: { focus?: string }) {
 
 function GraphExplorer({ graph, focus }: { graph: Graph; focus?: string }) {
   const t = useT();
-  const perms = useMe().data?.active_tenant?.permissions ?? [];
+  const me = useMe().data;
+  const perms = me?.active_tenant?.permissions ?? [];
   const canWrite = canWriteEA(perms);
   const nav = useNavigate();
+  // Livello «Continuità» (docs/sviluppo/continuita.md): RTO sui nodi e archi incoerenti.
+  const continuityOn = moduleOn(me, "continuity");
+  const [showContinuity, setShowContinuity] = useState(false);
+  const cont = useQuery({ queryKey: ["continuity", "graph"], queryFn: continuityApi.graph, enabled: continuityOn && showContinuity, staleTime: 30_000 });
   const [types, setTypes] = useState<Set<string>>(() => new Set(graph.node_types.map((nt) => nt.key)));
   const [team, setTeam] = useState("");
   const [minCrit, setMinCrit] = useState(0);
@@ -263,6 +271,12 @@ function GraphExplorer({ graph, focus }: { graph: Graph; focus?: string }) {
             <input type="checkbox" checked={alwaysLabels} onChange={(e) => setAlwaysLabels(e.target.checked)} />
             {t("altro.ea.map.alwaysLabels")}
           </label>
+          {continuityOn && (
+            <label className="flex items-center gap-1.5 text-[12.5px]">
+              <input type="checkbox" checked={showContinuity} onChange={(e) => setShowContinuity(e.target.checked)} />
+              {t("continuita.map.toggle")}
+            </label>
+          )}
           <span className="ml-auto flex flex-wrap gap-1.5">
             <button className="btn px-2.5 py-1" aria-label={t("altro.ea.map.zoomIn")} onClick={() => vp.zoomAt(1.3)}>
               +
@@ -295,6 +309,7 @@ function GraphExplorer({ graph, focus }: { graph: Graph; focus?: string }) {
             <g ref={vp.gRef}>
               <EdgeLayer edges={edges} positions={positions} typeOf={typeOf} highlight={highlight} />
               <NodeLayer nodes={nodes} positions={positions} colorMode={colorMode} highlight={highlight} selected={selected} labels={alwaysLabels || vp.labels} />
+              {showContinuity && cont.data && <ContinuityLayer data={cont.data} edges={edges} positions={positions} visible={visible} labels={alwaysLabels || vp.labels} nodeR={NODE_R} />}
             </g>
           </svg>
           <Legend colorMode={colorMode} />
@@ -304,7 +319,9 @@ function GraphExplorer({ graph, focus }: { graph: Graph; focus?: string }) {
         </div>
         <p className="m-0 px-4 py-2 text-[12px] text-muted md:px-7">
           {t("altro.ea.map.help")}
+          {showContinuity && <span className="block">{t("continuita.map.legend")}</span>}
         </p>
+        {showContinuity && <ErrorNote error={cont.error} />}
       </div>
       <aside className="flex w-full shrink-0 flex-col gap-4 border-hair px-4 py-4 md:px-7 lg:w-[380px] lg:border-l lg:px-5" aria-label={t("altro.ea.map.selectedLabel")}>
         {!sel && (

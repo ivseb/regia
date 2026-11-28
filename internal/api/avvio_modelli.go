@@ -10,6 +10,7 @@ import (
 
 	"regia/internal/engine"
 	"regia/internal/modules/architecture"
+	"regia/internal/modules/continuity"
 	"regia/internal/modules/demand"
 	"regia/internal/modules/finance"
 	"regia/internal/modules/grc"
@@ -51,7 +52,7 @@ type avvioModel struct {
 var avvioCatalogo = []avvioModel{
 	{
 		Key: "banca_assicurazione", Available: true,
-		ModulesOn: []string{"demand", "work", "knowledge", "devsecops", "grc", "architecture"},
+		ModulesOn: []string{"demand", "work", "knowledge", "devsecops", "grc", "architecture", "continuity"},
 		Catalogs:  []string{"dora", "nis2"},
 		Bodies: []avvioBody{
 			{"rischi_ict", "other", "Comitato rischi ICT", "ICT risk committee"},
@@ -81,7 +82,8 @@ type provisionFn = func(ctx context.Context, tx pgx.Tx, adminMemberID string) er
 // avvioProvisioners sono le Provision dei moduli, nello stesso ordine di cmd/regia/tenant.go.
 func avvioProvisioners() []provisionFn {
 	return []provisionFn{demand.Provision, architecture.Provision, portfolio.Provision, finance.Provision, reviews.Provision,
-		work.Provision, projects.Provision, requirements.Provision, risk.Provision, grc.Provision, knowledge.Provision}
+		work.Provision, projects.Provision, requirements.Provision, risk.Provision, grc.Provision, knowledge.Provision,
+		continuity.Provision}
 }
 
 func (b avvioBody) name(lang string) string {
@@ -139,8 +141,8 @@ func takeSnap(ctx context.Context, tx pgx.Tx) (*avvioSnap, error) {
 	for k := range fw {
 		sn.fws[k] = true
 	}
-	off := map[string]string{}
-	if err := pairs(`select module, module from tenant_modules where not enabled`, off); err != nil {
+	off, err := offModules(ctx, tx)
+	if err != nil {
 		return nil, err
 	}
 	for k := range off {

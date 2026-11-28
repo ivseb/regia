@@ -172,6 +172,8 @@ func (s *Server) notify(next http.Handler) http.Handler {
 			r.URL.Path == "/api/v1/ai/grc/map" || r.URL.Path == "/api/v1/ai/grc/draft" || r.URL.Path == "/api/v1/ai/grc/notice" ||
 			// Wiki personale: è della persona (solo la promozione a Knowledge cambia le viste degli altri).
 			(strings.HasPrefix(r.URL.Path, "/api/v1/wiki") && !strings.HasSuffix(r.URL.Path, "/promote")) ||
+			// Proposte dell'AI per un questionario: le vede solo chi le chiede (le decisioni pubblicano).
+			(strings.HasPrefix(r.URL.Path, "/api/v1/reviews/") && strings.HasSuffix(r.URL.Path, "/ai-proposals")) ||
 			// Salvataggio automatico dei questionari e controllo dei modelli: non cambiano le viste degli altri.
 			(strings.HasPrefix(r.URL.Path, "/api/v1/reviews/") && strings.HasSuffix(r.URL.Path, "/answers")) || r.URL.Path == "/api/v1/review-config/templates/validate" {
 			return

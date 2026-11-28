@@ -100,7 +100,8 @@ func TestAvvioModelloERipristino(t *testing.T) {
 			t.Fatalf("il catalogo %v deve essere «da verificare»", o["key"])
 		}
 	}
-	if kinds["catalog"]["dora"] != "new" || kinds["catalog"]["nis2"] != "new" || kinds["body"]["rischi_ict"] != "new" || len(kinds["process"]) == 0 || len(kinds["type"]) == 0 || len(kinds["module"]) != 6 {
+	if kinds["catalog"]["dora"] != "new" || kinds["catalog"]["nis2"] != "new" || kinds["body"]["rischi_ict"] != "new" || len(kinds["process"]) == 0 || len(kinds["type"]) == 0 || len(kinds["module"]) != 7 ||
+		kinds["module"]["continuity"] != "new" { // la continuità parte spenta: il modello la accende
 		t.Fatalf("anteprima: %v", kinds)
 	}
 	if pre["applied"] != false {

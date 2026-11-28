@@ -16,6 +16,11 @@ import {
   type ReviewTypeInput,
   type ReviewView,
 } from "./api";
+import type { AIStatus } from "./aiApi";
+
+/** Esito di «Proponi le risposte» (internal/api/reviews_ai.go). */
+export type AIProposeResult = { section: string; proposed: number; no_source: number; remaining: number; sources: number; status: AIStatus };
+export type AIDecision = { id: string; accept: boolean; value?: unknown };
 
 const q = encodeURIComponent;
 const rv = (ref: string) => `/reviews/${q(ref)}`;
@@ -36,6 +41,8 @@ export const reviewsApi = {
     call<ReviewView>("PATCH", `${rv(ref)}/prescriptions/${q(id)}`, p),
   removePrescription: (ref: string, id: string) => call<ReviewView>("DELETE", `${rv(ref)}/prescriptions/${q(id)}`),
   decide: (ref: string, outcome: string, note: string) => call<ReviewView>("POST", `${rv(ref)}/decision`, { outcome, note }),
+  aiPropose: (ref: string, section: string) => call<{ view: ReviewView; result: AIProposeResult }>("POST", `${rv(ref)}/ai-proposals`, { section }),
+  aiDecide: (ref: string, decisions: AIDecision[]) => call<{ view: ReviewView }>("POST", `${rv(ref)}/ai-proposals/decide`, { decisions }),
 
   config: () => call<ReviewConfig>("GET", rc),
   exportUrl: () => `/api/v1${rc}/export`,

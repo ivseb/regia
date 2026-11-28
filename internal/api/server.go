@@ -23,6 +23,7 @@ import (
 	"regia/internal/engine/webhooks"
 	"regia/internal/modules/architecture"
 	"regia/internal/modules/collab"
+	"regia/internal/modules/continuity"
 	"regia/internal/modules/demand"
 	"regia/internal/modules/devsecops"
 	almconn "regia/internal/modules/devsecops/connectors/alm"
@@ -117,6 +118,8 @@ type Server struct {
 	mods moduleCache
 	// Dal problema all'azione (problems.go).
 	prob *problems.Service
+	// Continuità operativa (continuity.go).
+	cont *continuity.Service
 	// Vista DPO (privacy.go).
 	privacy *privacy.Service
 	// AI: impostazioni, assistente e strumenti (ai.go; replica/ai.md).
@@ -284,6 +287,8 @@ func New(o Options) *Server {
 	s.imp = newImporter(o, s)
 	// Dal problema all'azione (problems.go).
 	s.prob = problems.New(o.Engine)
+	// Continuità operativa (continuity.go): dopo la conformità, per le evidenze dei test.
+	s.continuityInit(o)
 	// Vista DPO (ondata 3): trattamenti, DPIA, violazioni e flussi di dati.
 	s.privacy = privacy.New()
 	// AI (replica/ai.md, ondata 1): dopo i moduli, perché gli strumenti li usano.
@@ -319,6 +324,7 @@ func (s *Server) Handler() http.Handler {
 	s.appearanceRoutes(mux)
 	s.languageRoutes(mux)
 	s.problemRoutes(mux)
+	s.continuityRoutes(mux)
 	s.moduleRoutes(mux)
 	s.avvioRoutes(mux)
 	s.mappaRoutes(mux)

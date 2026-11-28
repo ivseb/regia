@@ -57,6 +57,9 @@ var Features = []Feature{
 	// GRC assistito (ondata 5): collegamenti evidenza → controllo, bozze di policy e runbook (con
 	// gli strumenti di lettura se il modello li sa usare), bozza della notifica DORA.
 	{Key: "grc", Tier: TierDeep, NeedsTools: true, Active: true},
+	// Questionari precompilati: per le domande di una sezione, risposte proposte con la fonte
+	// (risposte confermate, fatti del grafo, pagine, allegati). Non chiama strumenti.
+	{Key: "questionari", Tier: TierDeep, Active: true},
 }
 
 func featureByKey(key string) (Feature, bool) {

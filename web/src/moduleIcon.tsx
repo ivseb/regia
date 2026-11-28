@@ -83,7 +83,8 @@ export function uiModuleOfPath(path: string): UiModule {
   const m = moduleOfPath(path);
   if (!m) return "platform";
   // I progetti hanno il colore del lavoro: il piano del PM sta sopra le board dei team.
-  return m === "architecture" ? "arch" : m === "projects" ? "work" : m;
+  // La continuità sta dentro Architettura e ne prende il colore.
+  return m === "architecture" || m === "continuity" ? "arch" : m === "projects" ? "work" : m;
 }
 
 /** Icona del percorso: come la sezione del menu (stella per le pagine personali, elenco, impostazioni). */

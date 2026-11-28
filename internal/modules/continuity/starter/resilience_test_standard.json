@@ -1,0 +1,29 @@
+{
+  "format": "regia.process/v1",
+  "key": "resilience_test_standard",
+  "name": "Ciclo di vita del test di resilienza",
+  "description": "Pacchetto di partenza: un test di continuità si pianifica, si esegue, si registra l'esito con RTO e RPO misurati e si chiude quando i rilievi hanno le loro azioni.",
+  "type": "resilience_test",
+  "priority": 100,
+  "notes": "Pacchetto di partenza",
+  "definition": {
+    "phases": [
+      {"name": "Pianificato", "category": "todo", "color": "#6B7280", "description": "Tipo e data decisi."},
+      {"name": "In esecuzione", "category": "in_progress", "color": "#0B6E8E", "description": "Il test è in corso."},
+      {"name": "Eseguito", "category": "in_progress", "color": "#6B4FC8", "description": "Esito registrato; rilievi da trasformare in azioni."},
+      {"name": "Chiuso", "category": "done", "color": "#3A7A1C", "description": "Test concluso."},
+      {"name": "Annullato", "category": "cancelled", "color": "#1F2937", "off_path": true, "description": "Il test non si fa."}
+    ],
+    "initial": "Pianificato",
+    "gates": [
+      {"key": "esito", "name": "Esito del test", "check": "esito_test", "message": "registra l'esito, la data di esecuzione e, per un esito con rilievi o non superato, almeno un rilievo"}
+    ],
+    "transitions": [
+      {"from": ["Pianificato"], "to": "In esecuzione", "label": "Avvia il test"},
+      {"from": ["Pianificato", "In esecuzione"], "to": "Eseguito", "label": "Registra l'esito", "gates": ["esito"]},
+      {"from": ["Eseguito"], "to": "Chiuso", "label": "Chiudi il test"},
+      {"from": ["Pianificato", "In esecuzione"], "to": "Annullato", "label": "Annulla", "comment_required": true},
+      {"from": ["Annullato"], "to": "Pianificato", "label": "Ripianifica"}
+    ]
+  }
+}
