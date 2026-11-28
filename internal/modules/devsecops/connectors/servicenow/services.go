@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -141,6 +142,8 @@ type DiscoverResult struct {
 	Suggested int `json:"suggested"`
 }
 
+var sysIDRe = regexp.MustCompile(`^[0-9A-Za-z]{1,64}$`)
+
 // MaxServices è il numero massimo di servizi letti dalla CMDB per integrazione: oltre,
 // serve un filtro (per esempio operational_status=1 o un gruppo di supporto).
 const MaxServices = 3000
@@ -187,7 +190,8 @@ func (s *Service) discover(ctx context.Context, tenantID string, it *Integration
 	err := cl.Table(ctx, snapi.Query{Table: it.Config.ServiceClass, Query: q, Fields: fields, Limit: MaxServices + 1}, func(r map[string]string) (bool, error) {
 		id := strings.TrimSpace(r["sys_id"])
 		name := strings.Join(strings.Fields(r["name"]), " ")
-		if id == "" || name == "" || seen[id] {
+		// Il sys_id finisce nelle encoded query della sincronizzazione: solo lettere e cifre.
+		if !sysIDRe.MatchString(id) || name == "" || seen[id] {
 			return false, nil
 		}
 		seen[id] = true
