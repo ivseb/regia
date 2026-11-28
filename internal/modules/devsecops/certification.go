@@ -38,6 +38,23 @@ type CertChange struct {
 	Aliases []string `json:"aliases"`
 	Title   string   `json:"title"`
 	Request *Ref     `json:"request"`
+	// ServiceNow: la change letta dal connettore ServiceNow (tabella servicenow_changes), se c'è.
+	ServiceNow *CertSnChange `json:"servicenow"`
+}
+
+// CertSnChange è la change di ServiceNow: stato grezzo (-5 nuova … -2 pianificata, 3 chiusa,
+// 4 annullata), approvazione (not requested | requested | approved | rejected), tipo, finestra
+// pianificata ed effettiva, link al record. Chi ha approvato non si legge (dato personale).
+type CertSnChange struct {
+	State        string     `json:"state"`
+	Approval     string     `json:"approval"`
+	Type         string     `json:"type"`
+	PlannedStart *time.Time `json:"planned_start"`
+	PlannedEnd   *time.Time `json:"planned_end"`
+	ActualStart  *time.Time `json:"actual_start"`
+	ActualEnd    *time.Time `json:"actual_end"`
+	URL          string     `json:"url"`
+	UpdatedAt    *time.Time `json:"updated_at"`
 }
 
 // Ref è un elemento citato (chiave, titolo, stato).
@@ -179,7 +196,33 @@ func findChange(ctx context.Context, tx pgx.Tx, number string) (*CertChange, err
 	if reqKey != nil {
 		c.Request = &Ref{Key: *reqKey, Title: deref(reqTitle), State: deref(reqState)}
 	}
+	if c.ServiceNow, err = serviceNowChange(ctx, tx, c); err != nil {
+		return nil, err
+	}
 	return c, nil
+}
+
+// serviceNowChange legge la change dal connettore ServiceNow, se il modulo c'è (la tabella
+// servicenow_changes nasce con la sua migrazione): il collegamento è sul numero o su un alias.
+func serviceNowChange(ctx context.Context, tx pgx.Tx, c *CertChange) (*CertSnChange, error) {
+	var exists bool
+	if err := tx.QueryRow(ctx, `select to_regclass('servicenow_changes') is not null`).Scan(&exists); err != nil || !exists {
+		return nil, err
+	}
+	sn := &CertSnChange{}
+	var state, approval, typ, url *string
+	err := tx.QueryRow(ctx, `select state::text, approval::text, type::text, planned_start, planned_end, actual_start, actual_end, url::text, sys_updated_on
+		from servicenow_changes where upper(number) = any($1) order by sys_updated_on desc nulls last limit 1`,
+		append([]string{c.Number}, c.Aliases...)).
+		Scan(&state, &approval, &typ, &sn.PlannedStart, &sn.PlannedEnd, &sn.ActualStart, &sn.ActualEnd, &url, &sn.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sn.State, sn.Approval, sn.Type, sn.URL = deref(state), deref(approval), deref(typ), deref(url)
+	return sn, nil
 }
 
 // certData legge dal vivo i dati della certificazione di un change.

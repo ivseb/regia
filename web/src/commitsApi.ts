@@ -16,8 +16,8 @@ export type ElementCommit = {
 
 export type ElementCommits = {
   commits: ElementCommit[];
-  /** Il primo rilascio in produzione dello stesso servizio, successivo all'ultimo commit. */
-  release: { service: string; version: string; at: string; lead_days: number } | null;
+  /** Il rilascio in produzione che completa l'elemento (per ogni servizio, il primo dopo l'ultimo commit). */
+  release: { service: string; version: string; at: string; lead_days: number; release_id: string | null } | null;
   first_at: string | null;
 };
 

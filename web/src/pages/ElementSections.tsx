@@ -535,6 +535,12 @@ export function describe(
       const known = ["pass", "warn", "fail", "override_requested", "override_approved", "override_rejected", "override_revoked"];
       return h(field && known.includes(field) ? `gate.${field}` : "gateDefault", { env, envver });
     }
+    // Chiusura con le parole chiave (fixes HL-12 in un commit): fatta, o non possibile dal processo.
+    case "commit": {
+      const sha = s(added?.sha ?? "").slice(0, 7);
+      if (field === "closed") return h("commitClosed", { sha, keyword: s(added?.keyword ?? ""), to: s(added?.to ?? "") });
+      return h(added?.reason === "ambiguous" ? "commitCloseAmbiguous" : "commitCloseSkipped", { sha, keyword: s(added?.keyword ?? "") });
+    }
     case "release":
       return h("release", { env: s(added?.environment ?? h("production")), service: s(added?.service ?? ""), version: s(added?.version ?? "") }).trim();
     case "schedule":

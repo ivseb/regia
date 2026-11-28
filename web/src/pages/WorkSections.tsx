@@ -14,6 +14,7 @@ import { useT } from "../i18n/react";
 import { useWorkTypes } from "../typesApi";
 import { loc } from "../i18n/format";
 import { ModuleChip } from "../moduleIcon";
+import { InProduzione } from "./InProduzione";
 
 
 function Side({ title, aside, open = true, children }: { title: string; aside?: ReactNode; open?: boolean; children: ReactNode }) {
@@ -119,6 +120,7 @@ function DeliveryBlock({ refKey, detail, open }: { refKey: string; detail: Eleme
           <span className="text-[12px] text-muted">
             {t("lavoro.worksections.storiesClosed", { done: d.progress.done, total: d.progress.total })}
           </span>
+          <InProduzione refKey={refKey} />
         </div>
       )}
       {(d.kind === "request" || d.kind === "impact") && (

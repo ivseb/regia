@@ -1,0 +1,140 @@
+// Certificazione del rilascio (pagina /change/$numero/certificazione) e impostazioni dei
+// rilasci nella configurazione DevSecOps (chiusura con le parole chiave, sezioni).
+import type { Source } from "../types";
+
+export default {
+  // Pagina
+  "rilasci.certificazione.crumb": "certificazione del rilascio",
+  "rilasci.certificazione.titolo": "Certificazione del rilascio · {number}",
+  "rilasci.certificazione.richiesta": "Richiesta {key}",
+  "rilasci.certificazione.senzaRichiesta": "Nessuna richiesta collegata al change.",
+  "rilasci.certificazione.statoVivo": "Dati dal vivo, letti il {when}.",
+  "rilasci.certificazione.statoVersione": "Versione {n}, generata il {when} da {by}.",
+  "rilasci.certificazione.statoVersioneAnonima": "Versione {n}, generata il {when}.",
+  "rilasci.certificazione.impronta": "Impronta SHA-256 {hash}",
+  "rilasci.certificazione.genera": "Genera la certificazione",
+  "rilasci.certificazione.generazione": "Generazione…",
+  "rilasci.certificazione.senzaRilasci": "Il change non ha ancora nessun rilascio: non c'è niente da certificare.",
+  "rilasci.certificazione.stampa": "Stampa o salva in PDF",
+  "rilasci.certificazione.copiaLink": "Copia il link",
+  "rilasci.certificazione.linkCopiato": "Link copiato",
+  "rilasci.certificazione.versioni": "Versione mostrata",
+  "rilasci.certificazione.dalVivo": "Dal vivo",
+  "rilasci.certificazione.versioneVoce": "v{n} · {when}",
+  "rilasci.certificazione.evidenzaNonMappata":
+    "Alla generazione non nasce un'evidenza GRC finché in {gate} non si mappa un controllo sulla sorgente «Certificazione del rilascio».",
+  "rilasci.certificazione.evidenzaNonMappataLink": "Configurazione → Gate di rilascio",
+  "rilasci.certificazione.evidenza": "Evidenza GRC {key}",
+  "rilasci.certificazione.nonTrovato": "Change non trovato",
+  "rilasci.certificazione.nonTrovatoTesto": "Il change {number} non esiste, oppure non hai il permesso di vederlo.",
+  "rilasci.certificazione.versioneNonTrovata": "La versione {n} della certificazione di {number} non esiste.",
+  "rilasci.certificazione.tornaDalVivo": "Mostra i dati dal vivo",
+  "rilasci.certificazione.piede": "Certificazione del rilascio {number} · {stato} · stampata il {when}",
+  "rilasci.certificazione.piedeVivo": "dati dal vivo",
+  "rilasci.certificazione.piedeVersione": "versione {n}, SHA-256 {hash}",
+
+  // Sezioni (titoli, anche nella configurazione)
+  "rilasci.certificazione.sezione.change": "Change",
+  "rilasci.certificazione.sezione.releases": "Versioni rilasciate",
+  "rilasci.certificazione.sezione.items": "Elementi contenuti",
+  "rilasci.certificazione.sezione.tests": "Test",
+  "rilasci.certificazione.sezione.sonar": "Qualità del codice (Sonar)",
+  "rilasci.certificazione.sezione.security": "Sicurezza al rilascio",
+  "rilasci.certificazione.sezione.gate": "Gate e approvazioni",
+
+  // Change
+  "rilasci.certificazione.change.numero": "Numero",
+  "rilasci.certificazione.change.alias": "Già noto come",
+  "rilasci.certificazione.change.titolo": "Titolo",
+  "rilasci.certificazione.change.richiesta": "Richiesta",
+  "rilasci.certificazione.change.nessunTitolo": "Senza titolo",
+  "rilasci.certificazione.sn.stato": "Stato in ServiceNow",
+  "rilasci.certificazione.sn.approvazione": "Approvazione",
+  "rilasci.certificazione.sn.approvazione.notRequested": "non richiesta",
+  "rilasci.certificazione.sn.approvazione.requested": "richiesta, in attesa",
+  "rilasci.certificazione.sn.approvazione.approved": "approvata",
+  "rilasci.certificazione.sn.approvazione.rejected": "respinta",
+  "rilasci.certificazione.sn.tipo": "Tipo",
+  "rilasci.certificazione.sn.pianificata": "Finestra pianificata",
+  "rilasci.certificazione.sn.effettiva": "Finestra effettiva",
+  "rilasci.certificazione.sn.finestra": "dal {from} al {to}",
+  "rilasci.certificazione.sn.finestraDal": "dal {from}",
+  "rilasci.certificazione.sn.finestraAl": "fino al {to}",
+  "rilasci.certificazione.sn.record": "ServiceNow",
+  "rilasci.certificazione.sn.apri": "Apri in ServiceNow",
+
+  // Rilasci
+  "rilasci.certificazione.rilasci.servizio": "Servizio",
+  "rilasci.certificazione.rilasci.versione": "Versione",
+  "rilasci.certificazione.rilasci.ambiente": "Ambiente",
+  "rilasci.certificazione.rilasci.data": "Data",
+  "rilasci.certificazione.rilasci.apri": "Apri il rilascio",
+  "rilasci.certificazione.rilasci.nessuno": "Nessun rilascio collegato al change.",
+
+  // Elementi
+  "rilasci.certificazione.elementi.new": "Novità",
+  "rilasci.certificazione.elementi.fix": "Correzioni",
+  "rilasci.certificazione.elementi.other": "Altro",
+  "rilasci.certificazione.elementi.nessuno": "Nessun elemento citato dai commit dei rilasci.",
+  "rilasci.certificazione.elementi.nascosti": { one: "{count} elemento non visibile", other: "{count} elementi non visibili" },
+
+  // Test
+  "rilasci.certificazione.test.totali": "Eseguiti {executed} · superati {passed} · falliti {failed} · saltati {skipped}",
+  "rilasci.certificazione.test.vuoto": "Nessun esito di test. I numeri arrivano dai controlli della pipeline e, più avanti, dagli strumenti di test.",
+  "rilasci.certificazione.test.origine.pipeline": "pipeline",
+  "rilasci.certificazione.test.origine.alm": "ALM",
+  "rilasci.certificazione.test.origine.native": "test management",
+  "rilasci.certificazione.esito.passed": "superato",
+  "rilasci.certificazione.esito.failed": "fallito",
+  "rilasci.certificazione.esito.skipped": "saltato",
+  "rilasci.certificazione.esito.not_run": "non eseguito",
+  "rilasci.certificazione.dettaglio": "Dettaglio",
+
+  // Sonar
+  "rilasci.certificazione.sonar.vuoto": "Nessun controllo di Sonar sui rilasci del change.",
+
+  // Sicurezza
+  "rilasci.certificazione.cve": "critiche {c} · alte {h} · medie {m} · basse {l}",
+  "rilasci.certificazione.cve.nonDichiarate": "CVE non dichiarate al rilascio",
+  "rilasci.certificazione.sicurezza.vuoto": "Nessun rilascio, nessun dato di sicurezza.",
+
+  // Gate e approvazioni
+  "rilasci.certificazione.gate.decisioni": "Decisioni del gate",
+  "rilasci.certificazione.gate.pass": "via libera",
+  "rilasci.certificazione.gate.warn": "con avvisi",
+  "rilasci.certificazione.gate.fail": "bloccato",
+  "rilasci.certificazione.gate.override": "superato con override",
+  "rilasci.certificazione.gate.vuoto": "Nessuna decisione del gate per queste versioni.",
+  "rilasci.certificazione.approvazioni": "Approvazioni dichiarate",
+  "rilasci.certificazione.approvazioni.richiesta": "richiesta da {name}",
+  "rilasci.certificazione.approvazioni.approvata": "approvata da {name}",
+  "rilasci.certificazione.approvazioni.approvataIl": "approvata da {name} il {when}",
+  "rilasci.certificazione.approvazioni.nessuna": "nessuna approvazione dichiarata",
+  "rilasci.certificazione.approvazioni.vuoto": "Nessun rilascio, nessuna approvazione.",
+
+  // Mappatura delle evidenze (Configurazione → Gate di rilascio)
+  "rilasci.certificazione.sorgente": "Certificazione del rilascio generata",
+
+  // Impostazioni dei rilasci (Configurazione → DevSecOps)
+  "rilasci.certificazione.impostazioni.titolo": "Rilasci",
+  "rilasci.certificazione.impostazioni.solaLettura": "Le impostazioni dei rilasci le cambia chi configura il catalogo o l'amministratore.",
+  "rilasci.certificazione.impostazioni.chiusura": "Chiudi gli elementi citati con fixes, closes o resolves nei commit",
+  "rilasci.certificazione.impostazioni.chiusuraAiuto":
+    "Spenta per default. Un commit del branch predefinito con «fixes HL-12» sposta l'elemento nella fase finale solo se il suo processo lo consente; altrimenti lascia una nota nella storia dell'elemento.",
+  "rilasci.certificazione.impostazioni.eccezioni": "Eccezioni per spazio",
+  "rilasci.certificazione.impostazioni.eccezioniAiuto": "Uno spazio senza riga segue l'impostazione generale.",
+  "rilasci.certificazione.impostazioni.nessunaEccezione": "Nessuna eccezione: tutti gli spazi seguono l'impostazione generale.",
+  "rilasci.certificazione.impostazioni.spazio": "Chiave dello spazio",
+  "rilasci.certificazione.impostazioni.chiudeSpazio": "Chiusura con le parole chiave in {key}",
+  "rilasci.certificazione.impostazioni.si": "sì, chiude",
+  "rilasci.certificazione.impostazioni.no": "no, non chiude",
+  "rilasci.certificazione.impostazioni.aggiungiSpazio": "Aggiungi uno spazio",
+  "rilasci.certificazione.impostazioni.togliSpazio": "Togli l'eccezione di {key}",
+  "rilasci.certificazione.impostazioni.togli": "Togli",
+  "rilasci.certificazione.impostazioni.sezioni": "Sezioni della certificazione",
+  "rilasci.certificazione.impostazioni.sezioniAiuto": "Le sezioni spente non compaiono nella certificazione; le frecce cambiano l'ordine.",
+  "rilasci.certificazione.impostazioni.su": "Sposta in su {name}",
+  "rilasci.certificazione.impostazioni.giu": "Sposta in giù {name}",
+  "rilasci.certificazione.impostazioni.salva": "Salva",
+  "rilasci.certificazione.impostazioni.salvato": "Salvato",
+} satisfies Source;

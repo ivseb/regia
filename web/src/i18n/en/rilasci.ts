@@ -1,0 +1,42 @@
+// Releases: contained items, release notes, "in production since…" and keyword closing in the
+// history (area "rilasci"; the certification is in rilasci-certificazione.ts).
+import type { Translation } from "../types";
+import type it from "../it/rilasci";
+
+export default {
+  "rilasci.titolo": "Release",
+  "rilasci.apri_rilascio": "Open the release: items and notes",
+  "rilasci.dettagli": "Release details",
+  "rilasci.approvato_da": "approved by {nome}",
+  "rilasci.apri_origine": "Open at the source",
+  "rilasci.certificazione": "Release certification",
+  "rilasci.finestra": "Commits from {da} (after version {precedente}) to {a}.",
+  "rilasci.finestra_prima": "First release of the service in this environment: all commits up to {a}.",
+  "rilasci.elementi": "Items in the release",
+  "rilasci.conteggio": "{n} items · {commit} commits",
+  "rilasci.nessun_elemento": "No commit in this release mentions an item. Commits are linked to items when the message contains the key, for example HL-12.",
+  "rilasci.nascosti": "Plus {n} items you cannot see.",
+  "rilasci.continua": "work continues in a later release",
+  "rilasci.gruppo.new": "New",
+  "rilasci.gruppo.fix": "Fixes",
+  "rilasci.gruppo.other": "Other",
+  "rilasci.note.titolo": "Release notes",
+  "rilasci.note.meta": "Released to {ambiente} on {data}.",
+  "rilasci.note.change": "Change {change}.",
+  "rilasci.note.vuote": "No linked items.",
+  "rilasci.copia": "Copy",
+  "rilasci.copiato": "Copied",
+  "rilasci.scarica": "Download .md",
+  "rilasci.business.riscrivi": "Rewrite for the business",
+  "rilasci.business.in_corso": "Rewriting…",
+  "rilasci.business.indicazioni": "Hints (optional)",
+  "rilasci.business.esempio": "for example: for front-desk users",
+  "rilasci.business.proposta": "Proposal to review: it is not saved",
+  "rilasci.business.scarta": "Discard",
+  "rilasci.prod.dal": "In production since {data} with {servizio} {versione}.",
+  "rilasci.prod.in_attesa": "Not in production yet: waiting for {servizi}.",
+  "rilasci.prod.salita": "{n} of {totale} items in production",
+  "rilasci.prod.salita_ultimo": "{n} of {totale} items in production, the latest since {data}",
+  "rilasci.prod.tutti": "All {totale} items with code are in production, the latest since {data}",
+  "rilasci.prod.titolo": "In production",
+} satisfies Translation<typeof it>;

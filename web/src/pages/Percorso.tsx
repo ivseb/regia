@@ -14,6 +14,7 @@ import { percorsoApi, type PcNext, type PcTodo, type PcTrigger, type Percorso as
 import { useNarrow } from "./timeline";
 import type { TabKey } from "./ElementPage";
 import { PercorsoGuide, VersionNotice } from "./PercorsoVersioni";
+import { InProduzione } from "./InProduzione";
 
 type Name = (name: string, labels?: Record<string, string> | null) => string;
 
@@ -301,6 +302,8 @@ function Work({ p }: { p: PercorsoData }) {
               </span>
             </div>
           )}
+          {/* Il passo dopo la chiusura delle story: da quando il lavoro è in produzione. */}
+          <InProduzione refKey={p.key} />
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {d.epics.map((e) => (
               <li key={e.key} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">

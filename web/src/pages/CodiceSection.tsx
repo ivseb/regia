@@ -2,6 +2,7 @@
 // chiave, con il rilascio che li contiene e il lead time dal primo commit. Compare solo se ci
 // sono commit: un blocco vuoto non dice niente (e senza il modulo DevSecOps non c'è nulla).
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { commitsApi } from "../commitsApi";
 import { ago, date } from "../ui";
 import { useT } from "../i18n/react";
@@ -32,6 +33,14 @@ export default function CodiceSection({ refKey, open = true }: { refKey: string;
               ? t("lavoro.codice.rilasciatoOggi", { versione: rel.version, data: date(rel.at) })
               : t("lavoro.codice.rilasciato", { versione: rel.version, data: date(rel.at), giorni: days })
             : t("lavoro.codice.nonRilasciato")}
+          {rel?.release_id && (
+            <>
+              {" "}
+              <Link to="/rilasci/$id" params={{ id: rel.release_id }} data-testid="link-rilascio">
+                {t("rilasci.apri_rilascio")}
+              </Link>
+            </>
+          )}
         </p>
         <ul className="m-0 flex list-none flex-col p-0">
           {data.commits.map((c) => (

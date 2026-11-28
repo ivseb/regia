@@ -265,7 +265,33 @@ const doraRoute = createRoute({
     return <DoraPage search={search} onSearch={(next) => navigate({ search: next, replace: true })} />;
   },
 });
+// Rilasci: gli elementi di un rilascio con le note, e la certificazione del rilascio per numero di
+// change (indirizzo stabile, da mettere nella change; ?versione=N mostra un'istantanea generata).
+const ReleasePage = lazyRouteComponent(() => import("./pages/Rilascio"), "ReleasePage");
+const CertificationPage = lazyRouteComponent(() => import("./pages/Certificazione"), "CertificationPage");
+const releaseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/rilasci/$id",
+  component: function ReleaseRoute() {
+    const { id } = releaseRoute.useParams();
+    return <ReleasePage id={id} />;
+  },
+});
+const certificationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/change/$numero/certificazione",
+  validateSearch: (s: Record<string, unknown>): { versione?: number } =>
+    Number.isInteger(Number(s.versione)) && Number(s.versione) > 0 ? { versione: Number(s.versione) } : {},
+  component: function CertificationRoute() {
+    const { numero } = certificationRoute.useParams();
+    const { versione } = certificationRoute.useSearch();
+    const navigate = certificationRoute.useNavigate();
+    return <CertificationPage number={numero} version={versione} onVersion={(v) => navigate({ search: v ? { versione: v } : {} })} />;
+  },
+});
 const devsecopsRoutes = [
+  releaseRoute,
+  certificationRoute,
   createRoute({ getParentRoute: () => rootRoute, path: "/configurazione/gate", component: GateConfigPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/devsecops", component: DevsecopsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/configurazione/devsecops", component: DevsecopsConfigPage }),

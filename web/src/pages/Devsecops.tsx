@@ -38,6 +38,8 @@ import { DevsecopsTabs } from "./portafoglio-ui";
 
 // Fase 3: politica della pipeline e adozione guidata, caricate a parte.
 const PipelineSection = lazy(() => import("./PipelineAdherence").then((m) => ({ default: m.PipelineSection })));
+// Rilasci: chiusura con le parole chiave e sezioni della certificazione (ReleaseSettings.tsx).
+const ReleaseSettingsSection = lazy(() => import("./ReleaseSettings").then((m) => ({ default: m.ReleaseSettingsSection })));
 
 // ---------------------------------------------------------------------
 // Pezzi comuni
@@ -646,7 +648,8 @@ function LatestReleases({ rels, enterprise }: { rels: Release[]; enterprise: boo
         {rels.map((r) => (
           <li key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 border-b border-hair py-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <span className="min-w-0">
-              <span className="font-medium">{r.service}</span> <span className="font-mono text-[12.5px] tabular">{r.version}</span>
+              <span className="font-medium">{r.service}</span>{" "}
+              <Link to="/rilasci/$id" params={{ id: r.id }} className="font-mono text-[12.5px] tabular" title={tr("rilasci.apri_rilascio")}>{r.version}</Link>
               <span className={`ml-2 text-[12px] ${r.production ? "font-semibold" : "text-muted"}`}>{r.environment}</span>
               {r.application && <span className="block text-[12px] text-muted">{r.application}</span>}
             </span>
@@ -681,6 +684,7 @@ export function DevsecopsConfigPage() {
             <EnvironmentsConfig c={c} />
             <ServicesConfig c={c} />
             <ChangesConfig c={c} />
+            <Suspense fallback={null}><ReleaseSettingsSection /></Suspense>
           </>
         )}
       </div>

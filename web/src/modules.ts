@@ -29,7 +29,7 @@ const MODULE_PATHS: Record<ModuleKey, string[]> = {
   projects: ["/progetti", "/configurazione/progetti"],
   work: ["/delivery", "/tempo"],
   knowledge: ["/documenti", "/elenco/documenti"],
-  devsecops: ["/devsecops", "/configurazione/devsecops", "/configurazione/gate", "/configurazione/vulnerabilita", "/configurazione/integrazioni"],
+  devsecops: ["/devsecops", "/rilasci", "/change", "/configurazione/devsecops", "/configurazione/gate", "/configurazione/vulnerabilita", "/configurazione/integrazioni"],
   grc: ["/conformita", "/audit-spazio", "/privacy", "/rischi", "/crisi", "/elenco/rischi", "/elenco/incidenti", "/elenco/controlli"],
   architecture: ["/architettura", "/elenco/applicazioni", "/elenco/asset"],
 };

@@ -714,7 +714,7 @@ function EvidenceMap({ cfg }: { cfg: GateConfig }) {
     },
   });
   const edit = cfg.can_edit;
-  const sources = [{ key: "gate", name: t("configurazione.gate.decisioneDelGateSuperata") }, ...ev.check_names.map((n) => ({ key: `check:${n}`, name: t("configurazione.gate.checkPassedInBlock", { name: checkLabel(n) }) }))];
+  const sources = [{ key: "gate", name: t("configurazione.gate.decisioneDelGateSuperata") }, { key: "certification", name: t("rilasci.certificazione.sorgente") }, ...ev.check_names.map((n) => ({ key: `check:${n}`, name: t("configurazione.gate.checkPassedInBlock", { name: checkLabel(n) }) }))];
   for (const r of rows) if (!sources.some((s) => s.key === r.source)) sources.push({ key: r.source, name: r.source.startsWith("check:") ? t("configurazione.gate.checkPassedInBlock", { name: r.source.slice(6) }) : r.source });
   return (
     <section className="flex min-w-0 flex-col gap-3" aria-label={t("configurazione.gate.evidenzePerLaConformita")}>
