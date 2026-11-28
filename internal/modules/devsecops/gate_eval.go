@@ -346,7 +346,7 @@ func (s *Service) evaluate(ctx context.Context, tx pgx.Tx, actor engine.Actor, g
 		case RuleVulnerabilities:
 			rs, err = s.ruleVulnerabilities(ctx, tx, g, r)
 		case RuleChangeApproved:
-			rs, err = s.ruleChange(g, r)
+			rs, err = s.ruleChange(ctx, tx, g, r)
 		case RuleWindow:
 			rs, err = s.ruleWindow(g, r)
 		case RuleChecks:
@@ -549,10 +549,34 @@ func collapse(g *gateCtx, r GateRule, rs []GateReason) []GateReason {
 	return out
 }
 
-func (s *Service) ruleChange(g *gateCtx, r GateRule) ([]GateReason, error) {
+func (s *Service) ruleChange(ctx context.Context, tx pgx.Tx, g *gateCtx, r GateRule) ([]GateReason, error) {
 	var p changeParams
 	if err := strictDecode(r.Params, &p); err != nil {
 		return nil, err
+	}
+	var sn *snChange
+	if p.ServiceNow != "" {
+		var err error
+		if sn, err = serviceNowChange(ctx, tx, g); err != nil {
+			return nil, err
+		}
+	}
+	snOK := sn != nil && sn.approval == "approved" && sn.state != "4"
+	switch p.ServiceNow {
+	case SNApprovalAccept:
+		if snOK {
+			return []GateReason{g.reason(r, "pass", fmt.Sprintf("Il change %s è approvato in ServiceNow.", sn.number), sn.url)}, nil
+		}
+		if sn != nil && sn.approval == "rejected" {
+			return []GateReason{g.reason(r, "fail", fmt.Sprintf("Il change %s è stato rifiutato in ServiceNow.", sn.number), sn.url)}, nil
+		}
+	case SNApprovalRequire:
+		if !snOK {
+			return []GateReason{g.reason(r, "fail", sn.why(g.in.Change), sn.link())}, nil
+		}
+		if len(p.Phases) == 0 || g.req == nil {
+			return []GateReason{g.reason(r, "pass", fmt.Sprintf("Il change %s è approvato in ServiceNow.", sn.number), sn.url)}, nil
+		}
 	}
 	if g.req == nil {
 		if !p.RequireChange {
@@ -562,15 +586,93 @@ func (s *Service) ruleChange(g *gateCtx, r GateRule) ([]GateReason, error) {
 		if g.in.Change != "" {
 			msg = fmt.Sprintf("Il change %s non è collegato a nessuna richiesta di Regia.", g.in.Change)
 		}
-		return []GateReason{g.reason(r, "fail", msg, "")}, nil
+		if p.ServiceNow == SNApprovalAccept {
+			msg += " " + sn.why(g.in.Change)
+		}
+		return []GateReason{g.reason(r, "fail", msg, sn.link())}, nil
 	}
 	state := g.reqEl.State
 	for _, ph := range p.Phases {
 		if strings.EqualFold(ph, state) {
-			return []GateReason{g.reason(r, "pass", fmt.Sprintf("La richiesta %s è in fase «%s».", g.req.Key, state), g.req.URL)}, nil
+			msg := fmt.Sprintf("La richiesta %s è in fase «%s».", g.req.Key, state)
+			if snOK {
+				msg += fmt.Sprintf(" Il change %s è approvato in ServiceNow.", sn.number)
+			}
+			return []GateReason{g.reason(r, "pass", msg, g.req.URL)}, nil
 		}
 	}
-	return []GateReason{g.reason(r, "fail", fmt.Sprintf("La richiesta %s è in fase «%s»: serve una tra %s.", g.req.Key, state, quoted(p.Phases)), g.req.URL)}, nil
+	if len(p.Phases) == 0 {
+		return []GateReason{g.reason(r, "fail", sn.why(g.in.Change), sn.link())}, nil
+	}
+	msg := fmt.Sprintf("La richiesta %s è in fase «%s»: serve una tra %s.", g.req.Key, state, quoted(p.Phases))
+	if p.ServiceNow == SNApprovalAccept {
+		msg += " " + sn.why(g.in.Change)
+	}
+	return []GateReason{g.reason(r, "fail", msg, g.req.URL)}, nil
+}
+
+// snChange è la change request di ServiceNow del rilascio (connettore in sola lettura).
+type snChange struct{ number, state, approval, url string }
+
+// why spiega perché la change di ServiceNow non basta (sn può essere nil).
+func (sn *snChange) why(asked string) string {
+	switch {
+	case sn == nil && asked == "":
+		return "Nessun numero di change: serve per controllare l'approvazione in ServiceNow."
+	case sn == nil:
+		return fmt.Sprintf("Il change %s non è tra quelli letti da ServiceNow: controlla il numero o la sincronizzazione del connettore.", asked)
+	case sn.state == "4":
+		return fmt.Sprintf("Il change %s è annullato in ServiceNow.", sn.number)
+	case sn.approval == "rejected":
+		return fmt.Sprintf("Il change %s è stato rifiutato in ServiceNow.", sn.number)
+	case sn.approval == "":
+		return fmt.Sprintf("Il change %s non ha ancora un'approvazione in ServiceNow.", sn.number)
+	}
+	return fmt.Sprintf("Il change %s non è approvato in ServiceNow (approvazione: «%s»).", sn.number, sn.approval)
+}
+
+func (sn *snChange) link() string {
+	if sn == nil {
+		return ""
+	}
+	return sn.url
+}
+
+// serviceNowChange trova la change di ServiceNow del gate: il numero indicato (con gli
+// alias del change di Regia) oppure i change della richiesta. La più aggiornata vince.
+func serviceNowChange(ctx context.Context, tx pgx.Tx, g *gateCtx) (*snChange, error) {
+	var numbers []string
+	if n := normChange(g.in.Change); n != "" {
+		numbers = append(numbers, n)
+	}
+	rows, err := tx.Query(ctx, `select c.number, c.aliases from changes c
+		where ($1 <> '' and (c.number = $1 or $1 = any(c.aliases))) or ($2 <> '' and c.request_element_id::text = $2)`, normChange(g.in.Change), g.reqID)
+	if err != nil {
+		return nil, err
+	}
+	var num string
+	var als []string
+	if _, err := pgx.ForEachRow(rows, []any{&num, &als}, func() error {
+		numbers = append(numbers, num)
+		numbers = append(numbers, als...)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if len(numbers) == 0 {
+		return nil, nil
+	}
+	var sn snChange
+	err = tx.QueryRow(ctx, `select x.number, x.state, x.approval, x.url from servicenow_changes x
+		join integrations i on i.tenant_id = x.tenant_id and i.id = x.integration_id and i.active
+		where upper(x.number) = any($1) order by x.sys_updated_on desc limit 1`, numbers).Scan(&sn.number, &sn.state, &sn.approval, &sn.url)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sn, nil
 }
 
 // ellipsis aggiunge i puntini se clip ha tagliato il testo.

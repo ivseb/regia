@@ -60,7 +60,17 @@ type vulnParams struct {
 type changeParams struct {
 	Phases        []string `json:"phases"`
 	RequireChange bool     `json:"require_change"`
+	// ServiceNow dice come conta l'approvazione della change request letta da ServiceNow
+	// (connettore in sola lettura): "" non conta, "accept" basta al posto della fase della
+	// richiesta (e un rifiuto blocca), "require" serve sempre, insieme alla fase se indicata.
+	ServiceNow string `json:"servicenow,omitempty"`
 }
+
+// Modi dell'approvazione di ServiceNow nella regola change_approved.
+const (
+	SNApprovalAccept  = "accept"
+	SNApprovalRequire = "require"
+)
 
 type blackout struct {
 	From  string `json:"from"` // AAAA-MM-GG
@@ -176,7 +186,12 @@ func normRule(r GateRule, i int, now time.Time) (GateRule, error) {
 				ph = append(ph, x)
 			}
 		}
-		if len(ph) == 0 && r.Enabled {
+		switch p.ServiceNow {
+		case "", SNApprovalAccept, SNApprovalRequire:
+		default:
+			return r, bad("l'approvazione di ServiceNow è accept (basta), require (serve) o vuota (non conta)")
+		}
+		if len(ph) == 0 && r.Enabled && p.ServiceNow == "" {
 			return r, bad("scegli almeno una fase in cui il change è approvato")
 		}
 		p.Phases = ph
