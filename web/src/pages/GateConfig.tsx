@@ -9,8 +9,11 @@ import { dsoApi } from "../devsecopsApi";
 import {
   RULE_HELP,
   RULE_NAMES,
+  TESTS_DEFAULTS,
   checkLabel,
   gateApi,
+  testsParams,
+  type DefectsSeverity,
   type ChangeServiceNow,
   type EvidenceMapItem,
   type GateApprover,
@@ -18,6 +21,7 @@ import {
   type GatePolicy,
   type GateRule,
   type RuleKind,
+  type TestsParams,
 } from "../gateApi";
 import { PageHeader } from "../shell";
 import { ErrorNote, SectionTitle, Loading } from "../ui";
@@ -38,7 +42,7 @@ const MODES: { key: GatePolicy["mode"]; name: string; help: string }[] = [
 
 /** Giorni della settimana abbreviati nella lingua corrente (lunedì = 1). */
 const dayNames = () => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(loc(), { weekday: "short" }).format(new Date(2024, 0, i + 1)));
-const KINDS: RuleKind[] = ["requirements", "vulnerabilities", "change_approved", "checks", "window", "condition"];
+const KINDS: RuleKind[] = ["requirements", "vulnerabilities", "change_approved", "checks", "tests", "window", "condition"];
 
 const asNum = (v: unknown, d: number) => (typeof v === "number" ? v : d);
 const asStr = (v: unknown, d = "") => (typeof v === "string" ? v : d);
@@ -236,7 +240,8 @@ function PolicyEditor({ cfg, env, saved, onGone }: { cfg: GateConfig; env: strin
                     className="btn py-1 text-[12.5px]"
                     onClick={() => {
                       const base = cfg.default_rules.find((r) => r.kind === k);
-                      const rule: GateRule = base ? { ...base, id: "", enabled: true } : { id: "", kind: k, enabled: true, level: "block", params: k === "condition" ? { when: "", on: "application" } : {} };
+                      const rule: GateRule = base ? { ...base, id: "", enabled: true } : { id: "", kind: k, enabled: true, level: "block", params: k === "condition" ? { when: "", on: "application" } : k === "tests" ? { ...TESTS_DEFAULTS } : {} };
+                      if (k === "tests") rule.params = testsParams(rule.params);
                       setDraft({ ...draft, rules: [...draft.rules, rule] });
                     }}
                   >
@@ -412,6 +417,7 @@ function RuleEditor({ rule, cfg, disabled, onChange, onRemove }: { rule: GateRul
             </>
           )}
           {rule.kind === "checks" && <ChecksField names={asList<string>(p.names)} known={cfg.evidence.check_names} disabled={disabled} onChange={(names) => set({ names })} />}
+          {rule.kind === "tests" && <TestsFields p={testsParams(p)} disabled={disabled} onChange={(x) => onChange({ ...rule, params: x })} />}
           {rule.kind === "window" && <WindowFields p={p} disabled={disabled} set={set} />}
           {rule.kind === "condition" && (
             <div className="flex min-w-0 flex-col gap-2">
@@ -520,6 +526,67 @@ function ChecksField({ names, known, disabled, onChange }: { names: string[]; kn
         </button>
       </span>
     </fieldset>
+  );
+}
+
+const SEVERITY_OPTIONS: { key: DefectsSeverity; label: () => string }[] = [
+  { key: "critical", label: () => tr("altro.alm.gate.defects.critical") },
+  { key: "high", label: () => tr("altro.alm.gate.defects.high") },
+  { key: "medium", label: () => tr("altro.alm.gate.defects.medium") },
+  { key: "low", label: () => tr("altro.alm.gate.defects.low") },
+  { key: "", label: () => tr("altro.alm.gate.defects.none") },
+];
+
+/** Soglie della regola sui test del change: si mandano sempre tutte (una chiave mancante vale zero sul server). */
+function TestsFields({ p, disabled, onChange }: { p: TestsParams; disabled: boolean; onChange: (p: TestsParams) => void }) {
+  const t = useT();
+  const set = (patch: Partial<TestsParams>) => onChange({ ...p, ...patch });
+  const num = (v: string, max: number) => Math.min(max, Number(v.replace(/\D/g, "")) || 0);
+  return (
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <label className="flex items-center gap-2 text-[13px]">
+          {t("altro.alm.gate.maxFailed")}
+          <input className="field w-16 py-1 font-mono" inputMode="numeric" disabled={disabled} value={p.max_failed} onChange={(e) => set({ max_failed: num(e.target.value, 100000) })} />
+        </label>
+        <label className="flex items-center gap-2 text-[13px]">
+          {t("altro.alm.gate.minExecuted")}
+          <input className="field w-16 py-1 font-mono" inputMode="numeric" disabled={disabled} value={p.min_executed_pct} onChange={(e) => set({ min_executed_pct: num(e.target.value, 100) })} />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <label className="flex items-center gap-2 text-[13px]">
+          <input type="checkbox" disabled={disabled} checked={p.max_blocked !== null} onChange={(e) => set({ max_blocked: e.target.checked ? 0 : null })} />
+          {t("altro.alm.gate.countBlocked")}
+        </label>
+        {p.max_blocked !== null && (
+          <label className="flex items-center gap-2 text-[13px]">
+            {t("altro.alm.gate.maxBlocked")}
+            <input className="field w-16 py-1 font-mono" inputMode="numeric" disabled={disabled} value={p.max_blocked} onChange={(e) => set({ max_blocked: num(e.target.value, 100000) })} />
+          </label>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <label className="flex flex-wrap items-center gap-2 text-[13px]">
+          {t("altro.alm.gate.defects")}
+          <Select className="field w-auto max-w-full py-1" disabled={disabled} value={p.defects_severity} onChange={(e) => set({ defects_severity: e.target.value as DefectsSeverity })}>
+            {SEVERITY_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>{o.label()}</option>
+            ))}
+          </Select>
+        </label>
+        {p.defects_severity !== "" && (
+          <label className="flex items-center gap-2 text-[13px]">
+            {t("altro.alm.gate.maxDefects")}
+            <input className="field w-16 py-1 font-mono" inputMode="numeric" disabled={disabled} value={p.max_open_defects} onChange={(e) => set({ max_open_defects: num(e.target.value, 100000) })} />
+          </label>
+        )}
+      </div>
+      <label className="flex items-center gap-2 text-[13px]">
+        <input type="checkbox" disabled={disabled} checked={p.require_results} onChange={(e) => set({ require_results: e.target.checked })} />
+        {t("altro.alm.gate.requireResults")}
+      </label>
+    </div>
   );
 }
 
@@ -735,7 +802,7 @@ function EvidenceMap({ cfg }: { cfg: GateConfig }) {
     },
   });
   const edit = cfg.can_edit;
-  const sources = [{ key: "gate", name: t("configurazione.gate.decisioneDelGateSuperata") }, { key: "certification", name: t("rilasci.certificazione.sorgente") }, ...ev.check_names.map((n) => ({ key: `check:${n}`, name: t("configurazione.gate.checkPassedInBlock", { name: checkLabel(n) }) }))];
+  const sources = [{ key: "gate", name: t("configurazione.gate.decisioneDelGateSuperata") }, { key: "certification", name: t("rilasci.certificazione.sorgente") }, { key: "tests", name: t("altro.alm.gate.source") }, ...ev.check_names.map((n) => ({ key: `check:${n}`, name: t("configurazione.gate.checkPassedInBlock", { name: checkLabel(n) }) }))];
   for (const r of rows) if (!sources.some((s) => s.key === r.source)) sources.push({ key: r.source, name: r.source.startsWith("check:") ? t("configurazione.gate.checkPassedInBlock", { name: r.source.slice(6) }) : r.source });
   return (
     <section className="flex min-w-0 flex-col gap-3" aria-label={t("configurazione.gate.evidenzePerLaConformita")}>

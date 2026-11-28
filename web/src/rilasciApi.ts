@@ -93,6 +93,34 @@ export type TestRun = {
   passed: number | null;
   failed: number | null;
   skipped: number | null;
+  /** Test pianificati (test set di ALM e test management); assenti per la pipeline. */
+  planned?: number | null;
+  blocked?: number | null;
+  not_run?: number | null;
+  /** Per i test set: progetto · ciclo · release. */
+  detail?: string;
+};
+
+export type TestTotals = {
+  executed: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  /** Assenti nelle istantanee più vecchie. */
+  planned?: number;
+  blocked?: number;
+  not_run?: number;
+  counted: boolean;
+};
+
+export type DefectSeverity = "critical" | "high" | "medium" | "low" | "unknown";
+
+/** Difetti aperti dei test del change (assenti nelle istantanee più vecchie). */
+export type CertDefects = {
+  open: number;
+  by_severity: Partial<Record<DefectSeverity, number>>;
+  /** Al massimo 50, i più gravi prima. */
+  items: { key: string; summary: string; severity: string; raw_severity: string; status: string; project: string; url: string }[];
 };
 
 export type Certification = {
@@ -110,7 +138,8 @@ export type Certification = {
   items: ReleaseItem[];
   hidden: number;
   tests: TestRun[];
-  test_totals: { executed: number; passed: number; failed: number; skipped: number; counted: boolean };
+  test_totals: TestTotals;
+  defects?: CertDefects | null;
   sonar: { service: string; version: string; name: string; outcome: string; summary: string; url: string }[];
   security: { service: string; version: string; environment: string; cves: VulnSummary | null }[];
   gate: { service: string; environment: string; version: string; outcome: "pass" | "warn" | "fail"; overridden: boolean; at: string }[];

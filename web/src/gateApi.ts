@@ -7,7 +7,7 @@ import { tr } from "./i18n/core";
 const q = encodeURIComponent;
 
 export type GateResult = "pass" | "warn" | "fail";
-export type RuleKind = "requirements" | "vulnerabilities" | "change_approved" | "window" | "checks" | "condition";
+export type RuleKind = "requirements" | "vulnerabilities" | "change_approved" | "window" | "checks" | "tests" | "condition";
 
 export type GateRule = {
   id: string;
@@ -25,6 +25,44 @@ export type GateRule = {
  */
 export type ChangeServiceNow = "" | "accept" | "require";
 export type ChangeApprovedParams = { phases?: string[]; require_change?: boolean; servicenow?: ChangeServiceNow };
+
+/**
+ * Parametri della regola tests (test del numero di change: oggi da ALM in lettura, poi dal test
+ * management di Regia). max_blocked nullo = i bloccati non contano; defects_severity "" = i
+ * difetti non contano, altrimenti contano quelli di quella gravità e delle più alte.
+ */
+export type DefectsSeverity = "" | "critical" | "high" | "medium" | "low";
+export type TestsParams = {
+  max_failed: number;
+  max_blocked: number | null;
+  min_executed_pct: number;
+  defects_severity: DefectsSeverity;
+  max_open_defects: number;
+  require_results: boolean;
+};
+export const TESTS_DEFAULTS: TestsParams = {
+  max_failed: 0,
+  max_blocked: null,
+  min_executed_pct: 100,
+  defects_severity: "high",
+  max_open_defects: 0,
+  require_results: true,
+};
+const SEVERITIES: DefectsSeverity[] = ["", "critical", "high", "medium", "low"];
+
+/** I parametri della regola tests completi (il server legge una chiave mancante come zero): i mancanti o sbagliati prendono il predefinito. */
+export function testsParams(p: Record<string, unknown> | undefined): TestsParams {
+  const v = p ?? {};
+  const int = (x: unknown, d: number, max: number) => (typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= max ? x : d);
+  return {
+    max_failed: int(v.max_failed, TESTS_DEFAULTS.max_failed, 100000),
+    max_blocked: v.max_blocked === null || v.max_blocked === undefined ? null : int(v.max_blocked, 0, 100000),
+    min_executed_pct: int(v.min_executed_pct, TESTS_DEFAULTS.min_executed_pct, 100),
+    defects_severity: SEVERITIES.includes(v.defects_severity as DefectsSeverity) ? (v.defects_severity as DefectsSeverity) : TESTS_DEFAULTS.defects_severity,
+    max_open_defects: int(v.max_open_defects, TESTS_DEFAULTS.max_open_defects, 100000),
+    require_results: typeof v.require_results === "boolean" ? v.require_results : TESTS_DEFAULTS.require_results,
+  };
+}
 
 export type GatePolicy = {
   id?: string;
@@ -173,6 +211,7 @@ export const RULE_NAMES: Record<RuleKind, string> = {
   get change_approved() { return tr("governance.gateapi.change_approvato"); },
   get window() { return tr("governance.gateapi.finestra_di_rilascio"); },
   get checks() { return tr("governance.gateapi.controlli_della_pipeline"); },
+  get tests() { return tr("altro.alm.gate.name"); },
   get condition() { return tr("governance.gateapi.condizione_libera"); },
 };
 
@@ -182,6 +221,7 @@ export const RULE_HELP: Record<RuleKind, string> = {
   get change_approved() { return tr("governance.gateapi.la_richiesta_collegata_al_change"); },
   get window() { return tr("governance.gateapi.si_rilascia_solo_nei_giorni"); },
   get checks() { return tr("governance.gateapi.i_controlli_scelti_sono_superati"); },
+  get tests() { return tr("altro.alm.gate.help"); },
   get condition() { return tr("governance.gateapi.una_condizione_sui_dati_dell"); },
 };
 

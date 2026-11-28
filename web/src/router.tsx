@@ -818,6 +818,24 @@ export const servicenowRoute = createRoute({
   },
 }); // i18n-ok: codice TypeScript letto come testo
 
+// DevSecOps: connettore ALM / Quality Center in sola lettura (Configurazione → Integrazioni → ALM).
+const AlmPage = lazyRouteComponent(() => import("./pages/Alm"), "AlmPage");
+type AlmTabKey = "integrazioni" | "unita" | "testset" | "sincronizzazioni";
+const ALM_TAB_KEYS: AlmTabKey[] = ["integrazioni", "unita", "testset", "sincronizzazioni"];
+export const almRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/configurazione/integrazioni/alm",
+  validateSearch: (s: Record<string, unknown>): { tab?: AlmTabKey; sel?: string; integrazione?: string } => ({
+    tab: ALM_TAB_KEYS.includes(s.tab as AlmTabKey) ? (s.tab as AlmTabKey) : undefined,
+    sel: typeof s.sel === "string" && s.sel ? s.sel : undefined,
+    integrazione: typeof s.integrazione === "string" && s.integrazione ? s.integrazione : undefined,
+  }),
+  component: function AlmRoute() {
+    const { tab, sel, integrazione } = almRoute.useSearch();
+    return <AlmPage tab={tab ?? "integrazioni"} sel={sel} integration={integrazione} />;
+  },
+}); // i18n-ok: codice TypeScript letto come testo
+
 // Conformità (piano, passo 20): Governance → Conformità, caricata alla prima visita. Scheda,
 // normativa, requisito aperto, perimetro e stato delle evidenze stanno nella query.
 const CompliancePage = lazy(() => import("./pages/Compliance").then((m) => ({ default: m.Compliance }))); // i18n-ok: codice TypeScript letto come testo
@@ -952,6 +970,7 @@ export const router = createRouter({
     gitlabRoute,
     giteaRoute,
     servicenowRoute,
+    almRoute,
     ...devsecopsRoutes,
     ...vulnerabilityRoutes,
     ...pipelineRoutes,

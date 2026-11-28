@@ -72,7 +72,7 @@ export default {
   "rilasci.certificazione.elementi.nessuno": "No items mentioned in the commits of the releases.",
   "rilasci.certificazione.elementi.nascosti": { one: "{count} item not visible", other: "{count} items not visible" },
 
-  "rilasci.certificazione.test.totali": "Executed {executed} · passed {passed} · failed {failed} · skipped {skipped}",
+  "rilasci.certificazione.test.totali": "Executed {executed} · passed {passed} · failed {failed} · blocked {blocked} · not run {not_run}",
   "rilasci.certificazione.test.vuoto": "No test results. The numbers come from the pipeline checks and, later on, from the test tools.",
   "rilasci.certificazione.test.origine.pipeline": "pipeline",
   "rilasci.certificazione.test.origine.alm": "ALM",
@@ -82,6 +82,18 @@ export default {
   "rilasci.certificazione.esito.skipped": "skipped",
   "rilasci.certificazione.esito.not_run": "not run",
   "rilasci.certificazione.dettaglio": "Details",
+  "rilasci.certificazione.test.pianificati": "planned {n}",
+  "rilasci.certificazione.test.bloccati": "blocked {n}",
+  "rilasci.certificazione.test.nonEseguiti": "not run {n}",
+  "rilasci.certificazione.test.saltati": "skipped {n}",
+  "rilasci.certificazione.test.apriAlm": "open in ALM",
+  "rilasci.certificazione.difetti.titolo": "Open defects",
+  "rilasci.certificazione.difetti.critical": "critical {n}",
+  "rilasci.certificazione.difetti.high": "high {n}",
+  "rilasci.certificazione.difetti.medium": "medium {n}",
+  "rilasci.certificazione.difetti.low": "low {n}",
+  "rilasci.certificazione.difetti.unknown": "no severity {n}",
+  "rilasci.certificazione.difetti.altri": { one: "and {count} more not listed", other: "and {count} more not listed" },
 
   "rilasci.certificazione.sonar.vuoto": "No Sonar checks on the releases of the change.",
 

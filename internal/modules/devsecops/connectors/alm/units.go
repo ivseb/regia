@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	ghconn "regia/internal/modules/devsecops/connectors/github"
 	"regia/internal/modules/devsecops/connectors/alm/almapi"
+	ghconn "regia/internal/modules/devsecops/connectors/github"
 	"regia/internal/platform/db"
 )
 

@@ -10,7 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import "../print.css";
 import { ApiError } from "../api";
-import { rilasciApi, type CertSection, type Certification, type ServiceNowChange, CERT_SECTIONS } from "../rilasciApi";
+import { rilasciApi, type CertDefects, type CertSection, type Certification, type DefectSeverity, type ServiceNowChange, CERT_SECTIONS } from "../rilasciApi";
 import type { CheckResult } from "../devsecopsApi";
 import { PageHeader } from "../shell";
 import { ErrorNote, Loading, SectionTitle } from "../ui";
@@ -20,7 +20,7 @@ import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
 import type { Key } from "../i18n/core";
 import { fmtDate, fmtDateTime, fmtNumber } from "../i18n/format";
-import { groupItems, runNumbers, shortHash, testTotals, visibleSections } from "../certificazione";
+import { defectCounts, groupItems, runExtras, runNumbers, shortHash, testTotals, visibleSections } from "../certificazione";
 
 type Props = { number: string; version?: number; onVersion: (v?: number) => void };
 
@@ -377,7 +377,7 @@ function Outcome({ o }: { o: string }) {
 }
 
 /** Riga di un controllo (test o Sonar): nome, versione, esito, sintesi, collegamento. */
-function CheckRow({ name, service, version, outcome, summary, url, extra }: {
+function CheckRow({ name, service, version, outcome, summary, url, extra, linkLabel }: {
   name: string;
   service: string;
   version: string;
@@ -385,6 +385,8 @@ function CheckRow({ name, service, version, outcome, summary, url, extra }: {
   summary: string;
   url: string;
   extra?: ReactNode;
+  /** Testo del collegamento (predefinito «Dettaglio»). */
+  linkLabel?: string;
 }) {
   const t = useT();
   return (
@@ -397,29 +399,111 @@ function CheckRow({ name, service, version, outcome, summary, url, extra }: {
       <span className="text-right">
         <Outcome o={outcome} />
         {url && (
-          <a href={url} target="_blank" rel="noreferrer" className="block text-[0.9em] print:hidden">{t("rilasci.certificazione.dettaglio")}</a>
+          <a href={url} target="_blank" rel="noreferrer" className="block text-[0.9em] print:hidden">{linkLabel ?? t("rilasci.certificazione.dettaglio")}</a>
         )}
       </span>
     </li>
   );
 }
 
+const EXTRA: Record<"planned" | "blocked" | "not_run", Key> = {
+  planned: "rilasci.certificazione.test.pianificati",
+  blocked: "rilasci.certificazione.test.bloccati",
+  not_run: "rilasci.certificazione.test.nonEseguiti",
+};
+
 function TestsSection({ c }: { c: Certification }) {
   const t = useT();
   const tot = testTotals(c.test_totals, (n) => fmtNumber(n));
-  if (c.tests.length === 0) return <Empty>{t("rilasci.certificazione.test.vuoto")}</Empty>;
+  const defects = c.defects?.open ? c.defects : null;
+  if (c.tests.length === 0 && !defects) return <Empty>{t("rilasci.certificazione.test.vuoto")}</Empty>;
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      {tot && <p className="m-0 font-semibold tabular">{t("rilasci.certificazione.test.totali", tot)}</p>}
+      {tot && (
+        <p className="m-0 font-semibold tabular">
+          {t("rilasci.certificazione.test.totali", { executed: tot.executed, passed: tot.passed, failed: tot.failed, blocked: tot.blocked, not_run: tot.notRun })}
+          {tot.planned && <> · {t("rilasci.certificazione.test.pianificati", { n: tot.planned })}</>}
+          {tot.skipped && <> · {t("rilasci.certificazione.test.saltati", { n: tot.skipped })}</>}
+        </p>
+      )}
+      {c.tests.length === 0 && <Empty>{t("rilasci.certificazione.test.vuoto")}</Empty>}
       <ul className={listCls}>
         {c.tests.map((r, i) => {
           const nums = runNumbers(r);
+          const extras = runExtras(r);
+          const alm = r.origin === "alm";
           return (
             <CheckRow key={i} name={r.name} service={r.service} version={r.version} outcome={r.outcome} summary={r.summary} url={r.url}
-              extra={<span className="text-muted"> · {ORIGIN[r.origin] ? t(ORIGIN[r.origin]) : r.origin}{nums && <span className="font-mono tabular"> · {nums}</span>}</span>} />
+              linkLabel={alm ? t("rilasci.certificazione.test.apriAlm") : undefined}
+              extra={
+                <>
+                  <span className="text-muted">
+                    {" "}· {ORIGIN[r.origin] ? t(ORIGIN[r.origin]) : r.origin}
+                    {nums && <span className="font-mono tabular"> · {nums}</span>}
+                    {extras.map((x) => (
+                      <span key={x.k} className="tabular"> · {t(EXTRA[x.k], { n: fmtNumber(x.n) })}</span>
+                    ))}
+                  </span>
+                  {r.detail && <span className="block text-[0.9em] text-muted">{r.detail}</span>}
+                </>
+              } />
           );
         })}
       </ul>
+      {defects && <DefectsBlock d={defects} />}
+    </div>
+  );
+}
+
+const SEVERITY: Record<DefectSeverity, { k: Key; tone: string }> = {
+  critical: { k: "rilasci.certificazione.difetti.critical", tone: "text-danger" },
+  high: { k: "rilasci.certificazione.difetti.high", tone: "text-danger" },
+  medium: { k: "rilasci.certificazione.difetti.medium", tone: "text-flag" },
+  low: { k: "rilasci.certificazione.difetti.low", tone: "" },
+  unknown: { k: "rilasci.certificazione.difetti.unknown", tone: "text-muted" },
+};
+
+/** I difetti aperti dei test del change: i numeri per gravità e l'elenco (quelli che arrivano, al massimo 50). */
+function DefectsBlock({ d }: { d: CertDefects }) {
+  const t = useT();
+  const counts = defectCounts(d) ?? [];
+  const items = d.items ?? [];
+  return (
+    <div className="mt-1 flex min-w-0 break-inside-avoid flex-col">
+      <h4 className="m-0 text-[0.9em] font-semibold">
+        {t("rilasci.certificazione.difetti.titolo")} <span className="font-mono font-normal text-muted tabular">{fmtNumber(d.open)}</span>
+      </h4>
+      <p className="m-0 tabular">
+        {counts.map((x, i) => (
+          <span key={x.severity} className={x.n > 0 ? SEVERITY[x.severity].tone : "text-muted"}>
+            {i > 0 && " · "}
+            {t(SEVERITY[x.severity].k, { n: fmtNumber(x.n) })}
+          </span>
+        ))}
+      </p>
+      {items.length > 0 && (
+        <ul className={listCls}>
+          {items.map((x, i) => (
+            <li key={`${x.project}/${x.key}/${i}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 border-b border-hair py-0.5">
+              {x.url ? (
+                <a href={x.url} className="font-mono tabular">{x.key}</a>
+              ) : (
+                <span className="font-mono tabular">{x.key}</span>
+              )}
+              <span className="min-w-0 break-words">
+                {x.summary}{" "}
+                <span className="text-[0.9em] text-muted">
+                  · <span className={SEVERITY[x.severity as DefectSeverity]?.tone ?? ""}>{x.raw_severity || x.severity}</span> · {x.status}
+                  {x.project && <> · {x.project}</>}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {d.open > items.length && items.length > 0 && (
+        <p className="m-0 text-[0.9em] text-muted">{t("rilasci.certificazione.difetti.altri", { count: d.open - items.length })}</p>
+      )}
     </div>
   );
 }
