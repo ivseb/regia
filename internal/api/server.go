@@ -516,7 +516,16 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.Handle("/", s.spa())
 
-	return s.base(s.withPrincipal(s.withModules(s.notify(mux))))
+	app := s.base(s.withPrincipal(s.withModules(s.notify(mux))))
+	// SCIM (scim.go): token dell'organizzazione, niente sessione né withPrincipal.
+	scim := s.base(s.scimHandler())
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == scimPrefix || strings.HasPrefix(r.URL.Path, scimPrefix+"/") {
+			scim.ServeHTTP(w, r)
+			return
+		}
+		app.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {

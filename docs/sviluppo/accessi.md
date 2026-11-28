@@ -6,7 +6,7 @@
   - `GET /api/v1/auth/oidc/config` dice se è attivo, con che nome e se il login con password è ancora ammesso;
   - `GET /api/v1/auth/oidc/start?next=/percorso` manda all'IdP; `GET /api/v1/auth/oidc/callback` crea la sessione (stesso cookie `regia_session` del login con password) e torna a `next`, solo se è un percorso interno;
   - in caso di errore si torna a `/?sso_error=codice` (`unknown_account`, `email_unverified`, `already_linked`, `state`, `invalid`, `unavailable`, `denied`, `failed`) e la pagina di accesso mostra il messaggio.
-- **Collegamento all'account:** al primo accesso si cerca l'account con la stessa email, purché `email_verified` sia vero; poi vale la coppia issuer e sub (`account_identities`), anche se l'email cambia. Nessun account viene creato in automatico.
+- **Collegamento all'account:** al primo accesso si cerca l'account con la stessa email, purché `email_verified` sia vero; poi vale la coppia issuer e sub (`account_identities`), anche se l'email cambia. Un account nuovo nasce solo se un'organizzazione lo accoglie al primo accesso: vedi [identita-aziendale.md](identita-aziendale.md).
 - **Email non verificata:** se l'IdP non manda `email_verified` l'email non è considerata verificata e il primo collegamento è rifiutato. `REGIA_OIDC_TRUST_EMAIL=true` cambia questo default solo per IdP che verificano le email; un `email_verified: false` esplicito è sempre rifiutato.
 - **Cookie del flusso:** `regia_oidc`, valido 10 minuti e firmato con HMAC; la chiave sta in `<data>/keys/oidc-state.key`, creata al primo avvio.
 - **Solo SSO:** con `REGIA_OIDC_ONLY=true` il login con password risponde 403 `auth.password_disabled`, tranne per gli amministratori di piattaforma (emergenza). Il logout resta locale: non chiude la sessione sull'IdP.

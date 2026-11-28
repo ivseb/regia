@@ -126,6 +126,9 @@ func (s *Service) CreateRole(ctx context.Context, a Actor, in RoleInput) (string
 	}
 	id := db.NewID()
 	err := s.tx(ctx, a, func(tx pgx.Tx) error {
+		if err := a.canGrant(ctx, tx, in.Permissions); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, "insert into roles (tenant_id, id, name, description, permissions) values (app_tenant(), $1, $2, $3, $4)",
 			id, in.Name, in.Description, in.Permissions); err != nil {
 			if isUnique(err) {
@@ -159,6 +162,10 @@ func (s *Service) UpdateRole(ctx context.Context, a Actor, id string, in RoleInp
 		if key != nil {
 			return conflict("role.system", "i ruoli di sistema non si modificano: duplicalo e cambia la copia")
 		}
+		// Si cambiano solo ruoli che si potrebbero dare, e solo verso permessi che si hanno.
+		if err := a.canGrant(ctx, tx, append(append([]string{}, before...), in.Permissions...)); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, "update roles set name = $2, description = $3, permissions = $4 where id = $1",
 			id, in.Name, in.Description, in.Permissions); err != nil {
 			if isUnique(err) {
@@ -181,11 +188,15 @@ func (s *Service) DeleteRole(ctx context.Context, a Actor, id string) error {
 	return s.tx(ctx, a, func(tx pgx.Tx) error {
 		var key *string
 		var name string
-		if err := tx.QueryRow(ctx, "select key, name from roles where id = $1", id).Scan(&key, &name); err != nil {
+		var perms []string
+		if err := tx.QueryRow(ctx, "select key, name, permissions from roles where id = $1", id).Scan(&key, &name, &perms); err != nil {
 			return notFound(err)
 		}
 		if key != nil {
 			return conflict("role.system", "i ruoli di sistema non si cancellano")
+		}
+		if err := a.canGrant(ctx, tx, perms); err != nil {
+			return err
 		}
 		var holders int
 		if err := tx.QueryRow(ctx, "select count(*) from role_assignments where role_id = $1", id).Scan(&holders); err != nil {
@@ -223,6 +234,13 @@ func (s *Service) Assign(ctx context.Context, a Actor, roleID, memberID, groupID
 		if exists {
 			return conflict("role.already_assigned", "il ruolo è già assegnato")
 		}
+		var perms []string
+		if err := tx.QueryRow(ctx, "select permissions from roles where id = $1", roleID).Scan(&perms); err != nil {
+			return invalid("role_id", "ruolo inesistente")
+		}
+		if err := a.canGrant(ctx, tx, perms); err != nil {
+			return err
+		}
 		if memberID != "" {
 			var status string
 			if err := tx.QueryRow(ctx, "select status from members where id = $1", memberID).Scan(&status); err != nil {
@@ -252,9 +270,18 @@ func (s *Service) Unassign(ctx context.Context, a Actor, assignmentID string) er
 	return s.tx(ctx, a, func(tx pgx.Tx) error {
 		var roleID string
 		var memberID, groupID *string
-		if err := tx.QueryRow(ctx, "delete from role_assignments where id = $1 returning role_id, member_id, group_id", assignmentID).
-			Scan(&roleID, &memberID, &groupID); err != nil {
+		var perms []string
+		if err := tx.QueryRow(ctx, `select ra.role_id, ra.member_id, ra.group_id, r.permissions from role_assignments ra
+			join roles r on r.tenant_id = ra.tenant_id and r.id = ra.role_id where ra.id = $1`, assignmentID).
+			Scan(&roleID, &memberID, &groupID, &perms); err != nil {
 			return notFound(err)
+		}
+		// Non si toglie un ruolo che non si potrebbe dare (permessi letti prima di toglierlo).
+		if err := a.canGrant(ctx, tx, perms); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "delete from role_assignments where id = $1", assignmentID); err != nil {
+			return err
 		}
 		if err := ensureAdmin(ctx, tx); err != nil {
 			return err

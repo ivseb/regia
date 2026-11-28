@@ -343,7 +343,8 @@ func TestAdminSuspendClosesSessionsAndTokens(t *testing.T) {
 	}
 	e.admin.do("PATCH", "/api/v1/admin/members/"+u.member, map[string]any{"member_type": "standard", "display_name": "Di nuovo membro"}, http.StatusNoContent)
 	m = e.memberDetail(u.member)
-	if m["member_type"] != "standard" || !strings.Contains(fmt.Sprint(m["roles"]), "viewer") || m["display_name"] != "Di nuovo membro" {
+	// Tornando membro non si riceve più «Lettore» per default: nessun ruolo diretto.
+	if m["member_type"] != "standard" || len(m["roles"].([]any)) != 0 || m["display_name"] != "Di nuovo membro" {
 		t.Fatalf("ritorno a membro: %v %v", m["member_type"], m["roles"])
 	}
 
