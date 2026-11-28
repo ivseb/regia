@@ -507,8 +507,8 @@ const AuditLog = lazyRouteComponent(() => import("./pages/AuditLog"), "AuditLog"
 const WebhooksPage = lazyRouteComponent(() => import("./pages/Webhooks"), "Webhooks");
 const InvitePage = lazyRouteComponent(() => import("./pages/PublicLinks"), "InvitePage");
 const PasswordPage = lazyRouteComponent(() => import("./pages/PublicLinks"), "PasswordPage");
-type AdminTabKey = "membri" | "ruoli" | "gruppi" | "oggetti" | "sicurezza";
-const ADMIN_TAB_KEYS: AdminTabKey[] = ["membri", "ruoli", "gruppi", "oggetti", "sicurezza"];
+type AdminTabKey = "membri" | "ruoli" | "gruppi" | "oggetti" | "identita" | "sicurezza";
+const ADMIN_TAB_KEYS: AdminTabKey[] = ["membri", "ruoli", "gruppi", "oggetti", "identita", "sicurezza"];
 export const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/configurazione/persone",

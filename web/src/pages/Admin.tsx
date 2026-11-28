@@ -21,17 +21,19 @@ import { PageHeader } from "../shell";
 import { ErrorNote, SectionTitle, ago } from "../ui";
 import { ConfirmButton, CopyBox, KV, MutError, SidePanel, Tag, dateTime } from "./adminUi";
 import { AccessExplainSection, GroupInheritanceSection } from "./AdminAccess";
+import { IdentityTab } from "./AdminIdentity";
 import { useT } from "../i18n/react";
 import { Trans } from "../i18n/Trans";
 import { tr } from "../i18n/core";
 
-export type AdminTab = "membri" | "ruoli" | "gruppi" | "oggetti" | "sicurezza";
-export const ADMIN_TABS: AdminTab[] = ["membri", "ruoli", "gruppi", "oggetti", "sicurezza"];
+export type AdminTab = "membri" | "ruoli" | "gruppi" | "oggetti" | "identita" | "sicurezza";
+export const ADMIN_TABS: AdminTab[] = ["membri", "ruoli", "gruppi", "oggetti", "identita", "sicurezza"];
 const TAB_LABELS: Record<AdminTab, string> = {
   get membri() { return tr("configurazione.admin.tab.membri"); },
   get ruoli() { return tr("configurazione.admin.tab.ruoli"); },
   get gruppi() { return tr("configurazione.admin.tab.gruppi"); },
   get oggetti() { return tr("configurazione.admin.tab.oggetti"); },
+  get identita() { return tr("identita.tab"); },
   get sicurezza() { return tr("configurazione.admin.tab.sicurezza"); },
 };
 
@@ -49,7 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
-  for (const k of ["admin-members", "admin-member", "admin-roles", "admin-groups", "admin-stakeholder", "admin-security"]) {
+  for (const k of ["admin-members", "admin-member", "admin-roles", "admin-groups", "admin-stakeholder", "admin-security", "admin-idp"]) {
     qc.invalidateQueries({ queryKey: [k] });
   }
 }
@@ -88,6 +90,7 @@ export function AdminPage({ tab, selected }: { tab: AdminTab; selected?: string 
       {tab === "ruoli" && <RolesTab selected={selected} onSelect={(sel) => go({ sel })} />}
       {tab === "gruppi" && <GroupsTab selected={selected} onSelect={(sel) => go({ sel })} />}
       {tab === "oggetti" && <StakeholderTab />}
+      {tab === "identita" && <IdentityTab />}
       {tab === "sicurezza" && <SecurityTab />}
     </>
   );
@@ -203,6 +206,10 @@ function MemberRow({ m, on, me, onSelect }: { m: AdminMember; on: boolean; me?: 
         <span className="mt-1 flex flex-wrap gap-1">
           {m.admin && <Tag tone="accent">{t("configurazione.admin.amministratore")}</Tag>}
           {m.member_type !== "standard" && <Tag>{TYPE_LABELS[m.member_type] ?? m.member_type}</Tag>}
+          {m.origin === "oidc" && <Tag>{t("identita.badge.oidc")}</Tag>}
+          {m.origin === "scim" && <Tag>{t("identita.badge.scim")}</Tag>}
+          {m.status === "suspended" && m.suspended_source === "idp" && <Tag tone="danger">{t("identita.badge.suspendedIdp")}</Tag>}
+          {m.only_viewer && <Tag tone="flag">{t("identita.badge.onlyViewer")}</Tag>}
         </span>
       </td>
       <td className="hidden px-3 py-2.5 text-[12.5px] lg:table-cell">
@@ -331,7 +338,7 @@ function AddMember({ ssoOnly, emailAvailable, onDone }: { ssoOnly: boolean; emai
       </fieldset>
       <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
         <legend className="label mb-1.5 p-0">{t("configurazione.admin.ruoli")}</legend>
-        <span className="text-[12px] text-muted">{t("configurazione.admin.noChoice", { role: type === "requester" ? t("configurazione.admin.richiedentePortale") : t("configurazione.admin.lettore") })}</span>
+        <span className="text-[12px] text-muted">{type === "requester" ? t("configurazione.admin.noChoice", { role: t("configurazione.admin.richiedentePortale") }) : t("identita.noChoiceNone")}</span>
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           {assignable.map((r) => (
             <label key={r.id} className="flex items-start gap-2">
@@ -490,8 +497,8 @@ function MemberPanel({ id, me, ssoOnly }: { id: string; me?: string; ssoOnly: bo
           <span>{TYPE_LABELS[x.member_type] ?? x.member_type}</span>
           {(x.member_type === "standard" || x.member_type === "requester") && (
             <ConfirmButton
-              label={x.member_type === t("configurazione.gate.standard") ? t("configurazione.admin.rendiRichiedenteDelPortale") : t("configurazione.admin.rendiMembroPieno")}
-              confirm={x.member_type === t("configurazione.gate.standard") ? t("configurazione.admin.confermaIRuoliDiretti") : t("configurazione.admin.confermaIlRuoloDiventa")}
+              label={x.member_type === "standard" ? t("configurazione.admin.rendiRichiedenteDelPortale") : t("configurazione.admin.rendiMembroPieno")}
+              confirm={x.member_type === "standard" ? t("configurazione.admin.confermaIRuoliDiretti") : t("identita.confirmToMember")}
               pending={setType.isPending}
               onConfirm={() => setType.mutate(x.member_type === "standard" ? "requester" : "standard")}
             />
@@ -1135,13 +1142,14 @@ function GroupPanel({ group, groups, onDeleted }: { group: AdminGroup; groups: A
                 {m.name}
                 {m.status && m.status !== "active" && <span className="text-muted"> · {STATUS_LABELS[m.status] ?? m.status}</span>}
               </span>
-              {!group.system && (
+              {!group.system && !group.idp_managed && (
                 <button type="button" className="text-[12px] text-muted underline hover:text-danger" onClick={() => remove.mutate(m.id)}>{t("configurazione.common.togli2")}</button>
               )}
             </li>
           ))}
         </ul>
-        {!group.system && (
+        {group.idp_managed && <p className="m-0 border-l-2 border-accent pl-3 text-[12.5px]">{t("identita.groupManaged")}</p>}
+        {!group.system && !group.idp_managed && (
           <form
             className="flex flex-wrap gap-2"
             onSubmit={(e) => {
