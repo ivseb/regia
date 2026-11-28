@@ -45,6 +45,7 @@ test("dal blocco Codice alla pagina del rilascio, con le note e la certificazion
   const repo = code.toLowerCase();
   const owner = `acme${rnd}`;
   const change = `CHG${Date.now().toString().slice(-7)}`;
+  const version = `2.4.${Date.now() % 100000}`;
   await login(page, "admin");
   const app = await call(page.request, "POST", "/api/v1/architecture/applications", { name: code, code });
   const inc = await call(page.request, "POST", "/api/v1/incidents", {
@@ -71,7 +72,7 @@ test("dal blocco Codice alla pagina del rilascio, con le note e la certificazion
     const tok = await call(page.request, "POST", "/api/v1/me/tokens", { name: uniq("CI"), expires_in_days: 1, scopes: ["devsecops.write"] });
     const r = await page.request.fetch("/api/v1/devsecops/releases", {
       method: "POST", headers: { Authorization: `Bearer ${tok.token}` },
-      data: { format: "regia.devsecops/v1", service: { name: c.commits[0].service }, environment: "prod", version: "2.4.0", change_number: change,
+      data: { format: "regia.devsecops/v1", service: { name: c.commits[0].service }, environment: "prod", version, change_number: change,
         at: new Date(Date.now() - 3600e3).toISOString() },
     });
     expect(r.ok(), await r.text()).toBeTruthy();
@@ -79,10 +80,10 @@ test("dal blocco Codice alla pagina del rilascio, con le note e la certificazion
     // Dalla scheda alla pagina del rilascio.
     await page.goto(`/e/${key}`);
     const blocco = page.getByTestId("sezione-codice");
-    await expect(blocco.getByText(/Rilasciato in 2\.4\.0/)).toBeVisible();
+    await expect(blocco.getByText(`Rilasciato in ${version}`, { exact: false })).toBeVisible();
     await blocco.getByTestId("link-rilascio").click();
     await expect(page).toHaveURL(/\/rilasci\//);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(`${c.commits[0].service} 2.4.0`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(`${c.commits[0].service} ${version}`);
     const elementi = page.getByTestId("elementi-rilascio");
     await expect(elementi.getByRole("heading", { name: "Correzioni" })).toBeVisible();
     await expect(elementi.getByRole("link", { name: key })).toBeVisible();
@@ -97,6 +98,12 @@ test("dal blocco Codice alla pagina del rilascio, con le note e la certificazion
     await expect(page).toHaveURL(new RegExp(`/change/${change}/certificazione`));
     await expect(page.getByRole("heading", { level: 1 })).toContainText(change);
     await expect(page.getByRole("link", { name: key }).first()).toBeVisible();
+
+    // Anche da «Ultimi rilasci» in /devsecops la versione porta alla pagina del rilascio.
+    await page.goto("/devsecops");
+    await page.getByRole("link", { name: version, exact: true }).first().click();
+    await expect(page).toHaveURL(/\/rilasci\//);
+    await expect(page.getByTestId("elementi-rilascio").getByRole("link", { name: key })).toBeVisible();
   } finally {
     server.close();
   }

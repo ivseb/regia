@@ -290,7 +290,15 @@ function ServiceTr({ s, multiApp, enterprise }: { s: ServiceRow; multiApp: boole
           </div>
         </td>
         <td className="px-3 py-2 font-mono text-[12.5px] tabular">
-          {s.prod_version || <span className="font-sans text-muted">{tr("governance.devsecops.mai_in_produzione")}</span>}
+          {s.prod_version ? (
+            r && r.version === s.prod_version ? (
+              <Link to="/rilasci/$id" params={{ id: r.id }} title={tr("rilasci.apri_rilascio")}>{s.prod_version}</Link>
+            ) : (
+              s.prod_version
+            )
+          ) : (
+            <span className="font-sans text-muted">{tr("governance.devsecops.mai_in_produzione")}</span>
+          )}
           {r?.image && <span className="block max-w-[180px] [overflow-wrap:anywhere] text-[11px] text-muted" title={`${r.image}${r.digest ? "@" + r.digest : ""}`}>{r.digest?.slice(0, 19) ?? r.image}</span>}
         </td>
         <td className="px-3 py-2">{r ? <Released r={r} /> : <span className="text-muted">{s.prod_since ? when(s.prod_since) : "—"}</span>}</td>
@@ -360,7 +368,7 @@ function History({ id }: { id: string }) {
     <ol className="m-0 flex list-none flex-col p-0 text-[12.5px]">
       {rels.map((r) => (
         <li key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 border-b border-hair py-1.5 last:border-b-0 sm:grid-cols-[110px_90px_minmax(0,1fr)_auto]">
-          <span className="font-mono tabular">{r.version}</span>
+          <Link to="/rilasci/$id" params={{ id: r.id }} className="font-mono tabular" title={tr("rilasci.apri_rilascio")}>{r.version}</Link>
           <span className={r.production ? "font-semibold" : "text-muted"}>{r.environment}</span>
           <span className="col-span-2 text-muted sm:col-span-1">
             {when(r.at)}
@@ -452,7 +460,7 @@ function Changes({ groups }: { groups: ChangeGroup[] }) {
               {g.releases.map((r) => (
                 <li key={r.id} className="flex flex-wrap gap-x-2">
                   <span className="font-medium">{r.service}</span>
-                  <span className="font-mono tabular">{r.version}</span>
+                  <Link to="/rilasci/$id" params={{ id: r.id }} className="font-mono tabular" title={tr("rilasci.apri_rilascio")}>{r.version}</Link>
                   <span className={r.production ? "" : "text-muted"}>{r.environment}</span>
                   <span className="text-muted tabular">{when(r.at)}</span>
                   {r.approved_by && <span className="text-muted">{tr("governance.devsecops.approvato_da", { approved_by: r.approved_by })}</span>}
