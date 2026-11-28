@@ -188,7 +188,7 @@ func TestAIFondamenta(t *testing.T) {
 	// Un fornitore in uso non si toglie.
 	admin.do("DELETE", "/api/v1/ai/providers/"+ollama["id"].(string), nil, http.StatusConflict)
 	admin.do("DELETE", "/api/v1/ai/providers/"+claude["id"].(string), nil, http.StatusNoContent)
-	if st := ed.do("GET", "/api/v1/ai/status", nil, http.StatusOK); st["ready"] != true || st["tools"] != true || st["model"] != fakeai.ModelDeep {
+	if st := ed.do("GET", "/api/v1/ai/status", nil, http.StatusOK); st["ready"] != true || st["tools"] != true || st["model"] != fakeai.ModelFast {
 		t.Fatalf("stato acceso: %v", st)
 	}
 
@@ -207,7 +207,7 @@ func TestAIFondamenta(t *testing.T) {
 		t.Fatalf("risposta senza il link all'elemento: %v", answer)
 	}
 	convID := obj(res["conversation"])["id"].(string)
-	if n := calls(`conversation_id = $1 and outcome = 'ok' and feature = 'assistente' and input_tokens > 0 and length(prompt_sha256) = 32 and tier = 'approfondito'`, convID); n != 2 {
+	if n := calls(`conversation_id = $1 and outcome = 'ok' and feature = 'assistente' and input_tokens > 0 and length(prompt_sha256) = 32 and tier = 'rapido'`, convID); n != 2 {
 		t.Fatalf("chiamate registrate: %d", n)
 	}
 	// La conversazione è della persona: un'altra non la vede né la continua.
@@ -346,7 +346,15 @@ func TestAIFondamenta(t *testing.T) {
 	if txt := obj(list(res["messages"])[1])["text"].(string); !strings.HasPrefix(txt, "Bozza (senza strumenti)") {
 		t.Fatalf("modello senza strumenti: %s", txt)
 	}
+	// L'assistente sta sul rapido; se il modello rapido non sa usare gli strumenti e
+	// l'approfondito sì, usa l'approfondito invece di perdere le letture.
+	admin.do("PATCH", "/api/v1/ai/providers/"+fakeID, map[string]any{"name": "Finto", "no_tools_models": []string{fakeai.ModelFast}}, http.StatusOK)
+	setDeep(fakeai.ModelDeep, map[string]any{"fast": map[string]any{"provider_id": fakeID, "model": fakeai.ModelFast}})
+	if st := ed.do("GET", "/api/v1/ai/status", nil, http.StatusOK); st["tools"] != true || st["model"] != fakeai.ModelDeep {
+		t.Fatalf("assistente con il rapido senza strumenti: %v", st)
+	}
 	admin.do("PATCH", "/api/v1/ai/providers/"+fakeID, map[string]any{"name": "Finto", "no_tools_models": []string{}}, http.StatusOK)
+	setDeep(fakeai.ModelDeep, nil)
 
 	// --- Budget a token: avviso dall'80%, blocco dal 100%, poi la chiamata non parte ed è registrata.
 	if err := d.InTenant(ctx, tid, db.TenantOpts{}, func(tx pgx.Tx) error {

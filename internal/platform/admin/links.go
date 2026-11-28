@@ -87,6 +87,9 @@ func (s *Service) ResendInvitation(ctx context.Context, a Actor, memberID string
 		if status != "invited" {
 			return conflict("member.not_invited", "il membro ha già accettato l'invito")
 		}
+		if err := a.canActOn(ctx, tx, memberID); err != nil {
+			return err
+		}
 		var err error
 		if l, err = s.newInvitation(ctx, tx, a, memberID, newAccount); err != nil {
 			return err
@@ -109,6 +112,9 @@ func (s *Service) PasswordLink(ctx context.Context, a Actor, memberID string) (*
 	err := s.tx(ctx, a, func(tx pgx.Tx) error {
 		accountID, err := exclusiveAccount(ctx, tx, memberID)
 		if err != nil {
+			return err
+		}
+		if err := a.canActOn(ctx, tx, memberID); err != nil {
 			return err
 		}
 		if l, err = s.newReset(ctx, tx, a, accountID); err != nil {

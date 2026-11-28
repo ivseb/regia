@@ -36,6 +36,10 @@ func (s *Server) adminInit(o Options) {
 		off = o.Auth.PasswordLoginDisabled
 	}
 	s.adm.admin = admin.New(o.DB, admin.Options{PasswordOff: off})
+	if o.Auth != nil {
+		// Login OIDC: creazione al primo accesso e gruppi dall'IdP (admin/idp.go).
+		o.Auth.SetOIDCHook(s.adm.admin)
+	}
 	s.adm.hooks = o.Webhooks
 	if s.adm.hooks == nil {
 		box := o.SecretBox
@@ -95,6 +99,8 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/stakeholder-roles", adminOnly(s.adminStakeholderRoles))
 	mux.HandleFunc("POST /api/v1/admin/stakeholder-roles", adminSession(s.adminCreateStakeholderRole))
 	mux.HandleFunc("PATCH /api/v1/admin/stakeholder-roles/{id}", adminSession(s.adminRenameStakeholderRole))
+
+	s.idpRoutes(mux)
 
 	mux.HandleFunc("GET /api/v1/admin/security", adminOnly(s.adminSecurity))
 	mux.HandleFunc("PUT /api/v1/admin/security", adminSession(s.adminSetSecurity))
