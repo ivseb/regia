@@ -39,6 +39,8 @@ export default {
   "errors.validation.projects.reason_required": "Scrivi il motivo: il fornitore lo legge.",
   "errors.validation.projects.cr_status": "La change request non è più da inviare.",
   "errors.validation.projects.cr_withdraw": "Si ritira solo una change request da inviare o in approvazione.",
+  "errors.validation.projects.manager_type": "Il responsabile si cambia solo su progetti e programmi.",
+  "errors.validation.projects.manager_required": "Il responsabile è obbligatorio: indica una persona.",
   "errors.validation.work.epic_agile_only": "L'epic serve solo ai work package agili.",
   "errors.validation.work.wp_no_team": "Il work package non ha un team responsabile.",
 } satisfies Source;

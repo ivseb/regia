@@ -59,7 +59,7 @@ func (s *Server) aiInit(o Options) {
 
 // AITools sono gli strumenti dell'AI con i servizi di questo server (anche per serve.go e il server MCP).
 func (s *Server) AITools() *tools.Services {
-	return &tools.Services{DB: s.db, Engine: s.eng, Collab: s.collab, Work: s.work, Arch: s.arch}
+	return &tools.Services{DB: s.db, Engine: s.eng, Collab: s.collab, Work: s.work, Arch: s.arch, Projects: s.proj}
 }
 
 func (s *Server) aiRoutes(mux *http.ServeMux) {
