@@ -56,7 +56,9 @@ type AnswerView struct {
 	Value  any       `json:"value"`
 	By     *string   `json:"by"`
 	At     time.Time `json:"at"`
-	Source string    `json:"source"` // manual | prefill
+	Source string    `json:"source"` // manual | prefill | ai
+	// AI: accettata da una proposta dell'AI (Edited: cambiata prima di accettarla).
+	AI *AnswerAI `json:"ai,omitempty"`
 }
 
 // Assignment è una sezione assegnata.
@@ -104,6 +106,11 @@ type View struct {
 	Outcomes             []Outcome             `json:"outcomes"`
 	Attachments          []Attachment          `json:"attachments"`
 	Can                  Can                   `json:"can"`
+	// Highlights: le domande da guardare con attenzione, «score» (cambiano il punteggio) e
+	// «rules» (generano prescrizioni o requisiti).
+	Highlights map[string][]string `json:"highlights"`
+	// AIProposals: le proposte dell'AI in attesa, solo quelle chieste da chi guarda.
+	AIProposals []AIProposal `json:"ai_proposals"`
 }
 
 // View restituisce la valutazione con questionario, risposte, valutazione delle condizioni,
@@ -186,7 +193,7 @@ func (s *Service) View(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref s
 		}
 	}
 	for k, a := range r.Answers {
-		av := AnswerView{Value: a.V, At: a.At, Source: a.Src}
+		av := AnswerView{Value: a.V, At: a.At, Source: a.Src, AI: a.AI}
 		if a.By != nil {
 			n := names[*a.By]
 			av.By = &n
@@ -249,6 +256,10 @@ func (s *Service) View(ctx context.Context, tx pgx.Tx, actor engine.Actor, ref s
 	}
 	if r.Stage == StageExam && !p.team && v.Can.ReadOnlyWhy == "" {
 		v.Can.ReadOnlyWhy = "in esame dal team " + r.Team
+	}
+	v.Highlights = def.Highlights()
+	if v.AIProposals, err = aiProposals(ctx, tx, r.ID, actor.MemberID); err != nil {
+		return nil, err
 	}
 	return v, nil
 }

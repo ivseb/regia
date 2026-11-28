@@ -909,3 +909,32 @@ func Evaluate(d *Definition, facts engine.Facts, answers map[string]any) *Evalua
 	ev.FactsUsed = f
 	return ev
 }
+
+// Highlights sono le domande da guardare con attenzione quando si compila (e quando si accetta
+// una proposta dell'AI): «score» se la risposta cambia il punteggio, «rules» se una regola di
+// derivazione la usa (genera prescrizioni o requisiti).
+func (d *Definition) Highlights() map[string][]string {
+	out := map[string][]string{}
+	used := map[string]bool{}
+	for _, r := range d.Derivations {
+		for _, k := range cond(r.When).Keys() {
+			used[strings.ToLower(k)] = true
+		}
+	}
+	for _, s := range d.Sections {
+		for i := range s.Questions {
+			q := &s.Questions[i]
+			w := 1.0
+			if q.Weight != nil {
+				w = *q.Weight
+			}
+			if _, max := q.points(nil); max > 0 && w > 0 {
+				out[q.Key] = append(out[q.Key], "score")
+			}
+			if used[strings.ToLower(q.Key)] {
+				out[q.Key] = append(out[q.Key], "rules")
+			}
+		}
+	}
+	return out
+}

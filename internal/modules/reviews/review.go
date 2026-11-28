@@ -62,12 +62,20 @@ type reviewRow struct {
 	DecidedByName     *string
 }
 
-// storedAnswer è la risposta corrente: valore, chi, quando, origine (manual | prefill).
+// storedAnswer è la risposta corrente: valore, chi, quando, origine (manual | prefill | ai).
 type storedAnswer struct {
 	V   any       `json:"v"`
 	By  *string   `json:"by"`
 	At  time.Time `json:"at"`
 	Src string    `json:"src"`
+	// AI: la risposta viene da una proposta dell'AI accettata (o cambiata e accettata) da By.
+	AI *AnswerAI `json:"ai,omitempty"`
+}
+
+// AnswerAI è l'origine di una risposta accettata da una proposta dell'AI.
+type AnswerAI struct {
+	Proposal string `json:"proposal"`
+	Edited   bool   `json:"edited,omitempty"`
 }
 
 const selectReview = `
@@ -533,11 +541,17 @@ func (p *perms) canDecide(r *reviewRow) bool {
 // writeAnswers salva le risposte (già normalizzate) con la storia, aggiorna il riepilogo
 // della valutazione e le prescrizioni proposte dalle regole di derivazione.
 func (s *Service) writeAnswers(ctx context.Context, tx pgx.Tx, actor engine.Actor, r *reviewRow, def *Definition, facts engine.Facts, vals map[string]any, source string) error {
+	return s.writeAnswersFrom(ctx, tx, actor, r, def, facts, vals, source, nil)
+}
+
+// writeAnswersFrom è writeAnswers con l'origine delle risposte accettate da una proposta dell'AI
+// (source "ai"): resta nella storia (ai_proposal_id, ai_edited) e nella risposta corrente.
+func (s *Service) writeAnswersFrom(ctx context.Context, tx pgx.Tx, actor engine.Actor, r *reviewRow, def *Definition, facts engine.Facts, vals map[string]any, source string, origin map[string]*AnswerAI) error {
 	now := time.Now().UTC()
 	changed := map[string]any{}
 	for k, v := range vals {
 		cur, had := r.Answers[k]
-		if had && jsonEqual(cur.V, v) && !(cur.Src == "prefill" && source == "manual") {
+		if had && jsonEqual(cur.V, v) && !(cur.Src == "prefill" && source != "prefill") && source != "ai" {
 			continue // nessun cambiamento (una conferma di una precompilazione invece conta)
 		}
 		if !had && v == nil {
@@ -547,8 +561,13 @@ func (s *Service) writeAnswers(ctx context.Context, tx pgx.Tx, actor engine.Acto
 		if v == nil {
 			raw = nil
 		}
-		if _, err := tx.Exec(ctx, `insert into questionnaire_answers (tenant_id, review_id, question_key, value, source, answered_by)
-			values (app_tenant(), $1, $2, $3, $4, $5)`, r.ID, k, raw, source, nullable(actor.MemberID)); err != nil {
+		var propID any
+		edited := false
+		if o := origin[k]; o != nil {
+			propID, edited = o.Proposal, o.Edited
+		}
+		if _, err := tx.Exec(ctx, `insert into questionnaire_answers (tenant_id, review_id, question_key, value, source, answered_by, ai_proposal_id, ai_edited)
+			values (app_tenant(), $1, $2, $3, $4, $5, $6, $7)`, r.ID, k, raw, source, nullable(actor.MemberID), propID, edited); err != nil {
 			return err
 		}
 		if v == nil {
@@ -558,7 +577,7 @@ func (s *Service) writeAnswers(ctx context.Context, tx pgx.Tx, actor engine.Acto
 			if actor.MemberID != "" {
 				by = &actor.MemberID
 			}
-			r.Answers[k] = storedAnswer{V: v, By: by, At: now, Src: source}
+			r.Answers[k] = storedAnswer{V: v, By: by, At: now, Src: source, AI: origin[k]}
 		}
 		changed[k] = v
 	}
@@ -574,13 +593,28 @@ func (s *Service) writeAnswers(ctx context.Context, tx pgx.Tx, actor engine.Acto
 	if err := syncDerivedRequirements(ctx, tx, r.ID, ev.DerivedRequirements); err != nil {
 		return err
 	}
-	if len(changed) > 0 && source == "manual" {
+	if len(changed) > 0 && source != "prefill" {
 		keys := make([]string, 0, len(changed))
 		for k := range changed {
 			keys = append(keys, k)
 		}
 		slices.Sort(keys)
-		if err := engine.AddActivity(ctx, tx, r.ID, actor.MemberID, "answers", "", map[string]any{"questions": keys}, nil); err != nil {
+		payload := map[string]any{"questions": keys}
+		if source == "ai" {
+			payload["ai"] = true
+		}
+		if err := engine.AddActivity(ctx, tx, r.ID, actor.MemberID, "answers", "", payload, nil); err != nil {
+			return err
+		}
+	}
+	// Una domanda che riceve una risposta non ha più proposte dell'AI in attesa (di nessuno).
+	if len(changed) > 0 {
+		keys := make([]string, 0, len(changed))
+		for k := range changed {
+			keys = append(keys, k)
+		}
+		if _, err := tx.Exec(ctx, `update questionnaire_ai_proposals set status = 'superseded', decided_at = now()
+			where review_id = $1 and status = 'proposed' and question_key = any($2)`, r.ID, keys); err != nil {
 			return err
 		}
 	}
@@ -721,10 +755,12 @@ func (s *Service) startCompiling(ctx context.Context, tx pgx.Tx, actor engine.Ac
 
 // AnswerHistory è una voce della storia delle risposte.
 type AnswerHistory struct {
-	ID       int64     `json:"id"`
-	Question string    `json:"question"`
-	Value    any       `json:"value"`
-	Source   string    `json:"source"`
+	ID       int64  `json:"id"`
+	Question string `json:"question"`
+	Value    any    `json:"value"`
+	Source   string `json:"source"`
+	// AIEdited: per source "ai", la proposta è stata cambiata prima di accettarla.
+	AIEdited bool      `json:"ai_edited,omitempty"`
 	By       *string   `json:"by"`
 	At       time.Time `json:"at"`
 }
@@ -735,7 +771,7 @@ func (s *Service) History(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `select a.id, a.question_key, a.value, a.source, m.display_name, a.answered_at
+	rows, err := tx.Query(ctx, `select a.id, a.question_key, a.value, a.source, a.ai_edited, m.display_name, a.answered_at
 		from questionnaire_answers a left join members m on m.tenant_id = a.tenant_id and m.id = a.answered_by
 		where a.review_id = $1 and ($2 = '' or a.question_key = $2) order by a.id desc limit 500`, r.ID, question)
 	if err != nil {
@@ -744,7 +780,7 @@ func (s *Service) History(ctx context.Context, tx pgx.Tx, actor engine.Actor, re
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (AnswerHistory, error) {
 		var h AnswerHistory
 		var raw []byte
-		err := row.Scan(&h.ID, &h.Question, &raw, &h.Source, &h.By, &h.At)
+		err := row.Scan(&h.ID, &h.Question, &raw, &h.Source, &h.AIEdited, &h.By, &h.At)
 		if err == nil && len(raw) > 0 {
 			err = json.Unmarshal(raw, &h.Value)
 		}
