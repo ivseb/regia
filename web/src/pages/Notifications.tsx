@@ -33,6 +33,8 @@ export const KIND_LABELS: Record<NotificationKind, { label: Key; hint: Key }> = 
   timesheet: { label: "lavoro.notifications.kind.timesheet.label", hint: "lavoro.notifications.kind.timesheet.hint" },
   project: { label: "lavoro.notifications.kind.project.label", hint: "lavoro.notifications.kind.project.hint" },
   ai: { label: "ai.notif.label", hint: "ai.notif.hint" },
+  // Automazioni: notifiche delle regole dei processi (docs/sviluppo/automazioni.md).
+  automation: { label: "configurazione.regole.notif.label", hint: "configurazione.regole.notif.hint" },
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -208,6 +210,16 @@ export function Describe({ n }: { n: Notification }) {
           return R("project.dependency_late", { milestone: str(p.milestone), other: str(p.other), project: str(p.project), need: p.need ? fmtDate(str(p.need)) : "", date: p.date ? fmtDate(str(p.date)) : "" });
       }
       return R("project.plain");
+    case "automation":
+      return str(p.message) ? (
+        <>
+          {key} {str(p.message)}
+        </>
+      ) : (
+        <>
+          {key} {t("configurazione.regole.notif.vuota", { rule: str(p.rule) })}
+        </>
+      );
     case "ai":
       if (ev === "budget_warning") return <Rich k="ai.notif.budget_warning" params={{ percent: Number(p.percent) || 0, month: str(p.month) }} />;
       if (ev === "wiki_failed") return <>{t("ai.notif.wiki_failed")}</>;

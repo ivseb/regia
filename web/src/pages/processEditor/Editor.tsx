@@ -14,7 +14,7 @@ import {
 } from "../../api";
 import { ErrorNote, SectionTitle } from "../../ui";
 import { ConditionBuilder } from "./ConditionBuilder";
-import { RuleSentence, ruleSentence, useRuleRefs } from "./RuleSentence";
+import { RuleSentence, metaNames, ruleSentence, useRuleRefs } from "./RuleSentence";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { AddStep } from "./AddStep";
 import { Diagram, type Selection } from "./Diagram";
@@ -580,6 +580,8 @@ export default function ProcessEditor({ proc }: { proc: ProcessInfo }) {
             problems={grouped.rule}
             change={change}
             extraValues={extraValues}
+            processKey={curV ? proc.key : undefined}
+            publishedRules={proc.current?.rules?.map((r) => r.key) ?? []}
           />
         </>
       )}
@@ -1360,6 +1362,8 @@ function Rules({
   problems,
   change,
   extraValues,
+  processKey,
+  publishedRules,
 }: {
   def: Definition;
   meta: ProcessMeta;
@@ -1368,11 +1372,15 @@ function Rules({
   problems: Map<number, Problem[]>;
   change: Change;
   extraValues: Record<string, string[]>;
+  /** Chiave del processo, se ha una versione pubblicata. */
+  processKey?: string;
+  /** Chiavi delle regole della versione pubblicata (hanno le ultime esecuzioni). */
+  publishedRules: string[];
 }) {
   const t = useT();
   const refs = useRuleRefs();
   const rules = def.rules ?? [];
-  const names = { roles: meta.roles, schemas: meta.actions, facts: factNames(meta.facts) };
+  const names = metaNames(meta);
   const add = () => {
     const key = keyFrom(t("configurazione.processEditor.nuovaRegola"), rules.map((r) => r.key));
     change((d) => {
@@ -1449,6 +1457,7 @@ function Rules({
                     refs={refs}
                     extraValues={extraValues}
                     setRule={set}
+                    processKey={processKey && publishedRules.includes(r.key) ? processKey : undefined}
                     renderOther={(a, j) => (
                       <ActionEditor
                         action={a}
