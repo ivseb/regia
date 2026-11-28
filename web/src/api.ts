@@ -535,7 +535,9 @@ export type NotificationKind = "mention" | "comment" | "role" | "phase" | "appro
   // Progetti: conflitti sulle applicazioni, SAL e consegne dei fornitori da accettare.
   | "project"
   // AI: il budget del mese ha superato l'80% (a chi amministra l'organizzazione).
-  | "ai";
+  | "ai"
+  // Automazioni: notifica mandata da una regola di processo (azione «notify»).
+  | "automation";
 export type Notification = {
   id: string;
   kind: NotificationKind;
@@ -1634,7 +1636,44 @@ export type ProcessMeta = {
   facts: FactInfo[];
   sample?: string;
   actions: ActionSchema[];
+  /** Automazioni: campi del tipo (eventi «change:», azione set_field); kind = tipo di dato (string, date, enum…). */
+  fields?: MetaField[];
+  /** Date dell'elemento per gli eventi «at:<data>:<±giorni>» (es. «scadenza», «campo.fine»). */
+  dates?: DateSourceInfo[];
+  /** Tipi di elemento e relazioni (azione create_linked; name = nome in avanti). */
+  types?: NamedKey[];
+  relations?: NamedKey[];
+  /** Nomi dei webhook configurati (azione webhook). */
+  webhooks?: string[];
+  spaces?: NamedKey[];
+  /** Segnaposto fissi dei modelli di testo ({{titolo}}, {{chiave}}…). */
+  templates?: string[];
 };
+export type MetaField = { key: string; name: string; kind: string; multi?: boolean };
+export type DateSourceInfo = { key: string; name: string; source: "base" | "campo" | "modulo" };
+/** Anteprima di una regola: per «at:» i prossimi `days` giorni, per «every:» il prossimo giro, per gli altri eventi oggi. */
+export type RulePreview = {
+  ok: boolean;
+  error?: string;
+  matched: number;
+  total: number;
+  truncated?: boolean;
+  items: { key: string; title: string }[];
+  event: { kind: string; phase?: string; field?: string; date?: string; offset?: number; weekday?: number };
+  /** Finestra dell'anteprima (giorni AAAA-MM-GG nel fuso del tenant). */
+  from?: string;
+  to?: string;
+};
+export type RuleRunItem = {
+  element_key: string;
+  element_title: string;
+  occurrence: string;
+  version: number;
+  status: "ok" | "error" | "skipped";
+  note?: string;
+  fired_at: string;
+};
+export type AutomationSettings = { enabled: boolean; run_hour: number; max_per_run: number };
 export type ProcessBundle = {
   format: string;
   key: string;
@@ -1660,6 +1699,10 @@ export type NewProcess = {
 
 export const processEditorApi = {
   meta: (ref: string) => call<ProcessMeta>("GET", `/processes/${q(ref)}/meta`),
+  rulePreview: (p: { type: string; on: string; condition: string; days: number }) => call<RulePreview>("POST", "/rules/preview", p),
+  ruleRuns: (ref: string, rule: string, limit = 50) => call<{ items: RuleRunItem[] }>("GET", `/processes/${q(ref)}/rules/${q(rule)}/runs?limit=${limit}`),
+  automationSettings: () => call<AutomationSettings>("GET", "/automation/settings"),
+  setAutomationSettings: (s: AutomationSettings) => call<AutomationSettings>("PUT", "/automation/settings", s),
   catalog: () => call<ProcessCatalog>("GET", "/process-catalog"),
   check: (ref: string, definition: Definition) => call<{ problems: Problem[] }>("POST", `/processes/${q(ref)}/check`, { definition }),
   create: (p: NewProcess) => call<ProcessInfo>("POST", "/processes", p),

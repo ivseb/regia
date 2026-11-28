@@ -357,6 +357,11 @@ func (s *Server) Handler() http.Handler {
 	// Editor visuale dei processi (process_editor.go).
 	mux.HandleFunc("GET /api/v1/process-catalog", pa(s.processCatalog))
 	mux.HandleFunc("GET /api/v1/processes/{ref}/meta", pa(s.processMeta))
+	// Automazioni: anteprima, esecuzioni delle regole a tempo, impostazioni (automations.go).
+	mux.HandleFunc("POST /api/v1/rules/preview", pa(s.previewRule))
+	mux.HandleFunc("GET /api/v1/processes/{ref}/rules/{rule}/runs", pa(s.ruleRuns))
+	mux.HandleFunc("GET /api/v1/automation/settings", pa(s.automationSettings))
+	mux.HandleFunc("PUT /api/v1/automation/settings", pa(s.setAutomationSettings))
 	mux.HandleFunc("POST /api/v1/processes/{ref}/check", pa(s.checkDefinition))
 
 	mux.HandleFunc("GET /api/v1/teams", inTenant(s.listTeams))

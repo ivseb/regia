@@ -207,18 +207,14 @@ func Validate(w *Workflow) []Problem {
 			errc("validation.rule.key_duplicate", path+".key", "regola %q ripetuta", r.Key)
 		}
 		ruleKeys[r.Key] = true
-		ev, phase, _ := strings.Cut(r.On, ":")
-		switch ev {
-		case "create":
-			if phase != "" {
-				errc("validation.rule.event_invalid", path+".on", "\"create\" non ha una fase")
+		ev, err := ParseRuleEvent(r.On)
+		switch {
+		case err != nil:
+			errc("validation.rule.event_invalid", path+".on", "evento %q non valido: %v", r.On, err)
+		case ev.Kind == "enter" || ev.Kind == "exit":
+			if !hasPhase(ev.Phase) {
+				errc("validation.rule.phase_unknown", path+".on", "la fase %q non esiste", ev.Phase)
 			}
-		case "enter", "exit":
-			if !hasPhase(phase) {
-				errc("validation.rule.phase_unknown", path+".on", "la fase %q non esiste", phase)
-			}
-		default:
-			errc("validation.rule.event_invalid", path+".on", "evento %q non valido (create, enter:<fase>, exit:<fase>)", r.On)
 		}
 		ruleCond := func(p, src string) {
 			if src == "" {
@@ -301,7 +297,30 @@ func (s *Service) validateRefs(ctx context.Context, tx pgx.Tx, w *Workflow, type
 			}
 		}
 	}
+	var dates []DateSource
 	for i, r := range w.Rules {
+		ev, _ := ParseRuleEvent(r.On)
+		switch {
+		case ev.Kind == "change" && ev.Field != "titolo" && typeID != "":
+			var ok bool
+			if err := tx.QueryRow(ctx, `select exists (select 1 from type_fields tf join field_defs f on f.tenant_id = tf.tenant_id and f.id = tf.field_id
+				where tf.type_id = $1 and tf.space_id is null and f.key = $2)`, typeID, ev.Field).Scan(&ok); err != nil {
+				return nil, err
+			}
+			if !ok {
+				ps = append(ps, Problem{"error", fmt.Sprintf("rules[%d].on", i), fmt.Sprintf("il campo %q non è del tipo", ev.Field), "validation.rule.field_unknown"})
+			}
+		case ev.Kind == "at" && typeID != "":
+			if dates == nil {
+				var err error
+				if dates, err = s.DateSources(ctx, tx, typeID); err != nil {
+					return nil, err
+				}
+			}
+			if _, ok := findDate(dates, ev.Date); !ok {
+				ps = append(ps, Problem{"error", fmt.Sprintf("rules[%d].on", i), fmt.Sprintf("la data %q non è del tipo", ev.Date), "validation.rule.date_unknown"})
+			}
+		}
 		for j, a := range r.Actions {
 			ap := fmt.Sprintf("rules[%d].actions[%d]", i, j)
 			if a.Role != "" && !slices.Contains(roleKeys, a.Role) {
@@ -316,7 +335,21 @@ func (s *Service) validateRefs(ctx context.Context, tx pgx.Tx, w *Workflow, type
 					ps = append(ps, Problem{"error", ap + ".group", fmt.Sprintf("gruppo %q inesistente", a.Group), "validation.rule.group_unknown"})
 				}
 			}
-			if a.Kind != "assign_role" && a.Kind != "" {
+			if automationKinds[a.Kind] {
+				if missing := s.missingParams(a); len(missing) > 0 {
+					for _, f := range missing {
+						ps = append(ps, Problem{"error", ap + "." + f.Key, fmt.Sprintf("manca %q: %s", f.Key, f.Name), "validation.rule.param_required"})
+					}
+				} else {
+					msgs, err := s.checkAutomation(ctx, tx, typeID, a)
+					if err != nil {
+						return nil, err
+					}
+					for _, m := range msgs {
+						ps = append(ps, Problem{"error", ap, m, "validation.rule.param_invalid"})
+					}
+				}
+			} else if a.Kind != "assign_role" && a.Kind != "" {
 				d, ok := s.hooks.Actions[a.Kind]
 				if !ok && knownActions[a.Kind] {
 					continue
@@ -403,7 +436,7 @@ func (s *Service) missingParams(a Action) []ActionField {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []ActionField
-	for _, sc := range r.actions {
+	for _, sc := range append(append([]ActionSchema{}, automationSchemas...), r.actions...) {
 		if sc.Kind != a.Kind {
 			continue
 		}

@@ -161,6 +161,8 @@ func cmdServe(ctx context.Context, args []string) error {
 	go reqSvc.RunExpiry(ctx, rt.db, time.Hour, log)
 	go kbSvc.RunReminders(ctx, rt.db, time.Hour, log)
 	go riskSvc.RunDeadlines(ctx, rt.db, 15*time.Minute, log)
+	// Automazioni: regole dei processi a tempo e periodiche (docs/sviluppo/automazioni.md).
+	go eng.RunAutomations(ctx, rt.db, 15*time.Minute, log)
 	// Vulnerabilità governate: scadenze, eccezioni scadute ed escalation (piano, passo 21, fase 2).
 	go dsoSvc.RunVulnerabilities(ctx, rt.db, 15*time.Minute, log)
 	// Email delle notifiche: solo con un server SMTP configurato, altrimenti restano in app.

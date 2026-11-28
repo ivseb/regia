@@ -141,6 +141,9 @@ type outboxEvent struct {
 	Added      json.RawMessage `json:"added"`
 	Removed    json.RawMessage `json:"removed"`
 	At         time.Time       `json:"at"`
+	// WebhookID: l'evento va solo a questo webhook (azione «webhook» di una regola,
+	// engine.WebhookEvent), senza guardare iscrizioni e filtro.
+	WebhookID string `json:"webhook_id,omitempty"`
 }
 
 func (s *Service) dispatch(ctx context.Context) error {
@@ -213,6 +216,12 @@ func (s *Service) dispatchTenant(ctx context.Context, tenantID string) error {
 		for _, it := range items {
 			var targets []hook
 			for _, h := range hooks {
+				if it.ev.WebhookID != "" {
+					if h.id == it.ev.WebhookID {
+						targets = append(targets, hook{id: h.id}) // la regola l'ha scelto: niente filtro
+					}
+					continue
+				}
 				for _, e := range h.events {
 					if e == it.ev.Event {
 						targets = append(targets, h)

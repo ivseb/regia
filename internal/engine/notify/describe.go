@@ -102,6 +102,8 @@ func DescribeLang(lang string, it Item) string {
 		return describeTimesheet(lang, it, p)
 	case KindProject:
 		return byEvent(lang, "notify.project", event, p)
+	case KindAutomation:
+		return describeAutomation(lang, it, p)
 	case KindAI:
 		p["percent"] = num("percent")
 		return byEvent(lang, "notify.ai", event, p)

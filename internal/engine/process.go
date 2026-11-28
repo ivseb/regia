@@ -277,7 +277,29 @@ func (s *Service) RerunRules(ctx context.Context, tx pgx.Tx, actor Actor, el *El
 }
 
 func (s *Service) runRulesOf(ctx context.Context, tx pgx.Tx, actor Actor, el *Element, w *Workflow, event string, kinds []string) error {
+	return s.runRulesWith(ctx, tx, actor, el, w, event, kinds, &RuleRun{Event: event})
+}
+
+// runRulesWith esegue le regole dell'evento con i dati dell'esecuzione (fatti già pronti per
+// i cambi di campo, occorrenza per gli eventi a tempo). Le azioni girano un livello più in
+// basso nella catena delle regole (automation.go): così una modifica fatta da una regola fa
+// scattare le regole sugli eventi solo al primo livello e una regola non riscatta su sé stessa.
+func (s *Service) runRulesWith(ctx context.Context, tx pgx.Tx, actor Actor, el *Element, w *Workflow, event string, kinds []string, base *RuleRun) error {
+	if !rulesAllowed(ctx) {
+		return nil
+	}
+	chain := chainOf(ctx)
 	var lf *lazyFacts
+	facts := func() (Facts, error) {
+		if base.Facts != nil {
+			return base.Facts, nil
+		}
+		if lf == nil {
+			lf = &lazyFacts{s: s, el: el}
+		}
+		return lf.get(ctx, tx)
+	}
+	versionLoaded := false
 	for _, r := range w.Rules {
 		if !strings.EqualFold(r.On, event) {
 			continue
@@ -285,11 +307,19 @@ func (s *Service) runRulesOf(ctx context.Context, tx pgx.Tx, actor Actor, el *El
 		if kinds != nil && !slices.ContainsFunc(r.Actions, func(a Action) bool { return slices.Contains(kinds, a.Kind) }) {
 			continue
 		}
-		if r.When != "" {
-			if lf == nil {
-				lf = &lazyFacts{s: s, el: el}
+		if !versionLoaded && el.ProcessVersionID != nil {
+			pid, n, err := versionRef(ctx, tx, *el.ProcessVersionID)
+			if err != nil {
+				return err
 			}
-			f, err := lf.get(ctx, tx)
+			base.ProcessID, base.VersionID, base.Version, versionLoaded = pid, *el.ProcessVersionID, n, true
+		}
+		id := base.ProcessID + "/" + r.Key + "/" + el.ID
+		if chain.has(id) {
+			continue // la regola ha causato questo evento sullo stesso elemento: non riscatta
+		}
+		if r.When != "" {
+			f, err := facts()
 			if err != nil {
 				return err
 			}
@@ -297,24 +327,82 @@ func (s *Service) runRulesOf(ctx context.Context, tx pgx.Tx, actor Actor, el *El
 				continue
 			}
 		}
+		run := *base
+		run.Rule = r
+		if run.Facts == nil && needsFacts(r) {
+			f, err := facts()
+			if err != nil {
+				return err
+			}
+			run.Facts = f
+		}
 		for _, a := range r.Actions {
 			if kinds != nil && !slices.Contains(kinds, a.Kind) {
 				continue
 			}
-			note, err := s.runAction(ctx, tx, actor, el, a)
+			actx := context.WithValue(withRule(ctx, id, automationKinds[a.Kind]), runKey{}, &run)
+			note, err := s.runRuleAction(actx, tx, actor, el, a)
 			if errors.Is(err, ErrNoEffect) {
 				continue // niente da fare (es. valutazione già aperta): nessuna voce nella storia
 			}
 			if err != nil {
 				return err
 			}
-			if err := addActivity(ctx, tx, el.ID, actor.MemberID, "rule", r.Key,
-				map[string]any{"rule": r.Name, "action": a.Kind, "note": note}, nil); err != nil {
+			p := run.payload()
+			p["action"], p["note"] = a.Kind, note
+			if err := addActivity(ctx, tx, el.ID, actor.MemberID, "rule", r.Key, p, nil); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// needsFacts: le azioni delle automazioni usano i fatti dell'elemento per i modelli di testo.
+func needsFacts(r Rule) bool {
+	for _, a := range r.Actions {
+		if automationKinds[a.Kind] {
+			return true
+		}
+	}
+	return false
+}
+
+// runRuleAction esegue un'azione di regola. Le azioni delle automazioni girano in un
+// savepoint: un valore rifiutato o un riferimento sparito lascia una nota nella storia invece
+// di bloccare la modifica di chi ha causato l'evento. Le altre azioni si comportano come prima.
+func (s *Service) runRuleAction(ctx context.Context, tx pgx.Tx, actor Actor, el *Element, a Action) (string, error) {
+	if !automationKinds[a.Kind] {
+		return s.runAction(ctx, tx, actor, el, a)
+	}
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	note, err := s.runAction(ctx, sp, actor, el, a)
+	if err == nil || errors.Is(err, ErrNoEffect) {
+		if cerr := sp.Commit(ctx); cerr != nil {
+			return "", cerr
+		}
+		return note, err
+	}
+	_ = sp.Rollback(ctx)
+	if msg, ok := userError(err); ok {
+		return "non applicata: " + msg, nil
+	}
+	return "", err
+}
+
+// userError dice se l'errore è un problema dei dati (da annotare) e non un guasto.
+func userError(err error) (string, bool) {
+	var ve *ValidationError
+	switch {
+	case errors.As(err, &ve):
+		return ve.Error(), true
+	case errors.Is(err, ErrForbidden), errors.Is(err, ErrNotFound), errors.Is(err, ErrConflict):
+		return err.Error(), true
+	}
+	return "", false
 }
 
 func (s *Service) runAction(ctx context.Context, tx pgx.Tx, actor Actor, el *Element, a Action) (string, error) {
@@ -335,6 +423,8 @@ func (s *Service) runAction(ctx context.Context, tx pgx.Tx, actor Actor, el *Ele
 			return "", err
 		}
 		return "", nil
+	case ActionSetField, ActionNotify, ActionComment, ActionCreateLinked, ActionWebhook:
+		return s.runAutomation(ctx, tx, actor, el, a)
 	default:
 		if d, ok := s.hooks.Actions[a.Kind]; ok {
 			return d.run(ctx, tx, actor, el, a)
